@@ -18,3 +18,7 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   CLAUDE.md (werkafspraken), HANDOFF.md en TIJDLIJN.md ingericht voor
   sessie-overdracht tussen accounts. `.claude/launch.json` toegevoegd voor
   het Launch-voorbeeldpaneel.
+- **11 juni 2026 (vervolg)** — Eerste push naar GitHub
+  (SiemJaapvanEck/Morning_Report). De repo bevatte een ouder Vite+FastAPI-
+  prototype; via ours-merge vervangen door het Next.js-platform (prototype
+  blijft in de historie). Git-token in macOS-keychain.

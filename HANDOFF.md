@@ -45,8 +45,14 @@ alter table public.<elke tabel> enable row level security;
   overweeg hem te roteren.
 - `sources.last_error` in Instellingen toont feed-fouten; de starter-feedlijst
   is nog niet in productie getest (fase 3 breidt bronnen sowieso uit).
-- GitHub-auth liep via device-flow (gh CLI); check `gh auth status` aan het
-  begin van een sessie.
+- **Git-auth:** een OAuth-token (account SiemJaapvanEck) staat in de
+  macOS-keychain; `git push/pull` werkt direct. `gh auth status` zegt
+  "niet ingelogd" — dat klopt (token mist de read:org-scope die gh eist),
+  maar git zelf werkt. Op een ander account/apparaat: opnieuw device-flow.
+- **Oud prototype in historie:** de repo bevatte een eerdere Vite+FastAPI-
+  versie; die is via een ours-merge vervangen door dit platform en blijft
+  alleen in de git-historie bestaan. Niet hervatten — architectuur is
+  vastgelegd in docs/ontwerp.md.
 
 ## Volgende bouwfase (als bovenstaande klaar is)
 

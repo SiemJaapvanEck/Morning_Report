@@ -9,7 +9,7 @@
 // niveau. Cold-start is neutraal (score 0).
 
 import { db, unwrap } from "../shared/db";
-import { askClaudeJson } from "../shared/claude";
+import { askAIJson } from "../shared/ai";
 import { budgetPolicy } from "../shared/budget";
 import type { BudgetMode, Item, TopicScore, Band } from "../shared/types";
 
@@ -59,7 +59,7 @@ export async function scanBatch(
     .map((item, i) => `${i}. ${item.title}${item.raw_summary ? ` — ${item.raw_summary.slice(0, 150)}` : ""}`)
     .join("\n");
 
-  const { data } = await askClaudeJson<{ items: ScanVerdict[] }>({
+  const { data } = await askAIJson<{ items: ScanVerdict[] }>({
     tier: "scan",
     editionId,
     stepId,

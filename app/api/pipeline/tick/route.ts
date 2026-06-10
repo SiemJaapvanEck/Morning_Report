@@ -5,7 +5,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { tick } from "@/modules/pipeline";
 
-export const maxDuration = 10;
+// Tijdsbudget per tick is ~7s (modules/shared/config.ts); 60s als vangnet
+// zodat één trage AI-call nooit een halve stap afkapt.
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   const secret = process.env.CRON_SECRET;

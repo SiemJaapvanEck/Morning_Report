@@ -22,3 +22,8 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   (SiemJaapvanEck/Morning_Report). De repo bevatte een ouder Vite+FastAPI-
   prototype; via ours-merge vervangen door het Next.js-platform (prototype
   blijft in de historie). Git-token in macOS-keychain.
+- **11 juni 2026 (nacht)** — 🎉 **Eerste editie end-to-end gegenereerd.**
+  Provider-router gebouwd (`askAI()`): Grok/xAI actief, Claude omschakelbaar.
+  RLS aan op alle tabellen (migratie 0003). Vervolgstap-patroon toegevoegd
+  zodat scan_rank en generate zichzelf opdelen — alle stappen <10s
+  (Vercel-klaar). Kosten per editie: ±€0,03. Nog te doen: Vercel + scheduler.

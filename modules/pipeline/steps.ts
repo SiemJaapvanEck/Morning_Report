@@ -22,6 +22,25 @@ export interface StepContext {
 
 export type StepHandler = (ctx: StepContext) => Promise<Record<string, unknown>>;
 
+/**
+ * Vervolgstap-patroon: stappen die meer werk hebben dan in ~7s past, doen één
+ * begrensde portie en plannen zichzelf opnieuw in (zelfde positie, ronde+1).
+ * Latere stappen blijven wachten tot alle rondes klaar zijn. De ronde-limiet
+ * voorkomt eindeloos doorplannen.
+ */
+async function requeue(step: PipelineStep, maxRondes: number): Promise<boolean> {
+  const ronde = Number(step.payload.ronde ?? 0) + 1;
+  if (ronde >= maxRondes) return false;
+  const { error } = await db().from("pipeline_steps").insert({
+    edition_id: step.edition_id,
+    kind: step.kind,
+    payload: { ...step.payload, ronde },
+    position: step.position,
+  });
+  if (error) throw new Error(`Requeue ${step.kind}: ${error.message}`);
+  return true;
+}
+
 // ============================================================
 // plan — stappenlijst voor de editie opbouwen
 // ============================================================
@@ -107,7 +126,8 @@ const ingestStep: StepHandler = async ({ step }) => {
 // ============================================================
 
 const scanRankStep: StepHandler = async ({ edition, step }) => {
-  // items van de afgelopen 48u die nog geen belang-score hebben
+  // items van de afgelopen 48u die nog geen belang-score hebben;
+  // max 2 batches (~50 items) per aanroep i.v.m. de 10s-limiet
   const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
   const items: Item[] = unwrap(
     await db()
@@ -117,7 +137,7 @@ const scanRankStep: StepHandler = async ({ edition, step }) => {
       .eq("is_ad", false)
       .gte("fetched_at", cutoff)
       .order("published_at", { ascending: false })
-      .limit(75),
+      .limit(50),
   );
 
   let scanned = 0;
@@ -132,7 +152,13 @@ const scanRankStep: StepHandler = async ({ edition, step }) => {
       scanned++;
     }
   }
-  return { geclassificeerd: scanned };
+
+  // meer ongescande items? volgende ronde inplannen (max 6 ≈ 300 items)
+  let vervolg = false;
+  if (items.length === 50) {
+    vervolg = await requeue(step, 6);
+  }
+  return { geclassificeerd: scanned, vervolg };
 };
 
 // ============================================================
@@ -234,7 +260,12 @@ const generateStep: StepHandler = async ({ edition, step }) => {
       .order("position"),
   );
 
+  // één werkeenheid per aanroep — de samenvattingsbatch van één sectie, óf
+  // één deep-dive — zodat elke aanroep ~5-8s blijft; de rest via vervolgstappen
   let generated = 0;
+  let didWork = false;
+  let workRemains = false;
+
   for (const section of sections) {
     const editionItems = unwrap(
       await db()
@@ -250,7 +281,15 @@ const generateStep: StepHandler = async ({ edition, step }) => {
       .map((entry) => entry.items);
     const deepItems = editionItems.filter((entry) => entry.band === "deep" && !entry.summary_text);
 
+    if (summaryItems.length === 0 && deepItems.length === 0) continue;
+
+    if (didWork) {
+      workRemains = true;
+      break;
+    }
+
     if (summaryItems.length > 0) {
+      // werkeenheid: de samenvattingsbatch van deze sectie
       const summaries = await summarizeSection(section.title, summaryItems, mode, edition.id, step.id);
       for (const summary of summaries) {
         await db()
@@ -260,17 +299,25 @@ const generateStep: StepHandler = async ({ edition, step }) => {
           .eq("item_id", summary.itemId);
         generated++;
       }
-    }
-
-    for (const entry of deepItems) {
+      if (deepItems.length > 0) workRemains = true;
+    } else {
+      // werkeenheid: één deep-dive
+      const entry = deepItems[0];
       const text = await deepDive(entry.items, mode, edition.id, step.id);
       if (text) {
         await db().from("edition_items").update({ summary_text: text }).eq("id", entry.id);
         generated++;
       }
+      if (deepItems.length > 1) workRemains = true;
     }
+    didWork = true;
   }
-  return { gegenereerd: generated, budget_modus: mode };
+
+  let vervolg = false;
+  if (workRemains) {
+    vervolg = await requeue(step, 40); // ruim boven het max aantal werkeenheden
+  }
+  return { gegenereerd: generated, budget_modus: mode, vervolg };
 };
 
 // ============================================================

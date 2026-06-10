@@ -4,7 +4,7 @@
 // bepaalt lengte en aantal deep-dives. In modus 'stop' valt alles terug op
 // koppen — er gaat dan geen Claude-call meer uit.
 
-import { askClaude } from "../shared/claude";
+import { askAI } from "../shared/ai";
 import { budgetPolicy } from "../shared/budget";
 import type { BudgetMode, Item } from "../shared/types";
 
@@ -31,7 +31,7 @@ export async function summarizeSection(
     .map((item, i) => `${i}. ${item.title}\n${item.raw_summary?.slice(0, 300) ?? "(geen beschrijving)"}`)
     .join("\n\n");
 
-  const result = await askClaude({
+  const result = await askAI({
     tier: "scan",
     editionId,
     stepId,
@@ -64,7 +64,7 @@ export async function deepDive(
   const policy = budgetPolicy[mode];
   if (policy.deepDivesPerSectie === 0) return null;
 
-  const result = await askClaude({
+  const result = await askAI({
     tier: "deep",
     editionId,
     stepId,

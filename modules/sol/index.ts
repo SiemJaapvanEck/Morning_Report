@@ -6,7 +6,7 @@
 
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { askClaude } from "../shared/claude";
+import { askAI } from "../shared/ai";
 import { budgetPolicy } from "../shared/budget";
 import { db, unwrap } from "../shared/db";
 import type { BudgetMode, SolMemory } from "../shared/types";
@@ -49,7 +49,7 @@ export async function writeIntro(
 
   const kopLijst = topItems.map((t) => `- [${t.sectionTitle}] ${t.title}`).join("\n");
 
-  const result = await askClaude({
+  const result = await askAI({
     tier: "deep",
     editionId,
     stepId,

@@ -1,50 +1,47 @@
 # HANDOFF — stand van zaken
 
-> Laatst bijgewerkt: 11 juni 2026, sessie op account Siem.
+> Laatst bijgewerkt: 11 juni 2026 (nacht), sessie op account Siem.
 > Lees dit eerst bij het oppakken van het project; werkafspraken staan in CLAUDE.md.
 
 ## Waar we staan
 
-**Fase 1 + 2 zijn af en geverifieerd** (fundament + eerste verticale plak):
-de complete stappenmachine-pipeline, budget-guard, alle modules, lezer-UI,
-PWA-shell en 20 unit-tests. Build, lint en typecheck groen.
+**De eerste editie is live gegenereerd. 🎉** De volledige pipeline draait
+end-to-end: 212 items binnengehaald, gescand, geselecteerd, samengevat,
+Sol-intro geschreven, voorpagina samengesteld. Kosten: **±€0,03 per editie**
+(plafond €0,30). Alle pipeline-stappen blijven onder de 10s dankzij het
+vervolgstap-patroon (`requeue` in `modules/pipeline/steps.ts`).
 
-**Supabase staat live**: project "Morning Report." (`iqhyndhrlhjfdrwjvmjv`,
-eu-west-1, org "Siem & Jesse Mega Database"). Beide migraties zijn via de
-Supabase-connector toegepast: 18 tabellen + starterset (7 categorieën,
-20 topics, 14 RSS-bronnen). Schema-bestanden: `supabase/migrations/`.
+**AI-provider is "voor nu" Grok (xAI)** via de provider-router in
+`modules/shared/ai.ts` (`askAI()`/`askAIJson()`). Modellen:
+`grok-4.20-0309-non-reasoning` (scan) en `grok-4.3` (deep/Sol), beide
+$1,25/$2,50 per MTok. Anthropic/Claude blijft ingebouwd: schakel om met
+`AI_PROVIDER=anthropic` + `ANTHROPIC_API_KEY` in `.env.local`.
 
-## Wat nu nog openstaat (blokkerend voor de eerste editie)
+**Supabase staat live én beveiligd**: project "Morning Report."
+(`iqhyndhrlhjfdrwjvmjv`, eu-west-1). Drie migraties toegepast (schema,
+starterset, RLS aan op alle 18 tabellen — geen policies nodig, alleen
+service-role-toegang). Profiel "Siem" bestaat; Jesse kan via de UI worden
+aangemaakt. `.env.local` is compleet (Supabase-keys + xAI-key + geheimen).
 
-1. **`SUPABASE_SERVICE_ROLE_KEY` invullen in `.env.local`** — ophalen uit het
-   Supabase-dashboard: Project Settings → API Keys. De URL staat er al in.
-2. **`ANTHROPIC_API_KEY` invullen in `.env.local`** — er is per ongeluk een
-   xAI-key (Grok) aangeleverd; we hebben een Anthropic-key nodig
-   (`sk-ant-...`, via console.anthropic.com). Zonder die key falen de
-   scan/generate/sol-stappen; weer + ingestie werken wel.
-3. **Eerste editie proefdraaien**: `npm run dev` (profiel aanmaken op
-   localhost:3000) en daarna `npm run pipeline`.
-4. **Vercel koppelen** aan de GitHub-repo (auto-detect Next.js, env-vars uit
-   `.env.local` overnemen) en daarna de **cron-job.org-scheduler** instellen —
-   stappen 3 en 4 van `docs/setup.md`.
+## Wat nu nog openstaat
 
-## Beveiligingsadvies Supabase (beslissing nodig)
-
-RLS staat uit op alle 18 tabellen. Voor onze architectuur (alléén server-side
-toegang via service-role-key, geen anon-gebruik) is RLS aanzetten zonder
-policies de juiste afsluiting: anon-toegang wordt dan geblokkeerd en de app
-merkt er niets van. Nog niet toegepast — even bevestigen en dan uitvoeren:
-
-```sql
-alter table public.<elke tabel> enable row level security;
-```
+1. **Vercel koppelen** aan de GitHub-repo: importeer
+   `SiemJaapvanEck/Morning_Report`, neem de env-vars uit `.env.local` over
+   (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, AI_PROVIDER, XAI_API_KEY,
+   CRON_SECRET, CAPTURE_SECRET). Auto-detect Next.js, geen extra config.
+2. **cron-job.org-scheduler** instellen — stap 4 van `docs/setup.md`
+   (elke 2 min, 06:30–08:15, Europe/Amsterdam, Bearer CRON_SECRET).
+3. Daarna draait het rapport elke ochtend vanzelf.
 
 ## Bekende aandachtspunten
 
-- De gedeelde xAI-key is in de chat geplakt; als die elders in gebruik is,
-  overweeg hem te roteren.
+- De xAI-key is in de chat geplakt geweest; hij staat nu in `.env.local`.
+  Overweeg rotatie als hij ooit elders rondzwerft.
+- Postgres `current_date` is UTC; editie-datums komen uit `todayLocal()`
+  (Europe/Amsterdam). Bij handmatige SQL op datums: expliciet de datum
+  noemen, niet `current_date` (we liepen hier al eens tegenaan).
 - `sources.last_error` in Instellingen toont feed-fouten; de starter-feedlijst
-  is nog niet in productie getest (fase 3 breidt bronnen sowieso uit).
+  draait, fase 3 breidt bronnen uit.
 - **Git-auth:** een OAuth-token (account SiemJaapvanEck) staat in de
   macOS-keychain; `git push/pull` werkt direct. `gh auth status` zegt
   "niet ingelogd" — dat klopt (token mist de read:org-scope die gh eist),

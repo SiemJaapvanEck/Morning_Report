@@ -1,12 +1,24 @@
 // Centrale configuratie. Alles met een default is via env te overschrijven
 // zonder code aan te raken.
 
+export type AiProvider = "xai" | "anthropic";
+
+const DEFAULT_MODELS: Record<AiProvider, { scan: string; deep: string }> = {
+  // actieve provider "voor nu" (zie CLAUDE.md): Grok via de xAI-API
+  xai: { scan: "grok-4.20-0309-non-reasoning", deep: "grok-4.3" },
+  // omschakelbaar zodra er een Anthropic-key is: AI_PROVIDER=anthropic
+  anthropic: { scan: "claude-haiku-4-5", deep: "claude-sonnet-4-6" },
+};
+
+const provider = (process.env.AI_PROVIDER ?? "xai") as AiProvider;
+
 export const config = {
+  provider,
   models: {
     /** Brede scan & classificatie — goedkoop */
-    scan: process.env.MODEL_SCAN ?? "claude-haiku-4-5",
+    scan: process.env.MODEL_SCAN ?? DEFAULT_MODELS[provider].scan,
     /** Deep-dives & Sol — sterker */
-    deep: process.env.MODEL_DEEP ?? "claude-sonnet-4-6",
+    deep: process.env.MODEL_DEEP ?? DEFAULT_MODELS[provider].deep,
   },
 
   /**
@@ -18,6 +30,10 @@ export const config = {
     perModel: {
       "claude-haiku-4-5": { inputUsd: 1.0, outputUsd: 5.0 },
       "claude-sonnet-4-6": { inputUsd: 3.0, outputUsd: 15.0 },
+      // xAI-prijzen per docs.x.ai (juni 2026)
+      "grok-4.3": { inputUsd: 1.25, outputUsd: 2.5 },
+      "grok-4.20-0309-non-reasoning": { inputUsd: 1.25, outputUsd: 2.5 },
+      "grok-4.20-0309-reasoning": { inputUsd: 1.25, outputUsd: 2.5 },
     } as Record<string, { inputUsd: number; outputUsd: number }>,
   },
 

@@ -35,16 +35,21 @@ Begin elke nieuwe sessie met het lezen van `HANDOFF.md`.
   (database), elke stap is idempotent en klaar binnen ~7s. Nieuwe
   pipeline-functionaliteit wordt een stap-handler in
   `modules/pipeline/steps.ts`, gepland door de plan-stap.
-- **Elke Claude-call loopt via `askClaude()`** (`modules/shared/claude.ts`)
-  zodat tokens en kosten in `usage_log` komen. Generatie-stappen vragen vóór
-  hun werk de budget-modus op en respecteren `budgetPolicy`.
+- **Elke AI-call loopt via `askAI()`** (`modules/shared/ai.ts`) zodat tokens
+  en kosten in `usage_log` komen. Generatie-stappen vragen vóór hun werk de
+  budget-modus op en respecteren `budgetPolicy`. Nooit rechtstreeks een
+  AI-SDK of -API aanroepen buiten de provider-implementaties in dat bestand.
 - **Databasewijzigingen = migratie.** Nieuw SQL-bestand in
   `supabase/migrations/` (genummerd) én toepassen via de Supabase-connector
   (`apply_migration`). Nooit handmatig schema-drift veroorzaken. Types in
   `modules/shared/types.ts` synchroon houden.
-- **Modelkeuze:** Haiku-klasse voor scan/classificatie (`tier: "scan"`),
-  Sonnet-klasse voor deep-dives en Sol (`tier: "deep"`). Model-ID's alleen in
-  `modules/shared/config.ts`.
+- **Modelkeuze:** goedkoop model voor scan/classificatie (`tier: "scan"`),
+  sterker model voor deep-dives en Sol (`tier: "deep"`). Model-ID's en de
+  actieve provider staan alleen in `modules/shared/config.ts`.
+  Provider is config: **xAI/Grok is "voor nu" actief** (`AI_PROVIDER=xai`);
+  Anthropic/Claude blijft ingebouwd en wordt actief via
+  `AI_PROVIDER=anthropic` + `ANTHROPIC_API_KEY`. Prijzen per model staan in
+  dezelfde config — bijwerken als modellen wijzigen (budget-guard leunt erop).
 - **Sol's karakter is config:** `modules/sol/prompts/*.md`, geen code.
 
 ## Documentatierichtlijnen
@@ -79,8 +84,8 @@ Pure functies in `modules/` krijgen vitest-tests (zie bestaande `*.test.ts`).
 - `.env.local` (niet in git) — zie `.env.example` voor de sleutels.
 - Supabase-project: "Morning Report." (`iqhyndhrlhjfdrwjvmjv`, eu-west-1),
   org "Siem & Jesse Mega Database". Schema-beheer via de Supabase-connector.
-- AI-provider is **Anthropic** (Claude API, `sk-ant-...`-key) — geen andere
-  providers configureren; de budget-guard en prijstabellen zijn daarop gebouwd.
+- AI-provider: zie Architectuurrichtlijnen hierboven — xAI actief, Anthropic
+  als omschakelbare tweede provider. Beide via `askAI()`, nooit erbuiten om.
 - Deploy: GitHub `SiemJaapvanEck/Morning_Report` → Vercel (auto-detect
   Next.js, geen speciale config nodig). `.claude/launch.json` is alleen voor
   het lokale Launch-voorbeeldpaneel, niet voor deploys.

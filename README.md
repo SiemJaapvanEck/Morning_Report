@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Morning Report
 
-## Getting Started
+Een persoonlijk ochtendrapport dat elke dag rond 08:00 klaarstaat als
+installeerbare web-app: nieuws, weer en een vooruitkijkende kalender,
+gefilterd op jouw interesses, met een eigen redactionele AI-stem (**Sol**).
 
-First, run the development server:
+> 📐 Het volledige ontwerp staat in [docs/ontwerp.md](docs/ontwerp.md) —
+> het levende ontwerpdocument. Setup-instructies: [docs/setup.md](docs/setup.md).
+
+## Snelstart
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local   # invullen: Supabase, Anthropic, geheimen
+npm install
+npm run dev                  # app op localhost:3000
+npm run pipeline             # genereer de editie van vandaag
+npm test                     # unit-tests van de pure modules
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Architectuur in één oogopslag
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+morning-report/
+├── app/                  # Next.js App Router — de PWA (alleen aanroepers)
+│   ├── api/pipeline/tick #   scheduler-endpoint: één stap per tick, <10s
+│   ├── api/capture       #   iOS Shortcut + web-invoer
+│   ├── api/feedback      #   ratings & volg-markeringen
+│   ├── editie/[datum]    #   archief-weergave
+│   └── instellingen      #   interesses, scores, bronnen
+├── modules/              # de kern — framework-agnostisch TypeScript
+│   ├── shared/           #   types, config, db, claude-client, budget-guard, feeds
+│   ├── pipeline/         #   stappenmachine: plan → weer → ingest → scan →
+│   │                     #   select → generate → sol → finalize
+│   ├── ingest/           #   feeds binnenhalen, reclamefilter, dedupe-hash
+│   ├── rank/             #   interessemotor, belang-ranking, kostenpoort
+│   ├── generate/         #   samenvattingen & deep-dives (budget-bewust)
+│   ├── sol/              #   karakter (prompts/ als config), intro, geheugen
+│   ├── archive/          #   dedupe, editie-historie
+│   ├── calendar/         #   eventstore (earnings, releases, events)
+│   └── weather/          #   Open-Meteo
+├── supabase/migrations/  # schema + starterset
+├── scripts/run-pipeline  # lokale runner (zelfde code als het tick-endpoint)
+└── docs/                 # ontwerp + setup
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+**Drie principes** (uitgebreid in het ontwerp):
 
-## Learn More
+1. **Modules zijn puur.** `modules/` kent geen Next.js; de app en de pipeline
+   zijn slechts aanroepers. Alles wat erop gebouwd wordt, bouwt áán — niet om.
+2. **De pipeline is een stappenmachine.** Stappen staan in de database, elke
+   scheduler-tick voert er één of enkele uit (ruim binnen Vercel's 10s-limiet)
+   en is idempotent. Valt iets om, dan gaat de volgende tick verder.
+3. **De budget-guard is echt.** Elke Claude-call wordt per stap gelogd
+   (`usage_log`); nadert een editie het plafond (~€0,30) dan schakelt de
+   generatie automatisch terug in plaats van stilletjes door te branden.
 
-To learn more about Next.js, take a look at the following resources:
+## Status & roadmap
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Gebouwd (fase 1-2 — fundament + eerste verticale plak):
+schema, stappenmachine, budget-guard, weer, RSS-ingestie met reclamefilter,
+AI-scan & ranking, samenvattingen & deep-dives, Sol's intro, voorpagina,
+archief, instellingen, feedback-API, capture (web + Shortcut), PWA-shell.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Volgende fases (zie docs/ontwerp.md §7 voor de open punten):
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+3. Volledige ingestie — alle bronnen, subreddits, query-modus
+4. Interessemotor compleet — escalaties, waarom-tags, hiërarchie-tuning
+5. Archief — cross-refs, secties doorzoeken, export
+6. Sol volledig — geheugencompactie, notitiebelletjes, karakterevolutie
+7. Kalender + portfolio — finance-API's, roadmap-weergave
+8. Ontdekkingsblok, trivia, vervolg-tracking, on-this-day, PWA-afwerking

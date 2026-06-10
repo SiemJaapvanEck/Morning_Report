@@ -1,0 +1,96 @@
+.prefs {
+  max-width: 700px;
+}
+
+.prefs__title {
+  font-size: 2rem;
+  font-weight: 900;
+  margin-bottom: 0.5rem;
+}
+
+.prefs__desc {
+  color: var(--muted);
+  margin-bottom: 2rem;
+}
+
+.prefs__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.prefs__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.25rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--card-bg);
+  cursor: pointer;
+  font-family: var(--font-body);
+  position: relative;
+  transition: all 0.15s;
+}
+
+.prefs__card:hover {
+  border-color: var(--ink);
+}
+
+.prefs__card--active {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.prefs__emoji {
+  font-size: 1.75rem;
+}
+
+.prefs__label {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.prefs__check {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.6rem;
+  font-size: 0.7rem;
+  color: var(--paper);
+}
+
+.prefs__actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.prefs__save {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 0.6rem 1.5rem;
+  font-size: 0.9rem;
+  font-family: var(--font-body);
+  font-weight: 600;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.prefs__save:hover {
+  opacity: 0.85;
+}
+
+.prefs__save:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.prefs__error {
+  color: var(--accent);
+  font-size: 0.85rem;
+}

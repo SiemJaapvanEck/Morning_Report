@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "morning-report",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000
+    }
+  ],
+  "experimentalServices": {
+    "app": {
+      "root": ".",
+      "routePrefix": "/",
+      "framework": "nextjs"
+    }
+  }
+}

@@ -66,8 +66,9 @@ cron-job.org tikt dat endpoint aan.
 
 2. **Common**
    - **Title:** `Morning Report tick`
-   - **Address (URL):** `https://JOUW-APP.vercel.app/api/pipeline/tick`
-     (vervang door je Vercel-URL)
+   - **Address (URL):** `https://morning-report-siemjaapvanecks-projects.vercel.app/api/pipeline/tick`
+     (dit is de vaste productie-alias — volgt altijd de laatste `main`-deploy;
+     gebruik níet een URL met een build-hash erin)
 
 3. **Schedule** — kies **Custom** en zet:
    - **Days of month:** elke (`*`)
@@ -97,13 +98,19 @@ cron-job.org tikt dat endpoint aan.
 
 ### Testen of het werkt
 
+> **Let op — Vercel Deployment Protection.** Nieuwe Vercel-projecten zetten een
+> inlogmuur voor álle URLs. Die moet uit, anders kan cron-job.org (en de iOS
+> Shortcut) het endpoint niet bereiken. Dashboard → project → **Settings →
+> Deployment Protection → Vercel Authentication → Disabled**. Dit past bij het
+> login-loze ontwerp; de endpoints zijn al beveiligd met hun eigen geheimen.
+
 - Zonder de juiste header hoort het endpoint **401** te geven; mét de header
   draait een tick. Je kunt het los testen:
   ```bash
   # 401 verwacht (geen geheim):
-  curl -X POST https://JOUW-APP.vercel.app/api/pipeline/tick -i | head -1
+  curl -X POST https://morning-report-siemjaapvanecks-projects.vercel.app/api/pipeline/tick -i | head -1
   # 200 + JSON verwacht (mét geheim):
-  curl -X POST https://JOUW-APP.vercel.app/api/pipeline/tick \
+  curl -X POST https://morning-report-siemjaapvanecks-projects.vercel.app/api/pipeline/tick \
     -H "Authorization: Bearer JOUW_CRON_SECRET"
   ```
 - Op cron-job.org zelf: open de job → **History** om te zien of de aanroepen

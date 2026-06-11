@@ -29,5 +29,9 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   (Vercel-klaar). Kosten per editie: ±€0,03. Nog te doen: Vercel + scheduler.
 - **11 juni 2026 (vervolg 2)** — Vercel-import gedaan (auto-deploy op push aan).
   Scheduler-sectie in `docs/setup.md` §4 volledig uitgewerkt met exacte
-  cron-job.org-velden + uitleg waarom geen Vercel-cron. Laatste open stap:
+  cron-job.org-velden + uitleg waarom geen Vercel-cron.
+- **11 juni 2026 (vervolg 3)** — Vercel Deployment Protection uitgezet
+  (login-loos ontwerp). Productie-endpoint live geverifieerd: 401 zonder
+  geheim, 200 + JSON mét. Vaste productie-URL vastgelegd in docs/handoff:
+  `morning-report-siemjaapvanecks-projects.vercel.app`. Laatste open stap:
   cron-job.org-job aanmaken.

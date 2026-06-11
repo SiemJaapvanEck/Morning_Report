@@ -235,6 +235,9 @@ const selectStep: StepHandler = async ({ edition }) => {
       item_id: entry.id,
       band: bands.get(entry.id) ?? ("headline" as Band),
       position: i,
+      // prioriteit kan boven 1 uitkomen (interesse × bron-gewicht); voor het
+      // match-percentage op de kaarten clampen we naar 0..1
+      match_score: Math.max(0, Math.min(1, entry.priority)),
     }));
     const { error } = await db().from("edition_items").insert(rows);
     if (error) throw new Error(`Select: ${error.message}`);

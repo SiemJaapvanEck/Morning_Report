@@ -84,6 +84,7 @@ export interface Item {
   is_ad: boolean;
   importance: number | null;
   scan_meta: Record<string, unknown> | null;
+  image_url: string | null;
 }
 
 export interface Edition {
@@ -136,6 +137,8 @@ export interface EditionItem {
   position: number;
   summary_text: string | null;
   sol_note: string | null;
+  /** Sol's voorspelling (0..1) hoe goed dit artikel bij de lezer past */
+  match_score: number | null;
 }
 
 export interface FeedbackEvent {

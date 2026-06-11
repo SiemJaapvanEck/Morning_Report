@@ -39,3 +39,10 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   (status done, €0,048, alle stappen <12s). Open-Meteo bleek wisselvallig →
   weermodule kreeg 4 interne retries (build groen). Laatste open stap blijft:
   cron-job.org-job aanmaken.
+- **11 juni 2026 (vervolg 5)** — Voorpagina omgebouwd naar het dashboard van
+  de whiteboard-schets: weer/stats-kopstrook, puntenrij van edities, Daily
+  paper-kaart en "Sol's selectie" (artikelkaarten met afbeelding, categorie,
+  match-% en rating −2…+2). Migratie 0004 (items.image_url +
+  edition_items.match_score) toegepast; feedparser haalt afbeeldingen uit
+  feeds; select-stap schrijft match_score. Editie van vandaag gebackfilld
+  (55 scores, 32 afbeeldingen). Alle poorten groen.

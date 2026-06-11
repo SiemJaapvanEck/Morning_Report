@@ -1,6 +1,6 @@
 # HANDOFF — stand van zaken
 
-> Laatst bijgewerkt: 11 juni 2026 (nacht), sessie op account Siem.
+> Laatst bijgewerkt: 11 juni 2026 (middag), sessie op account Siem.
 > Lees dit eerst bij het oppakken van het project; werkafspraken staan in CLAUDE.md.
 
 ## Waar we staan
@@ -10,6 +10,19 @@ end-to-end: 212 items binnengehaald, gescand, geselecteerd, samengevat,
 Sol-intro geschreven, voorpagina samengesteld. Kosten: **±€0,03 per editie**
 (plafond €0,30). Alle pipeline-stappen blijven onder de 10s dankzij het
 vervolgstap-patroon (`requeue` in `modules/pipeline/steps.ts`).
+
+**De voorpagina is nu het dashboard van de whiteboard-schets** (11 juni):
+kopstrook met weer- en stats-blok, een puntenrij van afgelopen edities
+(tik = die editie openen), de grote "Daily paper"-kaart naar
+`/editie/[datum]`, en "Sol's selectie" — artikelkaarten met afbeelding,
+categorie, beschrijving, **Sol's match-percentage** en rating **−2…+2**
+(intern blijft 1–5; zie `ItemRating`). Daarvoor: migratie 0004
+(`items.image_url`, `edition_items.match_score`), afbeelding-extractie in
+`modules/shared/feeds.ts` (`extractImage`, met tests), select-stap schrijft
+`match_score` (prioriteit geclampt 0..1). De editie van vandaag is eenmalig
+gebackfilld (55 scores, 32 afbeeldingen); vanaf morgen vult de pipeline dit
+zelf. De volledige krant-weergave (`EditieWeergave`) is ongewijzigd en leeft
+op `/editie/[datum]`.
 
 **AI-provider is "voor nu" Grok (xAI)** via de provider-router in
 `modules/shared/ai.ts` (`askAI()`/`askAIJson()`). Modellen:

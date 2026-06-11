@@ -14,6 +14,7 @@ export interface FeedItem {
   summary: string | null;
   publishedAt: string | null;
   isAd: boolean;
+  imageUrl: string | null;
 }
 
 const AD_PATTERNS = [
@@ -42,7 +43,53 @@ export function contentHash(title: string): string {
   return createHash("sha256").update(normalized).digest("hex").slice(0, 32);
 }
 
-const parser = new Parser({ timeout: 8000 });
+/** Velden zoals rss-parser ze aanlevert; alleen wat de afbeelding-extractie nodig heeft. */
+export interface RawFeedItemMedia {
+  enclosure?: { url?: string; type?: string };
+  mediaContent?: { $?: { url?: string; medium?: string; type?: string } }[];
+  mediaThumbnail?: { $?: { url?: string } }[];
+  content?: string;
+  "content:encoded"?: string;
+}
+
+/**
+ * Pure functie: beste artikelafbeelding uit een feed-item. Volgorde:
+ * media:content → media:thumbnail → enclosure (alleen image/*) → eerste
+ * <img> in de HTML-inhoud. Geeft null als er niets bruikbaars is.
+ */
+export function extractImage(item: RawFeedItemMedia): string | null {
+  for (const media of item.mediaContent ?? []) {
+    const attrs = media.$;
+    if (!attrs?.url) continue;
+    if (attrs.medium && attrs.medium !== "image") continue;
+    if (attrs.type && !attrs.type.startsWith("image/")) continue;
+    return attrs.url;
+  }
+
+  const thumb = (item.mediaThumbnail ?? []).find((entry) => entry.$?.url);
+  if (thumb?.$?.url) return thumb.$.url;
+
+  if (item.enclosure?.url && (item.enclosure.type?.startsWith("image/") ?? false)) {
+    return item.enclosure.url;
+  }
+
+  const html = item["content:encoded"] || item.content || "";
+  const img = /<img[^>]+src=["']([^"']+)["']/i.exec(html);
+  if (img && /^https?:\/\//.test(img[1])) return img[1];
+
+  return null;
+}
+
+const parser = new Parser({
+  timeout: 8000,
+  customFields: {
+    item: [
+      ["media:content", "mediaContent", { keepArray: true }],
+      ["media:thumbnail", "mediaThumbnail", { keepArray: true }],
+      ["content:encoded", "content:encoded"],
+    ],
+  },
+});
 
 /** Haalt één feed op en normaliseert de items. Gooit bij netwerkfouten. */
 export async function fetchFeed(url: string): Promise<FeedItem[]> {
@@ -57,6 +104,7 @@ export async function fetchFeed(url: string): Promise<FeedItem[]> {
       summary,
       publishedAt: item.isoDate ?? null,
       isAd: looksLikeAd(title, summary, item.categories),
+      imageUrl: extractImage(item as RawFeedItemMedia),
     };
   });
 }

@@ -64,6 +64,7 @@ export async function ingestSource(source: Source): Promise<IngestResult> {
     published_at: item.publishedAt,
     content_hash: contentHash(item.title),
     is_ad: item.isAd,
+    image_url: item.imageUrl,
   }));
 
   if (rows.length > 0) {

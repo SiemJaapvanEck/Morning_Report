@@ -1,12 +1,14 @@
-// Voorpagina: de editie van vandaag voor het gekozen profiel.
-// Geen profiel-cookie → profielkiezer. Geen Supabase-config → setupscherm.
+// Voorpagina: dashboard met weer/stats, editie-punten, de Daily paper-kaart
+// en Sol's selectie (schets 2026-06-11). De volledige krant leeft op
+// /editie/[datum]. Geen profiel-cookie → profielkiezer. Geen Supabase-config
+// → setupscherm.
 
 import { cookies } from "next/headers";
 import { hasDbConfig } from "@/modules/shared/db";
 import { todayLocal } from "@/modules/shared/config";
-import { getProfiles, getEdition } from "@/app/lib/queries";
+import { getProfiles, getEdition, listEditions } from "@/app/lib/queries";
 import { ProfielKiezer } from "@/app/components/ProfielKiezer";
-import { EditieWeergave } from "@/app/components/EditieWeergave";
+import { VoorpaginaDashboard } from "@/app/components/VoorpaginaDashboard";
 
 export const dynamic = "force-dynamic";
 
@@ -32,30 +34,20 @@ export default async function Home() {
     return <ProfielKiezer profiles={profiles} />;
   }
 
-  const view = await getEdition(profileId, todayLocal());
+  const today = todayLocal();
+  const [view, editions] = await Promise.all([
+    getEdition(profileId, today),
+    listEditions(profileId, 10),
+  ]);
 
-  if (!view) {
-    return (
-      <div className="mx-auto mt-12 max-w-md text-center">
-        <h1 className="text-xl font-semibold">Nog geen editie voor vandaag</h1>
-        <p className="mt-3 text-sm leading-relaxed text-stone-500">
-          De pipeline draait &apos;s ochtends tussen 06:30 en 08:15. Lokaal kun je hem
-          starten met <code>npm run pipeline</code>.
-        </p>
-      </div>
-    );
-  }
-
-  if (view.edition.status !== "done") {
-    return (
-      <div>
-        <div className="mb-6 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+  return (
+    <div>
+      {view && view.edition.status !== "done" && (
+        <div className="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">
           Deze editie is nog in de maak — wat je ziet groeit nog aan.
         </div>
-        <EditieWeergave view={view} />
-      </div>
-    );
-  }
-
-  return <EditieWeergave view={view} />;
+      )}
+      <VoorpaginaDashboard view={view} editions={editions} today={today} />
+    </div>
+  );
 }

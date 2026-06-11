@@ -18,8 +18,10 @@ export interface SectionView {
     band: "deep" | "summary" | "headline";
     summary_text: string | null;
     sol_note: string | null;
+    match_score: number | null;
     title: string;
     url: string | null;
+    image_url: string | null;
     source_name: string | null;
   }[];
 }
@@ -49,7 +51,9 @@ export async function getEdition(profileId: string, date: string): Promise<Editi
   const rows = unwrap(
     await db()
       .from("edition_items")
-      .select("id, item_id, section_id, band, position, summary_text, sol_note, items(title, url, sources(name))")
+      .select(
+        "id, item_id, section_id, band, position, summary_text, sol_note, match_score, items(title, url, image_url, sources(name))",
+      )
       .eq("edition_id", edition.id)
       .order("position"),
   ) as unknown as {
@@ -59,7 +63,13 @@ export async function getEdition(profileId: string, date: string): Promise<Editi
     band: "deep" | "summary" | "headline";
     summary_text: string | null;
     sol_note: string | null;
-    items: { title: string; url: string | null; sources: { name: string } | null };
+    match_score: number | null;
+    items: {
+      title: string;
+      url: string | null;
+      image_url: string | null;
+      sources: { name: string } | null;
+    };
   }[];
 
   const sectionViews: SectionView[] = sections.map((section) => ({
@@ -73,8 +83,10 @@ export async function getEdition(profileId: string, date: string): Promise<Editi
         band: row.band,
         summary_text: row.summary_text,
         sol_note: row.sol_note,
+        match_score: row.match_score,
         title: row.items.title,
         url: row.items.url,
+        image_url: row.items.image_url,
         source_name: row.items.sources?.name ?? null,
       })),
   }));

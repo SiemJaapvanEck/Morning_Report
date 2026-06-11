@@ -279,3 +279,4 @@ Dagelijkse weermodule via gratis API's (Open-Meteo / KNMI / Buienradar), met mog
 - **Archief:** gesectioneerd, draagt historie + dedupe + cross-refs + Sol-geheugen + export.
 - **Invoer:** iOS Shortcut + web-app, incl. bron- en onderwerp-toevoeging.
 - **Bouwprincipe:** één modulaire versie, geen v2/v3.
+- **Voorpagina-dashboard (schets 11 juni 2026):** telefoon-eerst layout — kopstrook met weer- en stats-blok plus een puntenrij van afgelopen edities (tik = editie openen), grote "Daily paper"-kaart naar de volledige editie (/editie/[datum]), en "Sol's selectie": artikelkaarten met afbeelding (uit de feed: media:content/thumbnail/enclosure/inline img), categorie, titel, beschrijving en **Sol's match-percentage** (de select-prioriteit, geclampt 0..1, opgeslagen als `edition_items.match_score`), gerangschikt op match. Rating-gebaar in de UI: **−2…+2** (intern blijft de 1–5-schaal, UI-waarde +3).

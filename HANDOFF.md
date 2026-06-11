@@ -46,6 +46,15 @@ aangemaakt. `.env.local` is compleet (Supabase-keys + xAI-key + geheimen).
 
 ## Bekende aandachtspunten
 
+- **Cron live getest (11 juni):** editie van vandaag verwijderd en via de
+  productie-`/api/pipeline/tick` opnieuw opgebouwd — 23 tikken, alle stappen
+  <12s, status `done`, €0,048. De scheduler-route werkt dus end-to-end op
+  Vercel. (cron-job.org-job zelf nog door Siem aan te maken.)
+- **Open-Meteo is wisselvallig** (gratis publieke API): tijdens de test gaf
+  hij afwisselend 200 en connectie-fouten. De weermodule heeft nu 4 interne
+  retries; faalt het alsnog, dan slaat de pipeline de weersectie over en
+  bouwt de rest gewoon door (niet-blokkerend, by design). Latere robuustheid:
+  KNMI/Buienradar als fallback-bron (ontwerp §weer).
 - De xAI-key is in de chat geplakt geweest; hij staat nu in `.env.local`.
   Overweeg rotatie als hij ooit elders rondzwerft.
 - Postgres `current_date` is UTC; editie-datums komen uit `todayLocal()`

@@ -33,5 +33,9 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
 - **11 juni 2026 (vervolg 3)** — Vercel Deployment Protection uitgezet
   (login-loos ontwerp). Productie-endpoint live geverifieerd: 401 zonder
   geheim, 200 + JSON mét. Vaste productie-URL vastgelegd in docs/handoff:
-  `morning-report-siemjaapvanecks-projects.vercel.app`. Laatste open stap:
+  `morning-report-siemjaapvanecks-projects.vercel.app`.
+- **11 juni 2026 (vervolg 4)** — Cron end-to-end getest tegen productie:
+  editie verwijderd en via 23 tikken op de productie-URL volledig herbouwd
+  (status done, €0,048, alle stappen <12s). Open-Meteo bleek wisselvallig →
+  weermodule kreeg 4 interne retries (build groen). Laatste open stap blijft:
   cron-job.org-job aanmaken.

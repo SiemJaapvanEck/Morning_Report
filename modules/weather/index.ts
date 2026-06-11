@@ -50,8 +50,27 @@ export async function fetchWeather(
   url.searchParams.set("timezone", config.timezone);
   url.searchParams.set("forecast_days", "1");
 
-  const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
-  if (!response.ok) throw new Error(`Open-Meteo: HTTP ${response.status}`);
+  // Open-Meteo (gratis publieke API) hapert af en toe — connectie-fouten of
+  // trage antwoorden. Een paar snelle retries vangt dat op zodat één blip niet
+  // het weer voor de hele dag kost. Falen alle pogingen, dan gooien we en slaat
+  // de pipeline de weersectie over (niet-blokkerend; rest van het rapport gaat door).
+  let response: Response | undefined;
+  let lastError: unknown;
+  for (let poging = 0; poging < 4; poging++) {
+    try {
+      response = await fetch(url, { signal: AbortSignal.timeout(9000) });
+      if (response.ok) break;
+      lastError = new Error(`Open-Meteo: HTTP ${response.status}`);
+    } catch (err) {
+      lastError = err;
+    }
+    response = undefined;
+    await new Promise((resolve) => setTimeout(resolve, 800 * (poging + 1)));
+  }
+  if (!response) {
+    throw new Error(`Open-Meteo onbereikbaar na 4 pogingen: ${String(lastError)}`);
+  }
+
   const data = (await response.json()) as {
     current: { temperature_2m: number; weather_code: number; wind_speed_10m: number };
     daily: {

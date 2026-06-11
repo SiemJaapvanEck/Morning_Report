@@ -27,3 +27,7 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   RLS aan op alle tabellen (migratie 0003). Vervolgstap-patroon toegevoegd
   zodat scan_rank en generate zichzelf opdelen — alle stappen <10s
   (Vercel-klaar). Kosten per editie: ±€0,03. Nog te doen: Vercel + scheduler.
+- **11 juni 2026 (vervolg 2)** — Vercel-import gedaan (auto-deploy op push aan).
+  Scheduler-sectie in `docs/setup.md` §4 volledig uitgewerkt met exacte
+  cron-job.org-velden + uitleg waarom geen Vercel-cron. Laatste open stap:
+  cron-job.org-job aanmaken.

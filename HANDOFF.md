@@ -25,13 +25,23 @@ aangemaakt. `.env.local` is compleet (Supabase-keys + xAI-key + geheimen).
 
 ## Wat nu nog openstaat
 
-1. **Vercel koppelen** aan de GitHub-repo: importeer
-   `SiemJaapvanEck/Morning_Report`, neem de env-vars uit `.env.local` over
-   (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, AI_PROVIDER, XAI_API_KEY,
-   CRON_SECRET, CAPTURE_SECRET). Auto-detect Next.js, geen extra config.
-2. **cron-job.org-scheduler** instellen — stap 4 van `docs/setup.md`
-   (elke 2 min, 06:30–08:15, Europe/Amsterdam, Bearer CRON_SECRET).
+1. **Vercel: gekoppeld ✓** — repo geïmporteerd, env-vars gezet, auto-deploy
+   op elke push naar `main` staat aan. (Vercel-URL nog noteren in dit doc
+   zodra bekend.)
+2. **cron-job.org-scheduler** instellen — dit is de laatste stap. Volledig
+   uitgewerkt met exacte velden in `docs/setup.md` §4. Kernpunten:
+   - URL: `https://JOUW-VERCEL-URL/api/pipeline/tick`
+   - **Request method op POST** (niet de default GET!)
+   - Header `Authorization: Bearer <CRON_SECRET>`
+   - Schedule: minuten `*/2`, uren `6,7,8`, **timezone Europe/Amsterdam**
+   - Er zit bewust **geen** Vercel-cron / `vercel.json` in het project —
+     Vercel-cron kan op Hobby alleen 1×/dag en alleen UTC. Zie §4 voor de
+     redenering (voor als Jesse zich afvraagt waar de cron is).
 3. Daarna draait het rapport elke ochtend vanzelf.
+
+**Endpoint-test (handig vóór/na het instellen van de scheduler):**
+`curl -X POST https://JOUW-URL/api/pipeline/tick` hoort 401 te geven;
+mét `-H "Authorization: Bearer <CRON_SECRET>"` een 200 + JSON.
 
 ## Bekende aandachtspunten
 

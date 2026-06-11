@@ -35,7 +35,10 @@ Zelfde kiezer is bewerkbaar onder Instellingen → Interesses
 (`VoorkeurenKiezer`, `modules/preferences`, `/api/voorkeuren`,
 `app/lib/voorkeuren.ts`). Belangrijk: de scan-stap wijst nu per item een
 topic toe (`scanBatch` krijgt de topiclijst mee), waardoor topic-voorkeuren
-écht doorwerken in `priority()` → match-%. **Let op:** bestaande profielen
+écht doorwerken in `priority()` → match-%. Een eigen topic kan bovendien aan
+één **vaste bron** hangen (`topics.source_id`, migratie 0006): items uit die
+bron krijgen het topic direct bij ingestie en de scan respecteert dat; zonder
+koppeling geldt de normale zoekweg. **Let op:** bestaande profielen
 zonder `voorkeuren_ingesteld`-vlag (dus ook Siem) worden bij het eerste
 bezoek éénmalig naar `/onboarding` gestuurd — defaults staan klaar, één tik
 op "Klaar" volstaat.

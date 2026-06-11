@@ -46,3 +46,10 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   edition_items.match_score) toegepast; feedparser haalt afbeeldingen uit
   feeds; select-stap schrijft match_score. Editie van vandaag gebackfilld
   (55 scores, 32 afbeeldingen). Alle poorten groen.
+- **11 juni 2026 (vervolg 6, account Jesse)** — Vaste vormgeving ingevoerd:
+  het "Dispatch"-designsysteem uit de Claude Design-ronde (richting D).
+  Tokens + mr-*-klassen op één plek in app/globals.css (licht én donker,
+  geen dark:-klassen meer), Archivo + Space Mono via next/font, alle
+  pagina's/componenten omgezet (header/footer, dashboard, krant, rating,
+  profielkiezer, archief, instellingen). Nieuw: docs/design.md;
+  CLAUDE.md-designrichtlijnen en ontwerp-log bijgewerkt. Alle poorten groen.

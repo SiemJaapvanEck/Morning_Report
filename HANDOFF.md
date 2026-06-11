@@ -1,6 +1,6 @@
 # HANDOFF — stand van zaken
 
-> Laatst bijgewerkt: 11 juni 2026 (middag), sessie op account Siem.
+> Laatst bijgewerkt: 11 juni 2026 (avond), sessie op account Jesse.
 > Lees dit eerst bij het oppakken van het project; werkafspraken staan in CLAUDE.md.
 
 ## Waar we staan
@@ -23,6 +23,26 @@ categorie, beschrijving, **Sol's match-percentage** en rating **−2…+2**
 gebackfilld (55 scores, 32 afbeeldingen); vanaf morgen vult de pipeline dit
 zelf. De volledige krant-weergave (`EditieWeergave`) is ongewijzigd en leeft
 op `/editie/[datum]`.
+
+**De vormgeving is nu vast: het "Dispatch"-designsysteem** (11 juni,
+avond). Uit de Claude Design-ronde is richting D ("Dispatch") gekozen en
+integraal doorgevoerd: warm papier-palet, witte kaarten met lijn-randen,
+Archivo + Space Mono, kleursemantiek blauw = interactie/Sol/volgen,
+rood = live/nu/negatief, groen = positief. Alle tokens en
+`mr-*`-componentklassen staan op **één plek** (`app/globals.css`);
+regels en patronen in **`docs/design.md`** (verplichte leesstof vóór
+UI-werk — zo blijft het consistent). Donkere modus loopt automatisch via
+de tokens (`prefers-color-scheme`), er zijn geen `dark:`-klassen meer.
+Alle pagina's en componenten zijn omgezet: header/footer (layout),
+voorpagina-dashboard (weer-hero + stats, editie-punten, Daily
+paper-kaart, Sol's selectie), krantweergave (Sol-intro als blauwe
+commentary-kaart, sectiebanden), rating (−2…+2 mono-chips,
+groen/rood/blauw), profielkiezer, capture-formulier, archief en
+instellingen. In het ontwerp gereserveerd voor latere modules:
+tickerbalk (financieel), commentary/markets-rails, horizontale
+onderwerp-tijdlijn, categorie-hues. De Claude Design-zip staat lokaal
+bij Jesse (Downloads), niet in de repo; referentiewaarden zijn
+overgenomen in `globals.css`/`docs/design.md`.
 
 **AI-provider is "voor nu" Grok (xAI)** via de provider-router in
 `modules/shared/ai.ts` (`askAI()`/`askAIJson()`). Modellen:
@@ -58,6 +78,14 @@ aangemaakt. `.env.local` is compleet (Supabase-keys + xAI-key + geheimen).
 3. Daarna draait het rapport elke ochtend vanzelf.
 
 ## Bekende aandachtspunten
+
+- **`.env.local` bestaat alleen op Siems machine.** Op Jesse's account
+  draait de app lokaal in setup-modus (geen Supabase-secrets in git, by
+  design). De Dispatch-restyle is daarom lokaal geverifieerd op de
+  DB-loze schermen (fonts/tokens/licht/donker/responsive) en met echte
+  editie-data gecontroleerd op de productie-URL na de push. Wil Jesse
+  lokaal met data werken: keys uit Supabase/Vercel overnemen in een
+  eigen `.env.local` (zie `.env.example`).
 
 - **Cron live getest (11 juni):** editie van vandaag verwijderd en via de
   productie-`/api/pipeline/tick` opnieuw opgebouwd — 23 tikken, alle stappen

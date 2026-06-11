@@ -11,15 +11,21 @@ export const dynamic = "force-dynamic";
 
 export default async function InstellingenPagina() {
   if (!hasDbConfig()) {
-    return <p className="text-sm text-stone-500">Supabase is nog niet gekoppeld — zie docs/setup.md.</p>;
+    return (
+      <p className="text-sm text-muted">Supabase is nog niet gekoppeld — zie docs/setup.md.</p>
+    );
   }
 
   const cookieStore = await cookies();
   const profileId = cookieStore.get("mr_profile")?.value;
   if (!profileId) {
     return (
-      <p className="text-sm text-stone-500">
-        Kies eerst een profiel op de <Link href="/" className="underline">voorpagina</Link>.
+      <p className="text-sm text-muted">
+        Kies eerst een profiel op de{" "}
+        <Link href="/" className="text-blue underline">
+          voorpagina
+        </Link>
+        .
       </p>
     );
   }
@@ -35,17 +41,17 @@ export default async function InstellingenPagina() {
     scores.find((s) => s.target_type === type && s.target_id === id)?.score ?? 0;
 
   return (
-    <div className="space-y-10">
+    <div className="mx-auto max-w-3xl space-y-10">
       <section>
-        <h1 className="text-xl font-semibold">Instellingen</h1>
-        <p className="mt-1 text-sm text-stone-500">
+        <h1 className="text-2xl font-extrabold tracking-tight">Instellingen</h1>
+        <p className="mt-1.5 text-sm text-muted">
           Scores zijn zichtbaar en groeien mee met je ratings — geen black box.
         </p>
       </section>
 
       <section>
-        <h2 className="font-semibold">Onderwerp toevoegen</h2>
-        <p className="mt-1 text-sm text-stone-500">
+        <h2 className="text-base font-extrabold tracking-tight">Onderwerp toevoegen</h2>
+        <p className="mt-1 text-sm text-muted">
           Vrije onderwerpen zonder feed worden &apos;s ochtends actief opgezocht.
         </p>
         <div className="mt-3">
@@ -54,25 +60,26 @@ export default async function InstellingenPagina() {
       </section>
 
       <section>
-        <h2 className="font-semibold">Interesses</h2>
-        <div className="mt-3 space-y-4">
+        <h2 className="text-base font-extrabold tracking-tight">Interesses</h2>
+        <div className="mt-4 space-y-5">
           {categories.map((category) => (
             <div key={category.id}>
-              <h3 className="flex items-baseline gap-2 text-sm font-medium">
+              <h3 className="flex items-baseline gap-2 text-sm font-bold tracking-tight">
                 {category.name}
                 <ScoreBadge score={scoreFor("category", category.id)} />
               </h3>
-              <ul className="mt-1 flex flex-wrap gap-2">
+              <ul className="mt-2 flex flex-wrap gap-2">
                 {topics
                   .filter((topic) => topic.category_id === category.id)
                   .map((topic) => (
                     <li
                       key={topic.id}
-                      className="flex items-center gap-1.5 rounded-full border border-stone-200 px-3 py-1 text-xs dark:border-stone-700"
+                      className="flex items-center gap-1.5 rounded-full border bg-card px-3 py-1 text-xs"
                     >
                       {topic.name}
-                      <span className="text-stone-400">·</span>
-                      <span className="text-stone-400">{topic.cadence.replace("_", " ")}</span>
+                      <span className="mr-kicker text-faint">
+                        {topic.cadence.replace("_", " ")}
+                      </span>
                       <ScoreBadge score={scoreFor("topic", topic.id)} />
                     </li>
                   ))}
@@ -83,14 +90,16 @@ export default async function InstellingenPagina() {
       </section>
 
       <section>
-        <h2 className="font-semibold">Bronnen</h2>
-        <ul className="mt-3 divide-y divide-stone-200 text-sm dark:divide-stone-800">
+        <h2 className="text-base font-extrabold tracking-tight">Bronnen</h2>
+        <ul className="mt-3 divide-y text-sm">
           {sources.map((source) => (
-            <li key={source.id} className="flex items-baseline justify-between py-2">
-              <span className={source.active ? "" : "text-stone-400 line-through"}>
+            <li key={source.id} className="flex items-baseline justify-between gap-3 py-2.5">
+              <span className={source.active ? "font-medium" : "text-faint line-through"}>
                 {source.name}
               </span>
-              <span className="text-xs text-stone-400">
+              <span
+                className={`mr-kicker text-right ${source.last_error ? "text-red" : "text-faint"}`}
+              >
                 {source.last_error
                   ? `⚠ ${source.last_error.slice(0, 60)}`
                   : source.last_fetched_at
@@ -110,10 +119,8 @@ function ScoreBadge({ score }: { score: number }) {
   const positive = score > 0;
   return (
     <span
-      className={`rounded px-1 text-[10px] font-medium ${
-        positive
-          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
-          : "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300"
+      className={`rounded-tag border border-current px-1 font-mono text-[10px] font-bold ${
+        positive ? "text-green" : "text-red"
       }`}
     >
       {positive ? "+" : ""}

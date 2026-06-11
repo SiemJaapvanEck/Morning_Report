@@ -1,26 +1,184 @@
 @import "tailwindcss";
 
+/* ============================================================
+   MORNING REPORT — VAST DESIGNSYSTEEM ("Dispatch")
+   ============================================================
+   Bron: Claude Design-ronde 11 juni 2026, richting D ("Dispatch").
+   Dit bestand is de enige plek waar kleuren, fonts en radii van de
+   app gedefinieerd worden. Componenten gebruiken UITSLUITEND de
+   tokens hieronder (via Tailwind-utilities als bg-paper, text-ink,
+   border-line, text-blue, rounded-card …) of de mr-*-klassen.
+   Nooit losse hexwaarden of stone/amber/sky-klassen in componenten.
+   Volledige documentatie: docs/design.md
+   ============================================================ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* — kern (licht, "warm papier") — */
+  --paper: #f0eee9;       /* paginadak: warm gebroken wit */
+  --card: #ffffff;        /* kaarten en koppen/footers */
+  --ink: #16140f;         /* primaire tekst, bijna-zwart warm */
+  --muted: #6f6a5e;       /* secundaire tekst */
+  --faint: #a8a294;       /* tertiair: timestamps, bijschriften */
+  --line: #e7e2d6;        /* randen en scheidingslijnen */
+
+  /* — accenten — */
+  --blue: oklch(0.48 0.17 256);      /* interactie: links, selectie, volgen */
+  --blue-soft: oklch(0.95 0.03 256); /* zachte vlakken: Sol/commentary, notities */
+  --red: oklch(0.56 0.19 24);        /* live/nu, negatief, waarschuwing */
+  --green: oklch(0.55 0.13 150);     /* positief (scores, koersen) */
+
+  /* — foto-placeholder (arcering) — */
+  --photo-a: #faf8f3;
+  --photo-b: #efeae0;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
+/* Donkere variant: zelfde warme tint, omgekeerde rollen.
+   Afgeleid van het lichte palet — alleen hier bijstellen. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --paper: #14120e;
+    --card: #1d1a14;
+    --ink: #ece7db;
+    --muted: #a59e8c;
+    --faint: #6e6859;
+    --line: #2b2720;
+
+    --blue: oklch(0.64 0.13 256);
+    --blue-soft: oklch(0.27 0.045 256);
+    --red: oklch(0.64 0.16 24);
+    --green: oklch(0.66 0.12 150);
+
+    --photo-a: #1f1c15;
+    --photo-b: #25211a;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Tailwind v4-mapping: tokens → utilities (bg-paper, text-ink,
+   border-line, text-blue, bg-blue-soft, rounded-card, font-mono …) */
+@theme inline {
+  --color-paper: var(--paper);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-line: var(--line);
+  --color-blue: var(--blue);
+  --color-blue-soft: var(--blue-soft);
+  --color-red: var(--red);
+  --color-green: var(--green);
+
+  /* typografie: Archivo (koppen/lopende tekst) + Space Mono (labels,
+     timestamps, metadata, cijfers) — geladen in app/layout.tsx */
+  --font-sans: var(--font-archivo), "Archivo", ui-sans-serif, sans-serif;
+  --font-mono: var(--font-space-mono), "Space Mono", ui-monospace, monospace;
+
+  /* radii uit het ontwerp */
+  --radius-card: 16px;   /* gewone kaarten */
+  --radius-hero: 18px;   /* grote hero-kaarten (weer) */
+  --radius-rail: 14px;   /* zijbalk-/accentkaarten (Sol, notities) */
+  --radius-media: 10px;  /* foto's */
+  --radius-tag: 2px;     /* mono-tags */
+}
+
+@layer base {
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+  }
+
+  /* randen zijn standaard --line; afwijken kan met border-blue enz. */
+  *,
+  ::before,
+  ::after {
+    border-color: var(--line);
+  }
+
+  ::selection {
+    background: var(--blue-soft);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* Kicker: klein mono-label boven een blok (HET WEER, DAILY PAPER …).
+     Kleur per geval: text-faint (neutraal), text-blue of text-red. */
+  .mr-kicker {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  /* Tag: omrande mono-chip (categorie, status). Kleur via text-*-klasse;
+     de rand volgt automatisch de tekstkleur. */
+  .mr-tag {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border: 1px solid currentColor;
+    border-radius: var(--radius-tag);
+    padding: 2px 6px;
+    white-space: nowrap;
+  }
+
+  /* Standaardkaart: wit vlak met lijn-rand. */
+  .mr-card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+  }
+
+  /* Klikbare kaart: tilt licht op bij hover. */
+  .mr-lift {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .mr-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 34px rgb(0 0 0 / 0.07);
+  }
+
+  /* Kop die bij hover blauw kleurt (leeslink). */
+  .mr-headlink {
+    transition: color 0.12s ease;
+  }
+  .mr-headlink:hover {
+    color: var(--blue);
+  }
+
+  /* Foto-placeholder: schuine arcering zoals in het ontwerp. */
+  .mr-photo {
+    background: repeating-linear-gradient(
+      135deg,
+      var(--photo-a) 0 9px,
+      var(--photo-b) 9px 18px
+    );
+  }
+
+  /* Pill-knop (terug-knoppen e.d.). */
+  .mr-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 14px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: transform 0.1s ease, color 0.12s ease, border-color 0.12s ease;
+  }
+  .mr-btn:hover {
+    transform: translateY(-1px);
+    color: var(--blue);
+    border-color: var(--blue);
+  }
 }

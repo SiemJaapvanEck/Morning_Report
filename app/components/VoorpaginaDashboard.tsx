@@ -1,8 +1,9 @@
-// Voorpagina-dashboard (schets 2026-06-11, telefoon-eerst):
-//   1. kopstrook — weer links, stats rechts, daaronder de puntenrij van
-//      afgelopen edities (tik = die editie openen)
-//   2. grote "Daily paper"-kaart → de volledige editie van vandaag
-//   3. "Sol's selectie" — artikelkaarten (afbeelding, categorie, titel,
+// Voorpagina-dashboard (schets 2026-06-11, telefoon-eerst) in de vaste
+// Dispatch-stijl (docs/design.md):
+//   1. weer-hero — één dichte kaart: actueel weer links, editie-stats rechts
+//   2. puntenrij van afgelopen edities (tik = die editie openen)
+//   3. grote "Daily paper"-kaart → de volledige editie van vandaag
+//   4. "Sol's selectie" — artikelkaarten (afbeelding, categorie, titel,
 //      beschrijving, match-% en rating), gerangschikt op Sol's match-score.
 
 import Link from "next/link";
@@ -12,43 +13,84 @@ import { ItemRating } from "./ItemRating";
 
 type KaartItem = SectionView["items"][number] & { categorie: string };
 
-function WeerBlok({ weather }: { weather: WeatherSnapshot | null }) {
-  return (
-    <div className="rounded-xl bg-stone-100 px-4 py-3 dark:bg-stone-900">
-      <p className="text-xs font-medium uppercase tracking-wide text-stone-400">Weer</p>
-      {weather ? (
-        <>
-          <p className="mt-1 text-2xl font-semibold leading-none">{weather.temp_nu}°</p>
-          <p className="mt-1 truncate text-xs text-stone-500">
-            {weather.omschrijving} · {weather.temp_min}°/{weather.temp_max}° ·{" "}
-            {weather.neerslag_kans}% regen
-          </p>
-        </>
-      ) : (
-        <p className="mt-1 text-sm text-stone-400">geen gegevens</p>
-      )}
-    </div>
-  );
-}
-
-function StatsBlok({ view }: { view: EditionView | null }) {
+/** Eén dichte hero-kaart: weer links, de cijfers van vandaag rechts. */
+function WeerStatsHero({
+  weather,
+  view,
+}: {
+  weather: WeatherSnapshot | null;
+  view: EditionView | null;
+}) {
   const categorySections = view?.sections.filter((s) => s.section.kind === "category") ?? [];
   const artikelen = categorySections.reduce((n, s) => n + s.items.length, 0);
 
+  const metrics: [string, string][] = weather
+    ? [
+        ["Min / max", `${weather.temp_min}° / ${weather.temp_max}°`],
+        ["Neerslagkans", `${weather.neerslag_kans}%`],
+        ["Wind", `${weather.wind_kmh} km/u`],
+      ]
+    : [];
+
   return (
-    <div className="rounded-xl bg-stone-100 px-4 py-3 dark:bg-stone-900">
-      <p className="text-xs font-medium uppercase tracking-wide text-stone-400">Vandaag</p>
-      {view ? (
-        <>
-          <p className="mt-1 text-2xl font-semibold leading-none">{artikelen}</p>
-          <p className="mt-1 text-xs text-stone-500">
-            artikelen · {categorySections.length} secties
-          </p>
-        </>
-      ) : (
-        <p className="mt-1 text-sm text-stone-400">nog geen editie</p>
-      )}
-    </div>
+    <section className="mr-card rounded-hero px-5 py-4 sm:px-6 sm:py-5">
+      <div className="flex items-baseline gap-3">
+        <h2 className="text-[15px] font-black tracking-tight">HET WEER</h2>
+        <span className="mr-kicker text-muted">
+          {weather ? weather.plaats : "geen gegevens"}
+        </span>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-[1fr_auto] sm:gap-8">
+        {/* actueel */}
+        <div>
+          {weather ? (
+            <>
+              <div className="flex items-baseline gap-4">
+                <span className="text-6xl font-extrabold leading-[0.85] tracking-[-3px]">
+                  {weather.temp_nu}°
+                </span>
+                <div>
+                  <p className="text-base font-bold">{weather.omschrijving}</p>
+                  <p className="mr-kicker mt-1 text-faint">
+                    H {weather.temp_max}° · L {weather.temp_min}°
+                  </p>
+                </div>
+              </div>
+              <div className="mt-5 grid grid-cols-3 gap-4 border-t pt-4">
+                {metrics.map(([label, value]) => (
+                  <div key={label}>
+                    <p className="mr-kicker text-faint">{label}</p>
+                    <p className="mt-1 text-[15px] font-bold">{value}</p>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-faint">
+              Geen weergegevens in deze editie.
+            </p>
+          )}
+        </div>
+
+        {/* vandaag in cijfers */}
+        <div className="border-t pt-4 sm:w-44 sm:border-l sm:border-t-0 sm:pl-8 sm:pt-0">
+          <p className="mr-kicker text-faint">Vandaag</p>
+          {view ? (
+            <>
+              <p className="mt-2 text-4xl font-extrabold leading-none tracking-tight">
+                {artikelen}
+              </p>
+              <p className="mr-kicker mt-2 text-muted">
+                artikelen · {categorySections.length} secties
+              </p>
+            </>
+          ) : (
+            <p className="mt-2 text-sm text-faint">nog geen editie</p>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -59,7 +101,7 @@ function EditiePunten({ editions, today }: { editions: Edition[]; today: string 
   if (reeks.length === 0) return null;
 
   return (
-    <div className="mt-3 flex items-center gap-1 px-1">
+    <div className="mt-4 flex items-center gap-1 px-2">
       {reeks.map((edition, i) => {
         const isVandaag = edition.date === today;
         const dag = new Date(edition.date + "T00:00:00").toLocaleDateString("nl-NL", {
@@ -69,15 +111,15 @@ function EditiePunten({ editions, today }: { editions: Edition[]; today: string 
         });
         return (
           <span key={edition.id} className="flex flex-1 items-center last:flex-none">
-            {i > 0 && <span className="h-px flex-1 bg-stone-300 dark:bg-stone-700" />}
+            {i > 0 && <span className="h-px flex-1 bg-line" />}
             <Link
               href={`/editie/${edition.date}`}
               title={dag}
               aria-label={`Editie van ${dag}`}
               className={
                 isVandaag
-                  ? "h-3.5 w-3.5 rounded-full bg-amber-500 ring-2 ring-amber-200 dark:ring-amber-900"
-                  : "h-2.5 w-2.5 rounded-full bg-stone-300 transition-colors hover:bg-amber-400 dark:bg-stone-700"
+                  ? "h-3.5 w-3.5 rounded-full border-[2.5px] border-red bg-red transition-transform hover:scale-125"
+                  : "h-2.5 w-2.5 rounded-full border-2 border-blue bg-card transition-all hover:scale-125 hover:bg-blue"
               }
             />
           </span>
@@ -98,11 +140,11 @@ function DailyPaperKaart({ view, today }: { view: EditionView | null; today: str
 
   if (!view) {
     return (
-      <div className="mt-4 rounded-2xl border border-dashed border-stone-300 bg-white p-6 text-center dark:border-stone-700 dark:bg-stone-900">
-        <p className="text-sm capitalize text-stone-400">{datum}</p>
-        <h2 className="mt-2 text-xl font-semibold tracking-tight">Nog geen editie</h2>
-        <p className="mt-2 text-sm text-stone-500">
-          De pipeline draait &apos;s ochtends tussen 06:30 en 08:15.
+      <div className="mt-5 rounded-card border border-dashed bg-card p-6 text-center sm:p-8">
+        <p className="mr-kicker text-faint">Daily paper</p>
+        <h2 className="mt-2 text-xl font-extrabold capitalize tracking-tight">{datum}</h2>
+        <p className="mt-2 text-sm text-muted">
+          Nog geen editie — de pipeline draait &apos;s ochtends tussen 06:30 en 08:15.
         </p>
       </div>
     );
@@ -111,13 +153,22 @@ function DailyPaperKaart({ view, today }: { view: EditionView | null; today: str
   return (
     <Link
       href={`/editie/${today}`}
-      className="group mt-4 block rounded-2xl border border-stone-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md dark:border-stone-800 dark:bg-stone-900"
+      className="mr-card mr-lift group mt-5 block p-6 sm:p-8"
     >
-      <p className="text-xs font-medium uppercase tracking-widest text-amber-600">Daily paper</p>
-      <h2 className="mt-1 font-serif text-2xl font-semibold capitalize tracking-tight">{datum}</h2>
-      {intro && <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-stone-600 dark:text-stone-300">{intro}</p>}
-      <p className="mt-4 text-sm font-medium text-stone-500 transition-colors group-hover:text-stone-900 dark:group-hover:text-stone-100">
-        Lees de krant →
+      <div className="flex items-center gap-2">
+        <span className="mr-tag font-bold text-blue">Daily paper</span>
+        <span className="mr-tag text-red">Editie van vandaag</span>
+      </div>
+      <h2 className="mt-4 text-3xl font-extrabold capitalize leading-[1.05] tracking-[-0.9px] sm:text-4xl">
+        {datum}
+      </h2>
+      {intro && (
+        <p className="mt-3 line-clamp-3 text-[14.5px] leading-relaxed text-muted">
+          {intro}
+        </p>
+      )}
+      <p className="mr-kicker mt-5 inline-flex items-center gap-1.5 font-bold text-blue transition-[gap] group-hover:gap-2.5">
+        Lees de krant <span aria-hidden>→</span>
       </p>
     </Link>
   );
@@ -129,33 +180,37 @@ function ArtikelKaart({ item }: { item: KaartItem }) {
   const beschrijving = item.summary_text ?? null;
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-xl border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
-      <div className="relative aspect-[16/10] bg-gradient-to-br from-stone-200 to-stone-300 dark:from-stone-800 dark:to-stone-700">
-        {item.image_url && (
+    <div className="mr-card group flex flex-col overflow-hidden">
+      <div className="mr-photo relative aspect-[16/10] overflow-hidden">
+        {item.image_url ? (
           // eslint-disable-next-line @next/next/no-img-element -- externe feed-afbeeldingen, domeinen onbekend
           <img
             src={item.image_url}
             alt=""
             loading="lazy"
-            className="absolute inset-0 h-full w-full object-cover"
+            className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
           />
+        ) : (
+          <span className="mr-kicker absolute inset-0 flex items-center justify-center text-faint">
+            Foto
+          </span>
         )}
         {matchPct != null && (
           <span
             title="Sol's inschatting hoe goed dit artikel bij je past"
-            className="absolute right-2 top-2 rounded-full bg-stone-900/75 px-2 py-0.5 text-xs font-semibold text-white"
+            className="mr-kicker absolute right-2 top-2 rounded-tag border border-line bg-card/95 px-1.5 py-0.5 font-bold text-blue"
           >
-            {matchPct}%
+            {matchPct}% match
           </span>
         )}
       </div>
-      <div className="flex flex-1 flex-col gap-1.5 p-3">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-amber-600">
-          {item.categorie}
+      <div className="flex flex-1 flex-col gap-2 p-3 sm:p-4">
+        <p>
+          <span className="mr-tag text-blue">{item.categorie}</span>
         </p>
-        <h3 className="line-clamp-2 text-sm font-semibold leading-snug">
+        <h3 className="line-clamp-2 text-sm font-bold leading-snug tracking-tight">
           {item.url ? (
-            <a href={item.url} target="_blank" rel="noreferrer" className="hover:underline">
+            <a href={item.url} target="_blank" rel="noreferrer" className="mr-headlink">
               {item.title}
             </a>
           ) : (
@@ -163,9 +218,7 @@ function ArtikelKaart({ item }: { item: KaartItem }) {
           )}
         </h3>
         {beschrijving && (
-          <p className="line-clamp-3 text-xs leading-relaxed text-stone-500 dark:text-stone-400">
-            {beschrijving}
-          </p>
+          <p className="line-clamp-3 text-xs leading-relaxed text-muted">{beschrijving}</p>
         )}
         <div className="mt-auto pt-1.5">
           <ItemRating targetType="item" targetId={item.item_id} />
@@ -197,10 +250,7 @@ export function VoorpaginaDashboard({
   return (
     <div>
       {/* Kopstrook: weer + stats + editie-punten */}
-      <div className="grid grid-cols-2 gap-3">
-        <WeerBlok weather={weather} />
-        <StatsBlok view={view} />
-      </div>
+      <WeerStatsHero weather={weather} view={view} />
       <EditiePunten editions={editions} today={today} />
 
       {/* Daily paper */}
@@ -208,12 +258,13 @@ export function VoorpaginaDashboard({
 
       {/* Sol's selectie */}
       {kaarten.length > 0 && (
-        <section className="mt-8">
-          <div className="flex items-baseline justify-between">
-            <h2 className="text-lg font-semibold tracking-tight">Sol&apos;s selectie</h2>
-            <p className="text-xs text-stone-400">gerangschikt op match</p>
+        <section className="mt-9">
+          <div className="flex items-baseline gap-3">
+            <h2 className="text-base font-extrabold tracking-tight">Sol&apos;s selectie</h2>
+            <span className="flex-1" />
+            <p className="mr-kicker text-faint">Gerangschikt op match</p>
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-3 sm:gap-4">
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3">
             {kaarten.map((item) => (
               <ArtikelKaart key={item.id} item={item} />
             ))}

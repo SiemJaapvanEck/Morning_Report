@@ -1,5 +1,6 @@
 // Eén specifieke editie uit het archief (datum = YYYY-MM-DD).
 
+import Link from "next/link";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { hasDbConfig } from "@/modules/shared/db";
@@ -23,5 +24,12 @@ export default async function EditiePagina({
   const view = await getEdition(profileId, datum);
   if (!view) notFound();
 
-  return <EditieWeergave view={view} />;
+  return (
+    <div className="mx-auto max-w-3xl">
+      <Link href="/" className="mr-btn mb-6">
+        <span aria-hidden>←</span> Terug naar het rapport
+      </Link>
+      <EditieWeergave view={view} />
+    </div>
+  );
 }

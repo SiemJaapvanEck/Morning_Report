@@ -63,13 +63,24 @@ Begin elke nieuwe sessie met het lezen van `HANDOFF.md`.
 
 ## Designrichtlijnen (UI)
 
-- Rustige, krantachtige leeservaring: Tailwind, `stone`-palet, accenten
-  amber (rating/Sol) en sky (volgen), `max-w-3xl`, licht- én donker-modus.
+- **De vormgeving is vast: het "Dispatch"-designsysteem** (Claude
+  Design-ronde 11 juni 2026). Tokens en `mr-*`-componentklassen staan op
+  één plek, `app/globals.css`; regels en patronen in `docs/design.md` —
+  eerst lezen vóór UI-werk.
+- Componenten gebruiken uitsluitend tokens (`bg-paper`, `bg-card`,
+  `text-ink`, `text-muted`, `text-faint`, `border-line`, `text-blue`,
+  `bg-blue-soft`, `text-red`, `text-green`, `rounded-card` …) en de
+  `mr-*`-klassen. **Nooit** losse hexwaarden of standaard-paletten
+  (stone/amber/sky), **geen** `dark:`-klassen — donker loopt automatisch
+  via de tokens.
+- Typografie: Archivo (koppen/tekst) + Space Mono (labels/metadata/data),
+  geladen in `app/layout.tsx`. Kleursemantiek: blauw = interactie/Sol/
+  volgen, rood = live/nu/negatief, groen = positief.
+- Shell `max-w-5xl`; leespagina's (editie, archief, instellingen) een
+  binnenkolom `max-w-3xl` — de krant blijft een rustige leeskolom.
 - Nederlandstalige UI-teksten, geen lorem ipsum.
 - Geen zware component-libraries; kleine client-componenten alleen waar
   interactie nodig is, de rest server components.
-- De definitieve vormgevingsronde (iconen, rating-schaal) staat nog open in
-  het ontwerp — tot die tijd functioneel en consistent houden.
 
 ## Kwaliteitseisen vóór elke commit
 

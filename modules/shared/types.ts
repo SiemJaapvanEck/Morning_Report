@@ -27,6 +27,8 @@ export interface ProfileSettings {
   lat?: number;
   lon?: number;
   plaats?: string;
+  /** true zodra de gebruiker de voorkeuren-onboarding heeft afgerond */
+  voorkeuren_ingesteld?: boolean;
 }
 
 export interface Category {

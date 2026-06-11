@@ -1,11 +1,13 @@
-// Instellingen: interesses (zichtbare scores), bronnen en invoer.
-// v1 toont de kern; fase 4 (interessemotor compleet) bouwt de score-tuning uit.
+// Instellingen: interesses (bewerkbaar, zelfde kiezer als de onboarding),
+// bronnen en invoer.
 
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { db, hasDbConfig, unwrap } from "@/modules/shared/db";
+import { getVoorkeurenData } from "@/app/lib/voorkeuren";
 import { CaptureFormulier } from "@/app/components/CaptureFormulier";
-import type { Category, Source, Topic, TopicScore } from "@/modules/shared/types";
+import { VoorkeurenKiezer } from "@/app/components/VoorkeurenKiezer";
+import type { Source } from "@/modules/shared/types";
 
 export const dynamic = "force-dynamic";
 
@@ -24,15 +26,9 @@ export default async function InstellingenPagina() {
     );
   }
 
-  const categories: Category[] = unwrap(await db().from("categories").select("*").order("position"));
-  const topics: Topic[] = unwrap(await db().from("topics").select("*").order("name"));
   const sources: Source[] = unwrap(await db().from("sources").select("*").order("name"));
-  const scores: TopicScore[] = unwrap(
-    await db().from("topic_scores").select("*").eq("profile_id", profileId),
-  );
-
-  const scoreFor = (type: string, id: string) =>
-    scores.find((s) => s.target_type === type && s.target_id === id)?.score ?? 0;
+  const voorkeuren = await getVoorkeurenData(profileId);
+  const { categories, topics } = voorkeuren;
 
   return (
     <div className="space-y-10">
@@ -55,30 +51,17 @@ export default async function InstellingenPagina() {
 
       <section>
         <h2 className="font-semibold">Interesses</h2>
-        <div className="mt-3 space-y-4">
-          {categories.map((category) => (
-            <div key={category.id}>
-              <h3 className="flex items-baseline gap-2 text-sm font-medium">
-                {category.name}
-                <ScoreBadge score={scoreFor("category", category.id)} />
-              </h3>
-              <ul className="mt-1 flex flex-wrap gap-2">
-                {topics
-                  .filter((topic) => topic.category_id === category.id)
-                  .map((topic) => (
-                    <li
-                      key={topic.id}
-                      className="flex items-center gap-1.5 rounded-full border border-stone-200 px-3 py-1 text-xs dark:border-stone-700"
-                    >
-                      {topic.name}
-                      <span className="text-stone-400">·</span>
-                      <span className="text-stone-400">{topic.cadence.replace("_", " ")}</span>
-                      <ScoreBadge score={scoreFor("topic", topic.id)} />
-                    </li>
-                  ))}
-              </ul>
-            </div>
-          ))}
+        <p className="mt-1 text-sm text-stone-500">
+          Wat je volgt en hoe relevant (−2…+2) — het startpunt van Sol&apos;s
+          match-percentage; je ratings stellen het daarna bij.
+        </p>
+        <div className="mt-3">
+          <VoorkeurenKiezer
+            categories={categories}
+            topics={topics}
+            initieel={voorkeuren.initieel}
+            modus="instellingen"
+          />
         </div>
       </section>
 
@@ -102,22 +85,5 @@ export default async function InstellingenPagina() {
         </ul>
       </section>
     </div>
-  );
-}
-
-function ScoreBadge({ score }: { score: number }) {
-  if (score === 0) return null;
-  const positive = score > 0;
-  return (
-    <span
-      className={`rounded px-1 text-[10px] font-medium ${
-        positive
-          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
-          : "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300"
-      }`}
-    >
-      {positive ? "+" : ""}
-      {score.toFixed(2)}
-    </span>
   );
 }

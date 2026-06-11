@@ -140,14 +140,24 @@ const scanRankStep: StepHandler = async ({ edition, step }) => {
       .limit(50),
   );
 
+  // topiclijst voor de toewijzing: zo werken topic-voorkeuren (ook eigen,
+  // heel specifieke topics) door in priority() → Sol's match-score
+  const topics = unwrap(
+    await db().from("topics").select("id, name, query_text"),
+  ) as { id: string; name: string; query_text: string | null }[];
+
   let scanned = 0;
   for (let i = 0; i < items.length; i += 25) {
     const batch = items.slice(i, i + 25);
-    const verdicts = await scanBatch(batch, edition.id, step.id);
+    const verdicts = await scanBatch(batch, edition.id, step.id, topics);
     for (const [itemId, verdict] of verdicts) {
       await db()
         .from("items")
-        .update({ importance: verdict.belang, is_ad: verdict.isReclame })
+        .update({
+          importance: verdict.belang,
+          is_ad: verdict.isReclame,
+          topic_id: verdict.topicId,
+        })
         .eq("id", itemId);
       scanned++;
     }

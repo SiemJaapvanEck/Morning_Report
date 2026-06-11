@@ -4,6 +4,7 @@
 // → setupscherm.
 
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { hasDbConfig } from "@/modules/shared/db";
 import { todayLocal } from "@/modules/shared/config";
 import { getProfiles, getEdition, listEditions } from "@/app/lib/queries";
@@ -30,8 +31,14 @@ export default async function Home() {
   const profileId = cookieStore.get("mr_profile")?.value;
   const profiles = await getProfiles();
 
-  if (!profileId || !profiles.some((profile) => profile.id === profileId)) {
+  const profile = profiles.find((p) => p.id === profileId);
+  if (!profileId || !profile) {
     return <ProfielKiezer profiles={profiles} />;
+  }
+
+  // eerst voorkeuren instellen — die zijn het startpunt van Sol's match-score
+  if (!profile.settings?.voorkeuren_ingesteld) {
+    redirect("/onboarding");
   }
 
   const today = todayLocal();

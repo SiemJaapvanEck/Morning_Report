@@ -1,6 +1,6 @@
 # HANDOFF — stand van zaken
 
-> Laatst bijgewerkt: 11 juni 2026 (middag), sessie op account Siem.
+> Laatst bijgewerkt: 12 juni 2026, sessie op account Siem.
 > Lees dit eerst bij het oppakken van het project; werkafspraken staan in CLAUDE.md.
 
 ## Waar we staan
@@ -23,6 +23,22 @@ categorie, beschrijving, **Sol's match-percentage** en rating **−2…+2**
 gebackfilld (55 scores, 32 afbeeldingen); vanaf morgen vult de pipeline dit
 zelf. De volledige krant-weergave (`EditieWeergave`) is ongewijzigd en leeft
 op `/editie/[datum]`.
+
+**Accountvoorkeuren staan erin (12 juni).** Nieuw profiel → `/onboarding`
+(defaults voorgeselecteerd: tech, financieel, wereld, wetenschap, goed-nieuws
+— die laatste is nieuw, migratie 0005, met Good News Network + Positive News
+als feeds). Per topic volgen/niet + relevantie −2…+2; dat seedt
+`topic_scores` (×0.3, dus −0.6…+0.6 — ruimte voor het leren via ratings).
+Eigen topics kunnen hoe specifiek ook (bv. één bedrijf), evt. met nieuwe
+categorie en zoektekst (`query_mode`; fase 3 gaat die actief opzoeken).
+Zelfde kiezer is bewerkbaar onder Instellingen → Interesses
+(`VoorkeurenKiezer`, `modules/preferences`, `/api/voorkeuren`,
+`app/lib/voorkeuren.ts`). Belangrijk: de scan-stap wijst nu per item een
+topic toe (`scanBatch` krijgt de topiclijst mee), waardoor topic-voorkeuren
+écht doorwerken in `priority()` → match-%. **Let op:** bestaande profielen
+zonder `voorkeuren_ingesteld`-vlag (dus ook Siem) worden bij het eerste
+bezoek éénmalig naar `/onboarding` gestuurd — defaults staan klaar, één tik
+op "Klaar" volstaat.
 
 **AI-provider is "voor nu" Grok (xAI)** via de provider-router in
 `modules/shared/ai.ts` (`askAI()`/`askAIJson()`). Modellen:

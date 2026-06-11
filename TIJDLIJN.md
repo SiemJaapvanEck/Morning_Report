@@ -46,3 +46,9 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   edition_items.match_score) toegepast; feedparser haalt afbeeldingen uit
   feeds; select-stap schrijft match_score. Editie van vandaag gebackfilld
   (55 scores, 32 afbeeldingen). Alle poorten groen.
+- **12 juni 2026** — Accountvoorkeuren gebouwd: onboarding-stap (defaults
+  voorgeselecteerd: tech/financieel/wereld/wetenschap/goed-nieuws) +
+  bewerkbare Interesses in Instellingen. Relevantie −2…+2 seedt topic_scores
+  (×0.3); eigen (hyper-specifieke) topics met evt. nieuwe categorie en
+  zoektekst. Migratie 0005 (goed-nieuws + 2 bronnen). Scan-stap wijst nu per
+  artikel een topic toe zodat topic-voorkeuren echt in de match-% doorwerken.

@@ -97,6 +97,11 @@ export interface NieuwTopic {
    * scan-stap matcht het ondertussen al op naam in de bestaande feeds.
    */
   zoektekst?: string;
+  /**
+   * Optionele vaste bron: items uit deze bron krijgen het topic direct bij
+   * de ingestie. Leeg = de normale zoekweg (AI-toewijzing over alle feeds).
+   */
+  source_id?: string;
 }
 
 /** Maakt een eigen topic (en zo nodig categorie) aan en volgt het meteen. */
@@ -140,6 +145,7 @@ export async function createUserTopic(
           cadence: "altijd",
           query_mode: zoektekst != null,
           query_text: zoektekst,
+          source_id: invoer.source_id ?? null,
         },
         { onConflict: "slug" },
       )

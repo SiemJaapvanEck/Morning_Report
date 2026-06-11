@@ -7,7 +7,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Category, Topic } from "@/modules/shared/types";
+import type { Category, Source, Topic } from "@/modules/shared/types";
 
 interface Keuze {
   volgen: boolean;
@@ -20,6 +20,7 @@ interface PendingTopic {
   nieuwe_categorie?: string;
   relevantie: number;
   zoektekst?: string;
+  source_id?: string;
 }
 
 const RELEVANTIES = [-2, -1, 0, 1, 2] as const;
@@ -54,11 +55,14 @@ function RelevantieKiezer({
 export function VoorkeurenKiezer({
   categories,
   topics,
+  sources,
   initieel,
   modus,
 }: {
   categories: Category[];
   topics: Topic[];
+  /** actieve bronnen, voor de optionele topic ↔ bron-koppeling */
+  sources: Source[];
   /** huidige stand per topic_id; ontbreekt een topic, dan geldt de modus-default */
   initieel: Record<string, Keuze>;
   modus: "onboarding" | "instellingen";
@@ -76,6 +80,7 @@ export function VoorkeurenKiezer({
   const [nieuwCategorie, setNieuwCategorie] = useState<string>(categories[0]?.id ?? "");
   const [eigenCategorie, setEigenCategorie] = useState("");
   const [nieuwZoektekst, setNieuwZoektekst] = useState("");
+  const [nieuwBron, setNieuwBron] = useState(""); // "" = alle bronnen (normale zoekweg)
   const [nieuwRelevantie, setNieuwRelevantie] = useState(1);
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
@@ -103,11 +108,13 @@ export function VoorkeurenKiezer({
         nieuwe_categorie: eigenCategorie.trim() || undefined,
         relevantie: nieuwRelevantie,
         zoektekst: nieuwZoektekst.trim() || undefined,
+        source_id: nieuwBron || undefined,
       },
     ]);
     setNieuwNaam("");
     setNieuwZoektekst("");
     setEigenCategorie("");
+    setNieuwBron("");
     setNieuwRelevantie(1);
   }
 
@@ -161,6 +168,11 @@ export function VoorkeurenKiezer({
                             · specifiek
                           </span>
                         )}
+                        {topic.source_id && (
+                          <span className="ml-1.5 text-xs text-stone-400">
+                            · {sources.find((s) => s.id === topic.source_id)?.name ?? "vaste bron"}
+                          </span>
+                        )}
                       </span>
                     </label>
                     {keuze.volgen && (
@@ -182,7 +194,8 @@ export function VoorkeurenKiezer({
         <h3 className="text-sm font-semibold">Eigen onderwerp volgen</h3>
         <p className="mt-1 text-xs text-stone-500">
           Hoe specifiek je wilt — bv. één bedrijf. Met een zoektekst wordt het onderwerp
-          &apos;s ochtends ook actief opgezocht.
+          &apos;s ochtends ook actief opgezocht. Koppel je een vaste bron, dan komt dit
+          onderwerp direct uit die bron; anders geldt de normale zoekweg.
         </p>
         <div className="mt-3 space-y-2">
           <input
@@ -218,6 +231,18 @@ export function VoorkeurenKiezer({
             placeholder="Zoektekst (optioneel), bv. Anthropic OR Claude"
             className="w-full rounded-lg border border-stone-300 bg-transparent px-3 py-1.5 text-sm dark:border-stone-700"
           />
+          <select
+            value={nieuwBron}
+            onChange={(event) => setNieuwBron(event.target.value)}
+            className="w-full rounded-lg border border-stone-300 bg-transparent px-2 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-900"
+          >
+            <option value="">Bron: alle bronnen (normale zoekweg)</option>
+            {sources.map((source) => (
+              <option key={source.id} value={source.id}>
+                Alleen uit: {source.name}
+              </option>
+            ))}
+          </select>
           <div className="flex items-center justify-between">
             <span className="text-xs text-stone-500">
               Relevantie: <RelevantieKiezer waarde={nieuwRelevantie} onKies={setNieuwRelevantie} />

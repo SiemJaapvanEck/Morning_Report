@@ -4,18 +4,21 @@
 
 import { db, unwrap } from "@/modules/shared/db";
 import { DEFAULT_CATEGORY_SLUGS } from "@/modules/preferences";
-import type { Category, Topic } from "@/modules/shared/types";
+import type { Category, Source, Topic } from "@/modules/shared/types";
 
 export interface VoorkeurenData {
   categories: Category[];
   topics: Topic[];
+  /** actieve bronnen, voor de optionele topic ↔ bron-koppeling */
+  sources: Source[];
   initieel: Record<string, { volgen: boolean; relevantie: number }>;
 }
 
 export async function getVoorkeurenData(profileId: string): Promise<VoorkeurenData> {
-  const [categoriesRes, topicsRes, scoresRes, marksRes] = await Promise.all([
+  const [categoriesRes, topicsRes, sourcesRes, scoresRes, marksRes] = await Promise.all([
     db().from("categories").select("*").order("position"),
     db().from("topics").select("*").order("name"),
+    db().from("sources").select("*").eq("active", true).order("name"),
     db()
       .from("topic_scores")
       .select("target_id, score")
@@ -29,6 +32,7 @@ export async function getVoorkeurenData(profileId: string): Promise<VoorkeurenDa
   ]);
   const categories = unwrap(categoriesRes) as Category[];
   const topics = unwrap(topicsRes) as Topic[];
+  const sources = unwrap(sourcesRes) as Source[];
   const scores = unwrap(scoresRes) as { target_id: string; score: number }[];
   const marks = unwrap(marksRes) as { target_id: string; active: boolean }[];
 
@@ -59,5 +63,5 @@ export async function getVoorkeurenData(profileId: string): Promise<VoorkeurenDa
     }
   }
 
-  return { categories, topics, initieel };
+  return { categories, topics, sources, initieel };
 }

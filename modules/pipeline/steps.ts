@@ -146,6 +146,8 @@ const scanRankStep: StepHandler = async ({ edition, step }) => {
     await db().from("topics").select("id, name, query_text"),
   ) as { id: string; name: string; query_text: string | null }[];
 
+  const vastTopic = new Map(items.map((item) => [item.id, item.topic_id]));
+
   let scanned = 0;
   for (let i = 0; i < items.length; i += 25) {
     const batch = items.slice(i, i + 25);
@@ -156,7 +158,8 @@ const scanRankStep: StepHandler = async ({ edition, step }) => {
         .update({
           importance: verdict.belang,
           is_ad: verdict.isReclame,
-          topic_id: verdict.topicId,
+          // een bron-gekoppeld topic (gezet bij ingestie) wint van de AI-gok
+          topic_id: vastTopic.get(itemId) ?? verdict.topicId,
         })
         .eq("id", itemId);
       scanned++;

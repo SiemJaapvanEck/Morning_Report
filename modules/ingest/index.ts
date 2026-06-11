@@ -54,9 +54,20 @@ export async function ingestSource(source: Source): Promise<IngestResult> {
     (item) => !item.publishedAt || new Date(item.publishedAt).getTime() > cutoff,
   );
 
+  // is een topic aan deze bron gekoppeld, dan krijgen de items dat topic
+  // direct mee (de scan-stap respecteert dit); anders de normale zoekweg
+  const pinned = await db()
+    .from("topics")
+    .select("id")
+    .eq("source_id", source.id)
+    .limit(1)
+    .maybeSingle();
+  const pinnedTopicId: string | null = pinned.data?.id ?? null;
+
   const rows = fresh.map((item) => ({
     source_id: source.id,
     category_id: source.category_id,
+    topic_id: pinnedTopicId,
     guid: item.guid,
     url: item.url,
     title: item.title,

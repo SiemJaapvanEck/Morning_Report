@@ -17,7 +17,7 @@ export default async function OnboardingPagina() {
   const profileId = cookieStore.get("mr_profile")?.value;
   if (!profileId) redirect("/");
 
-  const { categories, topics, initieel } = await getVoorkeurenData(profileId);
+  const { categories, topics, sources, initieel } = await getVoorkeurenData(profileId);
 
   return (
     <div className="mx-auto max-w-xl">
@@ -32,6 +32,7 @@ export default async function OnboardingPagina() {
         <VoorkeurenKiezer
           categories={categories}
           topics={topics}
+          sources={sources}
           initieel={initieel}
           modus="onboarding"
         />

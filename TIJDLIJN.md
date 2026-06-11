@@ -52,3 +52,7 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   (×0.3); eigen (hyper-specifieke) topics met evt. nieuwe categorie en
   zoektekst. Migratie 0005 (goed-nieuws + 2 bronnen). Scan-stap wijst nu per
   artikel een topic toe zodat topic-voorkeuren echt in de match-% doorwerken.
+- **12 juni 2026 (vervolg)** — Topic ↔ bron-koppeling: eigen onderwerpen
+  kunnen optioneel aan één vaste bron hangen (migratie 0006,
+  topics.source_id). Ingest zet het topic dan direct; scan respecteert dat.
+  Zonder koppeling de normale zoekweg. Bron-dropdown in de voorkeurenkiezer.

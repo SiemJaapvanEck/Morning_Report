@@ -59,6 +59,7 @@ export default async function InstellingenPagina() {
           <VoorkeurenKiezer
             categories={categories}
             topics={topics}
+            sources={voorkeuren.sources}
             initieel={voorkeuren.initieel}
             modus="instellingen"
           />

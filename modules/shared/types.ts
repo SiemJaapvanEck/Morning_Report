@@ -46,6 +46,8 @@ export interface Topic {
   cadence: Cadence;
   query_mode: boolean;
   query_text: string | null;
+  /** optionele vaste bron: items uit deze bron krijgen dit topic direct */
+  source_id: string | null;
   created_at: string;
 }
 

@@ -56,3 +56,8 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   kunnen optioneel aan één vaste bron hangen (migratie 0006,
   topics.source_id). Ingest zet het topic dan direct; scan respecteert dat.
   Zonder koppeling de normale zoekweg. Bron-dropdown in de voorkeurenkiezer.
+- **12 juni 2026 (vervolg 2)** — Developer-modus in Instellingen: quick
+  pipeline test met live log, oude test-edities seeden + opruimen
+  (modules/dev, /api/dev). 3 oude edities (8–10 juni, 24 artikelen) geseed.
+  Kleurthema's Krant/Sepia/Mint/Nacht als stip-knoppen in de koptekst
+  (class-based dark, anti-flits-script, localStorage).

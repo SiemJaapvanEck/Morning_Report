@@ -7,6 +7,7 @@ import { db, hasDbConfig, unwrap } from "@/modules/shared/db";
 import { getVoorkeurenData } from "@/app/lib/voorkeuren";
 import { CaptureFormulier } from "@/app/components/CaptureFormulier";
 import { VoorkeurenKiezer } from "@/app/components/VoorkeurenKiezer";
+import { DevPaneel } from "@/app/components/DevPaneel";
 import type { Source } from "@/modules/shared/types";
 
 export const dynamic = "force-dynamic";
@@ -84,6 +85,16 @@ export default async function InstellingenPagina() {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section>
+        <h2 className="font-semibold">Developer</h2>
+        <p className="mt-1 text-sm text-stone-500">
+          Testgereedschap: pipeline direct draaien en testdata beheren.
+        </p>
+        <div className="mt-3">
+          <DevPaneel />
+        </div>
       </section>
     </div>
   );

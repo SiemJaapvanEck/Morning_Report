@@ -2,7 +2,12 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
 import { ServiceWorkerRegistratie } from "./components/ServiceWorkerRegistratie";
+import { ThemaKiezer } from "./components/ThemaKiezer";
 import "./globals.css";
+
+// Vóór de eerste paint: opgeslagen thema toepassen (geen flits). Zonder
+// keuze volgt het thema het OS (donker → Nacht).
+const themaScript = `(function(){try{var t=localStorage.getItem("mr_thema");if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"nacht":"krant";}var h=document.documentElement;h.dataset.theme=t;h.classList.toggle("dark",t==="nacht");}catch(e){}})();`;
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -37,15 +42,18 @@ export default function RootLayout({
   return (
     <html
       lang="nl"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-stone-50 text-stone-900 dark:bg-stone-950 dark:text-stone-100">
+      <body className="min-h-full flex flex-col">
+        <script dangerouslySetInnerHTML={{ __html: themaScript }} />
         <header className="border-b border-stone-200 dark:border-stone-800">
-          <nav className="mx-auto flex max-w-3xl items-baseline justify-between px-4 py-3">
+          <nav className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
             <Link href="/" className="font-semibold tracking-tight">
               Morning Report
             </Link>
-            <div className="flex gap-4 text-sm text-stone-500">
+            <div className="flex items-center gap-4 text-sm text-stone-500">
+              <ThemaKiezer />
               <Link href="/archief" className="hover:text-stone-900 dark:hover:text-stone-100">
                 Archief
               </Link>

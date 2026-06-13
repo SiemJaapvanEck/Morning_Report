@@ -48,7 +48,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <script dangerouslySetInnerHTML={{ __html: themaScript }} />
         <header className="border-b border-stone-200 dark:border-stone-800">
-          <nav className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
+          <nav className="flex w-full items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
             <Link href="/" className="font-semibold tracking-tight">
               Morning Report
             </Link>
@@ -63,7 +63,7 @@ export default function RootLayout({
             </div>
           </nav>
         </header>
-        <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6">{children}</main>
+        <main className="w-full flex-1 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
         <ServiceWorkerRegistratie />
       </body>
     </html>

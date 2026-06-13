@@ -40,6 +40,9 @@ export default async function InstellingenPagina() {
         </p>
       </section>
 
+      {/* twee kolommen op grote schermen, gestapeld op mobiel */}
+      <div className="grid items-start gap-x-12 gap-y-10 lg:grid-cols-2">
+        <div className="space-y-10">
       <section>
         <h2 className="font-semibold">Onderwerp toevoegen</h2>
         <p className="mt-1 text-sm text-stone-500">
@@ -66,7 +69,9 @@ export default async function InstellingenPagina() {
           />
         </div>
       </section>
+        </div>
 
+        <div className="space-y-10">
       <section>
         <h2 className="font-semibold">Bronnen</h2>
         <ul className="mt-3 divide-y divide-stone-200 text-sm dark:divide-stone-800">
@@ -96,6 +101,8 @@ export default async function InstellingenPagina() {
           <DevPaneel />
         </div>
       </section>
+        </div>
+      </div>
     </div>
   );
 }

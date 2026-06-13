@@ -42,7 +42,7 @@ export function EditieWeergave({ view }: { view: EditionView }) {
           </div>
         )}
         {frontPage?.intro && (
-          <div className="mt-5 rounded-xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
+          <div className="mt-5 max-w-3xl rounded-xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
             <p className="text-xs font-medium uppercase tracking-wide text-stone-400">Sol</p>
             <p className="mt-2 leading-relaxed">{frontPage.intro}</p>
           </div>
@@ -53,7 +53,7 @@ export function EditieWeergave({ view }: { view: EditionView }) {
       {categorySections.map(({ section, items }) => (
         <section key={section.id} className="border-b border-stone-200 py-6 last:border-0 dark:border-stone-800">
           <h2 className="text-lg font-semibold tracking-tight">{section.title}</h2>
-          <div className="mt-4 space-y-5">
+          <div className="mt-4 grid gap-x-8 gap-y-6 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {items.map((item) => (
               <div key={item.id}>
                 <div className="flex items-start justify-between gap-3">

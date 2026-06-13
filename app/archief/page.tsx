@@ -27,7 +27,7 @@ export default async function ArchiefPagina() {
   return (
     <div>
       <h1 className="text-xl font-semibold">Archief</h1>
-      <ul className="mt-6 divide-y divide-stone-200 dark:divide-stone-800">
+      <ul className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
         {editions.map((edition) => {
           const datum = new Date(edition.date + "T00:00:00").toLocaleDateString("nl-NL", {
             weekday: "long",
@@ -39,7 +39,7 @@ export default async function ArchiefPagina() {
             <li key={edition.id}>
               <Link
                 href={`/editie/${edition.date}`}
-                className="flex items-baseline justify-between py-3 hover:bg-stone-100 dark:hover:bg-stone-900"
+                className="flex items-baseline justify-between gap-3 rounded-xl border border-stone-200 bg-white px-4 py-3 transition-shadow hover:shadow-md dark:border-stone-800 dark:bg-stone-900"
               >
                 <span className="capitalize">{datum}</span>
                 <span className="text-xs text-stone-400">
@@ -50,7 +50,7 @@ export default async function ArchiefPagina() {
           );
         })}
         {editions.length === 0 && (
-          <li className="py-3 text-sm text-stone-400">Nog geen edities.</li>
+          <li className="text-sm text-stone-400">Nog geen edities.</li>
         )}
       </ul>
     </div>

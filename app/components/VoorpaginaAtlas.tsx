@@ -400,18 +400,15 @@ export function VoorpaginaAtlas({
   const headline = ranked[0]?.title ?? "Je ochtendeditie staat klaar";
   const bullets = ranked.slice(1, 6); // kop is al de #1 — niet herhalen
   const selectie = ranked.slice(0, 6);
-  const kaarten = ranked.slice(0, 6);
+  const kaarten = ranked.slice(0, 8);
 
   const datumLang = fmtDatum(today, { weekday: "long", day: "numeric", month: "long" });
   const initialen = (profileName ?? "Lezer").trim().slice(0, 2).toUpperCase();
 
   return (
-    // volle breedte binnen de smalle layout-container (full-bleed)
-    <div
-      className={`${grotesk.variable} ${archivo.variable} ${spaceMono.variable} font-[family-name:var(--font-grotesk)]`}
-      style={{ marginInline: "calc(50% - 50vw)" }}
-    >
-      <div className="mx-auto max-w-5xl px-4 sm:px-6">
+    // de layout-container is nu zelf vol-breed; hier alleen de lettertypen scopen
+    <div className={`${grotesk.variable} ${archivo.variable} ${spaceMono.variable} font-[family-name:var(--font-grotesk)]`}>
+      <div>
         {/* datumstrook met recente edities + avatar */}
         <div className="flex items-center gap-3 pb-5">
           <span className="h-1.5 w-1.5 rounded-full bg-[#2f6df0]" />
@@ -453,7 +450,7 @@ export function VoorpaginaAtlas({
               <span className="ml-1 h-px flex-1 bg-stone-200 dark:bg-stone-800" />
               <span className="font-[family-name:var(--font-space-mono)] text-[10.5px] font-bold tracking-wide text-stone-400">OP MATCH</span>
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {kaarten.map((item) => (
                 <VerhaalKaart key={item.id} item={item} />
               ))}

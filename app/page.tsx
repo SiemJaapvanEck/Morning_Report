@@ -9,7 +9,7 @@ import { hasDbConfig } from "@/modules/shared/db";
 import { todayLocal } from "@/modules/shared/config";
 import { getProfiles, getEdition, listEditions } from "@/app/lib/queries";
 import { ProfielKiezer } from "@/app/components/ProfielKiezer";
-import { VoorpaginaDashboard } from "@/app/components/VoorpaginaDashboard";
+import { VoorpaginaAtlas } from "@/app/components/VoorpaginaAtlas";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +54,7 @@ export default async function Home() {
           Deze editie is nog in de maak — wat je ziet groeit nog aan.
         </div>
       )}
-      <VoorpaginaDashboard view={view} editions={editions} today={today} />
+      <VoorpaginaAtlas view={view} editions={editions} today={today} profileName={profile.name} />
     </div>
   );
 }

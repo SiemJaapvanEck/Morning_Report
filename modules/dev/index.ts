@@ -11,6 +11,7 @@
 
 import { db, unwrap } from "../shared/db";
 import type { Category } from "../shared/types";
+import type { RegioCode } from "../shared/regios";
 
 const DEV_GUID_PREFIX = "dev-test-";
 
@@ -22,6 +23,8 @@ interface TestArtikel {
   match: number;
   band: "deep" | "summary" | "headline";
   solNote?: string;
+  /** wereldregio voor de nieuwskaart (weggelaten = geen plek) */
+  regio?: RegioCode;
 }
 
 // Vaste, herkenbare testset — per dag hergebruikt met de dag-index in de
@@ -29,6 +32,7 @@ interface TestArtikel {
 const TEST_ARTIKELEN: TestArtikel[] = [
   {
     titel: "Anthropic toont nieuw redeneer-model voor agents",
+    regio: "na",
     samenvatting:
       "Het lab demonstreert een model dat meerstaps-taken plant en uitvoert met minder toezicht. Eerste benchmarks tonen een flinke sprong in betrouwbaarheid.",
     categorieSlug: "tech",
@@ -38,6 +42,7 @@ const TEST_ARTIKELEN: TestArtikel[] = [
   },
   {
     titel: "ASML verhoogt outlook na sterke chipvraag",
+    regio: "eu",
     samenvatting:
       "De Veldhovense machinebouwer ziet de vraag naar EUV-systemen aanhouden en schroeft de jaarverwachting op. Analisten reageren positief.",
     categorieSlug: "financieel",
@@ -46,6 +51,7 @@ const TEST_ARTIKELEN: TestArtikel[] = [
   },
   {
     titel: "Doorbraak in zonnecel-rendement: 31% in het lab",
+    regio: "eu",
     samenvatting:
       "Onderzoekers combineren perovskiet met silicium en doorbreken de 30%-grens. Productie op schaal is de volgende horde.",
     categorieSlug: "wetenschap",
@@ -54,6 +60,7 @@ const TEST_ARTIKELEN: TestArtikel[] = [
   },
   {
     titel: "Spanningen rond handelsverdrag lopen op voor top",
+    regio: "me",
     samenvatting:
       "Onderhandelaars zien de posities verharden in aanloop naar de top van volgende week. Een compromis over tarieven ligt nog open.",
     categorieSlug: "wereld",
@@ -62,6 +69,7 @@ const TEST_ARTIKELEN: TestArtikel[] = [
   },
   {
     titel: "Buurtinitiatief bouwt voedselbos op braakliggend terrein",
+    regio: "eu",
     samenvatting:
       "Vrijwilligers vormden een kale stadskavel om tot een eetbaar bos met 400 soorten. De gemeente wil het model nu breder uitrollen.",
     categorieSlug: "goed-nieuws",
@@ -71,6 +79,7 @@ const TEST_ARTIKELEN: TestArtikel[] = [
   },
   {
     titel: "Nieuwe GPU-generatie aangekondigd met fors lager verbruik",
+    regio: "ap",
     samenvatting:
       "De volgende architectuur belooft 40% efficiëntiewinst bij gelijke prestaties. Releases volgen in het najaar.",
     categorieSlug: "tech",
@@ -79,6 +88,7 @@ const TEST_ARTIKELEN: TestArtikel[] = [
   },
   {
     titel: "Centrale bank houdt rente gelijk, hint op verlaging",
+    regio: "na",
     samenvatting:
       "Het rentebesluit viel zoals verwacht; de toelichting suggereert ruimte voor een verlaging later dit jaar.",
     categorieSlug: "financieel",
@@ -94,6 +104,10 @@ const TEST_ARTIKELEN: TestArtikel[] = [
     band: "headline",
   },
 ];
+
+// regio-telling van de testset (constant per dag) voor de nieuwskaart
+const TEST_REGIOS: Record<string, number> = {};
+for (const a of TEST_ARTIKELEN) if (a.regio) TEST_REGIOS[a.regio] = (TEST_REGIOS[a.regio] ?? 0) + 1;
 
 /**
  * Seedt complete edities op oude datums voor een profiel (gisteren t/m
@@ -135,6 +149,7 @@ export async function seedOudeEdities(
               `Testeditie van ${datumStr}. Goedemorgen! Dit is geseedde ontwikkel-data ` +
               "zodat je het archief, de editie-punten en de kaarten kunt testen — " +
               "op te ruimen via Instellingen → Developer.",
+            regios: TEST_REGIOS,
           },
         })
         .select()
@@ -203,6 +218,7 @@ export async function seedOudeEdities(
               fetched_at: new Date(datum.getTime() + 6 * 60 * 60 * 1000).toISOString(),
               is_ad: false,
               importance: artikel.match,
+              scan_meta: { regio: artikel.regio ?? "geen" },
               image_url: `https://picsum.photos/seed/${guid}/640/400`,
             })
             .select()

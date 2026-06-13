@@ -105,6 +105,8 @@ export interface FrontPage {
   intro?: string;
   top_items?: { item_id: string; title: string; section_title: string }[];
   weather?: WeatherSnapshot;
+  /** aantal items per wereldregio (RegioCode → telling) voor de nieuwskaart */
+  regios?: Record<string, number>;
 }
 
 export interface PipelineStep {

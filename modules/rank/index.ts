@@ -11,6 +11,7 @@
 import { db, unwrap } from "../shared/db";
 import { askAIJson } from "../shared/ai";
 import { budgetPolicy } from "../shared/budget";
+import { REGIO_CODES, REGIO_GEEN, REGIO_NAAM, isRegioCode } from "../shared/regios";
 import type { BudgetMode, Item, Topic, TopicScore, Band } from "../shared/types";
 
 // ============================================================
@@ -23,6 +24,8 @@ interface ScanVerdict {
   is_reclame: boolean;
   /** index in de meegegeven topiclijst; −1 = geen passend topic */
   topic_index: number;
+  /** wereldregio waar het nieuws over gaat, of "geen" */
+  regio: string;
 }
 
 const SCAN_SCHEMA = {
@@ -37,8 +40,9 @@ const SCAN_SCHEMA = {
           belang: { type: "number" },
           is_reclame: { type: "boolean" },
           topic_index: { type: "integer" },
+          regio: { type: "string", enum: [...REGIO_CODES, REGIO_GEEN] },
         },
-        required: ["index", "belang", "is_reclame", "topic_index"],
+        required: ["index", "belang", "is_reclame", "topic_index", "regio"],
         additionalProperties: false,
       },
     },
@@ -55,6 +59,8 @@ export interface ScanUitslag {
   isReclame: boolean;
   /** best passende topic, of null als geen enkel topic past */
   topicId: string | null;
+  /** wereldregio waar het nieuws over gaat, of null als geen duidelijke plek */
+  regio: string | null;
 }
 
 /**
@@ -90,7 +96,11 @@ export async function scanBatch(
       "Markeer is_reclame=true voor gesponsorde content, advertorials en deals-artikelen — " +
       "officiële persberichten van fabrikanten zijn GEEN reclame. " +
       "Kies per item daarnaast het best passende onderwerp uit de onderwerpenlijst " +
-      "(topic_index; specifieke onderwerpen winnen van brede) of −1 als niets echt past.",
+      "(topic_index; specifieke onderwerpen winnen van brede) of −1 als niets echt past. " +
+      "Bepaal tot slot de wereldregio waar het nieuws over gáát (niet de bron): " +
+      `${REGIO_CODES.map((c) => `${c}=${REGIO_NAAM[c]}`).join(", ")}. ` +
+      `Nederland valt onder eu. Gebruik "${REGIO_GEEN}" als er geen duidelijke geografische plek is ` +
+      "(bv. algemeen tech-, wetenschap- of marktnieuws).",
     prompt: `Onderwerpen:\n${topicLijst || "(geen)"}\n\nBeoordeel deze items:\n\n${lijst}`,
   });
 
@@ -102,6 +112,7 @@ export async function scanBatch(
         belang: Math.max(0, Math.min(1, verdict.belang)),
         isReclame: verdict.is_reclame,
         topicId: topics[verdict.topic_index]?.id ?? null,
+        regio: isRegioCode(verdict.regio) ? verdict.regio : null,
       });
     }
   }

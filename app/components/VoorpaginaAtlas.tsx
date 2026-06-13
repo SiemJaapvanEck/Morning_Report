@@ -9,7 +9,9 @@ import Link from "next/link";
 import { Archivo, Space_Grotesk, Space_Mono } from "next/font/google";
 import type { Edition } from "@/modules/shared/types";
 import type { EditionView, SectionView } from "@/app/lib/queries";
+import { REGIO_NAAM } from "@/modules/shared/regios";
 import { ItemRating } from "./ItemRating";
+import { WereldKaart, regioStats } from "./WereldKaart";
 
 // Lettertypen van het ontwerp — alleen op de voorpagina via de variabel-classes.
 const archivo = Archivo({ subsets: ["latin"], weight: ["600", "700", "800"], variable: "--font-archivo" });
@@ -243,8 +245,36 @@ function WeerStrook({ weather }: { weather: import("@/modules/shared/types").Wea
   );
 }
 
-// ── "Waar Sol vandaag las" — top bronnen als balken (eerlijke variant op de
-//    wereldkaart uit het ontwerp) ─────────────────────────────────────────────
+// ── "Waar het nieuws vandaan komt" — stippen-wereldkaart op échte regio-tellingen ─
+function WereldKaartTegel({ counts }: { counts: Record<string, number> }) {
+  const { topCode, topAantal } = regioStats(counts);
+  return (
+    <div className={`${TILE} flex flex-1 flex-col p-6`}>
+      <div className="mb-3 flex items-center gap-2">
+        <Icon.Globe className="h-4 w-4 text-stone-700 dark:text-stone-200" />
+        <span className="font-[family-name:var(--font-archivo)] text-[13px] font-extrabold tracking-tight">Waar het nieuws vandaan komt</span>
+        <span className="flex-1" />
+        <span className="font-[family-name:var(--font-space-mono)] text-[9.5px] font-bold tracking-widest text-stone-400">PER REGIO</span>
+      </div>
+      <div className="relative min-h-0 flex-1">
+        <WereldKaart counts={counts} />
+      </div>
+      <div className="mt-3 flex items-center gap-3">
+        <span className="text-[10.5px] font-semibold text-stone-400">Minder</span>
+        <span className="h-[7px] flex-1 rounded-full bg-[linear-gradient(90deg,rgba(47,109,240,0.16),rgba(47,109,240,1))]" />
+        <span className="text-[10.5px] font-semibold text-stone-400">Meer</span>
+        {topAantal > 0 && (
+          <span className="whitespace-nowrap rounded-full bg-[#2f6df0] px-2.5 py-1 font-[family-name:var(--font-archivo)] text-[10px] font-extrabold text-white">
+            {REGIO_NAAM[topCode]} heetst
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── "Waar Sol vandaag las" — top bronnen als balken (terugval als er nog te
+//    weinig geo-data is voor de kaart) ──────────────────────────────────────────
 function BronnenTegel({ bronnen }: { bronnen: { naam: string; n: number }[] }) {
   const max = Math.max(1, ...bronnen.map((b) => b.n));
   return (
@@ -392,10 +422,16 @@ export function VoorpaginaAtlas({
     bronnen: new Set(allItems.map((i) => i.source_name).filter(Boolean)).size,
   };
 
-  // top bronnen op aantal items
+  // top bronnen op aantal items (terugval voor de kaart)
   const bronTel = new Map<string, number>();
   for (const it of allItems) if (it.source_name) bronTel.set(it.source_name, (bronTel.get(it.source_name) ?? 0) + 1);
   const topBronnen = [...bronTel.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([naam, n]) => ({ naam, n }));
+
+  // regio-tellingen voor de wereldkaart (gezet door de pipeline bij finalize);
+  // pas tonen als er genoeg spreiding is, anders de bronnen-balken
+  const regios = view?.edition.front_page?.regios ?? {};
+  const geo = regioStats(regios);
+  const toonKaart = geo.totaal >= 3 && geo.actief >= 2;
 
   const headline = ranked[0]?.title ?? "Je ochtendeditie staat klaar";
   const bullets = ranked.slice(1, 6); // kop is al de #1 — niet herhalen
@@ -434,9 +470,9 @@ export function VoorpaginaAtlas({
             <WeerStrook weather={weather} />
           </div>
 
-          {/* rechterkolom: bronnen + selectie */}
+          {/* rechterkolom: wereldkaart (of bronnen-balken) + selectie */}
           <div className="flex flex-col gap-3 lg:col-span-5">
-            <BronnenTegel bronnen={topBronnen} />
+            {toonKaart ? <WereldKaartTegel counts={regios} /> : <BronnenTegel bronnen={topBronnen} />}
             {selectie.length > 0 && <SelectieTegel items={selectie} />}
           </div>
         </div>

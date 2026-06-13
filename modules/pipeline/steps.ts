@@ -160,6 +160,8 @@ const scanRankStep: StepHandler = async ({ edition, step }) => {
           is_ad: verdict.isReclame,
           // een bron-gekoppeld topic (gezet bij ingestie) wint van de AI-gok
           topic_id: vastTopic.get(itemId) ?? verdict.topicId,
+          // wereldregio voor de "waar komt het nieuws vandaan"-kaart
+          scan_meta: { regio: verdict.regio },
         })
         .eq("id", itemId);
       scanned++;
@@ -398,9 +400,22 @@ const finalizeStep: StepHandler = async ({ edition }) => {
     edition_sections: { title: string } | null;
   }[];
 
+  // regio-telling voor de "waar komt het nieuws vandaan"-kaart: tel de items
+  // van deze editie per wereldregio (scan_meta.regio, gezet in scan_rank)
+  const geoRows = unwrap(
+    await db().from("edition_items").select("items(scan_meta)").eq("edition_id", edition.id),
+  ) as unknown as { items: { scan_meta: { regio?: string | null } | null } | null }[];
+
+  const regios: Record<string, number> = {};
+  for (const row of geoRows) {
+    const regio = row.items?.scan_meta?.regio;
+    if (regio && regio !== "geen") regios[regio] = (regios[regio] ?? 0) + 1;
+  }
+
   const frontPage = {
     intro,
     weather: weather.data?.payload ?? null,
+    regios,
     top_items: topRows.map((row) => ({
       item_id: row.item_id,
       title: row.items.title,

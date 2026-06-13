@@ -8,12 +8,13 @@
 import { db, unwrap } from "../shared/db";
 import { currentBudgetMode } from "../shared/budget";
 import { fetchWeather } from "../weather";
+import { fetchMarkten } from "../markten";
 import { activeSources, ingestSource } from "../ingest";
 import { scanBatch, loadScoreContext, priority, assignBands } from "../rank";
 import { summarizeSection, deepDive } from "../generate";
 import { writeIntro } from "../sol";
 import { dedupeForEdition } from "../archive";
-import type { Edition, Item, PipelineStep, Band } from "../shared/types";
+import type { Edition, Item, PipelineStep, Band, MarktSnapshot } from "../shared/types";
 
 export interface StepContext {
   edition: Edition;
@@ -60,6 +61,7 @@ const planStep: StepHandler = async ({ edition }) => {
 
   const steps = [
     { kind: "weather", payload: {} },
+    { kind: "markten", payload: {} },
     ...ingestSteps,
     { kind: "scan_rank", payload: {} },
     { kind: "select", payload: {} },
@@ -102,6 +104,17 @@ const weatherStep: StepHandler = async ({ edition }) => {
   });
   if (error) throw new Error(`Weer: ${error.message}`);
   return { weer: weather.omschrijving, temp: weather.temp_nu };
+};
+
+// ============================================================
+// markten — beurssnapshot per regio (gratis bron, €0/call)
+// ============================================================
+
+const marktenStep: StepHandler = async () => {
+  // niet-blokkerend: fetchMarkten slaat falende indices over en gooit nooit;
+  // de snapshot komt in het stap-result en wordt bij finalize in front_page gezet
+  const snapshot = await fetchMarkten();
+  return { markten: snapshot, opgehaald: snapshot.indices.length };
 };
 
 // ============================================================
@@ -387,6 +400,15 @@ const finalizeStep: StepHandler = async ({ edition }) => {
     .eq("kind", "weather")
     .maybeSingle();
 
+  // beurssnapshot uit de markten-stap halen (kan ontbreken → null)
+  const marktenRow = await db()
+    .from("pipeline_steps")
+    .select("result")
+    .eq("edition_id", edition.id)
+    .eq("kind", "markten")
+    .maybeSingle();
+  const markten = (marktenRow.data?.result?.markten as MarktSnapshot | undefined) ?? null;
+
   const topRows = unwrap(
     await db()
       .from("edition_items")
@@ -415,6 +437,7 @@ const finalizeStep: StepHandler = async ({ edition }) => {
   const frontPage = {
     intro,
     weather: weather.data?.payload ?? null,
+    markten,
     regios,
     top_items: topRows.map((row) => ({
       item_id: row.item_id,
@@ -438,6 +461,7 @@ const finalizeStep: StepHandler = async ({ edition }) => {
 export const stepRegistry: Record<string, StepHandler> = {
   plan: planStep,
   weather: weatherStep,
+  markten: marktenStep,
   ingest: ingestStep,
   scan_rank: scanRankStep,
   select: selectStep,

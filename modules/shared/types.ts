@@ -107,6 +107,24 @@ export interface FrontPage {
   weather?: WeatherSnapshot;
   /** aantal items per wereldregio (RegioCode → telling) voor de nieuwskaart */
   regios?: Record<string, number>;
+  /** beurssnapshot per regio voor de markten-kaart */
+  markten?: MarktSnapshot;
+}
+
+/** Eén beursindex met dagrendement, voor de markten-per-regio-kaart. */
+export interface MarktIndex {
+  /** RegioCode (na, eu, …) */
+  regio: string;
+  /** bron-symbool, bv. ^GSPC */
+  symbool: string;
+  naam: string;
+  /** procentuele verandering t.o.v. de vorige slotkoers */
+  d: number;
+}
+
+export interface MarktSnapshot {
+  indices: MarktIndex[];
+  opgehaald_op: string;
 }
 
 export interface PipelineStep {

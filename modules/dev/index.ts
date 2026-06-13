@@ -109,6 +109,21 @@ const TEST_ARTIKELEN: TestArtikel[] = [
 const TEST_REGIOS: Record<string, number> = {};
 for (const a of TEST_ARTIKELEN) if (a.regio) TEST_REGIOS[a.regio] = (TEST_REGIOS[a.regio] ?? 0) + 1;
 
+// vaste beurssnapshot voor de markten-kaart in testdata
+const TEST_MARKTEN = {
+  indices: [
+    { regio: "na", symbool: "^GSPC", naam: "S&P 500", d: 0.4 },
+    { regio: "eu", symbool: "^STOXX", naam: "STOXX 600", d: 0.6 },
+    { regio: "ru", symbool: "IMOEX.ME", naam: "MOEX", d: -0.5 },
+    { regio: "me", symbool: "^TASI.SR", naam: "Tadawul", d: 1.2 },
+    { regio: "ap", symbool: "^N225", naam: "Nikkei 225", d: 0.9 },
+    { regio: "in", symbool: "^NSEI", naam: "Nifty 50", d: -0.2 },
+    { regio: "af", symbool: "^J203.JO", naam: "JSE All-Share", d: 0.3 },
+    { regio: "sa", symbool: "^BVSP", naam: "Bovespa", d: -0.4 },
+  ],
+  opgehaald_op: new Date().toISOString(),
+};
+
 /**
  * Seedt complete edities op oude datums voor een profiel (gisteren t/m
  * `dagen` terug). Bestaat er al een editie op zo'n datum, dan wordt die dag
@@ -150,6 +165,7 @@ export async function seedOudeEdities(
               "zodat je het archief, de editie-punten en de kaarten kunt testen — " +
               "op te ruimen via Instellingen → Developer.",
             regios: TEST_REGIOS,
+            markten: TEST_MARKTEN,
           },
         })
         .select()

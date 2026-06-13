@@ -7,11 +7,12 @@
 
 import Link from "next/link";
 import { Archivo, Space_Grotesk, Space_Mono } from "next/font/google";
-import type { Edition } from "@/modules/shared/types";
+import type { Edition, MarktIndex } from "@/modules/shared/types";
 import type { EditionView, SectionView } from "@/app/lib/queries";
-import { REGIO_NAAM } from "@/modules/shared/regios";
+import { REGIO_NAAM, type RegioCode } from "@/modules/shared/regios";
 import { ItemRating } from "./ItemRating";
 import { WereldKaart, regioStats } from "./WereldKaart";
+import { MarktenKaart } from "./MarktenKaart";
 
 // Lettertypen van het ontwerp — alleen op de voorpagina via de variabel-classes.
 const archivo = Archivo({ subsets: ["latin"], weight: ["600", "700", "800"], variable: "--font-archivo" });
@@ -45,6 +46,11 @@ const Icon = {
   Arrow: (p: { className?: string }) => (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={p.className}>
       <path d="M5 12h14" /><path d="M13 5l7 7-7 7" />
+    </svg>
+  ),
+  Pulse: (p: { className?: string }) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={p.className}>
+      <path d="M3 12h4l2-7 4 14 2-7h6" />
     </svg>
   ),
 };
@@ -273,6 +279,42 @@ function WereldKaartTegel({ counts }: { counts: Record<string, number> }) {
   );
 }
 
+// ── "Markten per regio" — rood/groen-stippenkaart + indexlijst (beurssnapshot) ─
+function MarktenTegel({ indices }: { indices: MarktIndex[] }) {
+  const lijst = [...indices].sort((a, b) => b.d - a.d); // hoog → laag rendement
+  const kleur = (d: number) => (d >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400");
+  return (
+    <div className={`${TILE} flex flex-1 flex-col p-6`}>
+      <div className="mb-3 flex items-center gap-2">
+        <Icon.Pulse className="h-4 w-4 text-stone-700 dark:text-stone-200" />
+        <span className="font-[family-name:var(--font-archivo)] text-[13px] font-extrabold tracking-tight">Markten per regio</span>
+        <span className="flex-1" />
+        <span className="font-[family-name:var(--font-space-mono)] text-[9.5px] font-bold tracking-widest text-stone-400">VANDAAG</span>
+      </div>
+      <div className="relative min-h-0 flex-1">
+        <MarktenKaart indices={indices} />
+      </div>
+      <div className="mt-3 flex items-center gap-3">
+        <span className="text-[10.5px] font-semibold text-stone-400">Verlies</span>
+        <span className="h-[7px] flex-1 rounded-full bg-[linear-gradient(90deg,rgba(220,38,38,1),rgba(220,38,38,0.2),rgba(22,163,74,0.2),rgba(22,163,74,1))]" />
+        <span className="text-[10.5px] font-semibold text-stone-400">Winst</span>
+      </div>
+      <div className="mt-3 grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2">
+        {lijst.map((ix) => (
+          <div key={ix.symbool} className="flex items-center gap-2 py-0.5">
+            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${ix.d >= 0 ? "bg-emerald-500" : "bg-rose-500"}`} />
+            <span className="truncate text-[12px] font-semibold" title={REGIO_NAAM[ix.regio as RegioCode]}>{ix.naam}</span>
+            <span className="flex-1" />
+            <span className={`font-[family-name:var(--font-archivo)] text-[12px] font-extrabold ${kleur(ix.d)}`}>
+              {ix.d >= 0 ? "+" : ""}{ix.d.toFixed(1)}%
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── "Waar Sol vandaag las" — top bronnen als balken (terugval als er nog te
 //    weinig geo-data is voor de kaart) ──────────────────────────────────────────
 function BronnenTegel({ bronnen }: { bronnen: { naam: string; n: number }[] }) {
@@ -433,6 +475,9 @@ export function VoorpaginaAtlas({
   const geo = regioStats(regios);
   const toonKaart = geo.totaal >= 3 && geo.actief >= 2;
 
+  // beurssnapshot voor de markten-kaart (leeg → tegel wordt niet getoond)
+  const markten = view?.edition.front_page?.markten?.indices ?? [];
+
   const headline = ranked[0]?.title ?? "Je ochtendeditie staat klaar";
   const bullets = ranked.slice(1, 6); // kop is al de #1 — niet herhalen
   const selectie = ranked.slice(0, 6);
@@ -470,9 +515,10 @@ export function VoorpaginaAtlas({
             <WeerStrook weather={weather} />
           </div>
 
-          {/* rechterkolom: wereldkaart (of bronnen-balken) + selectie */}
+          {/* rechterkolom: nieuwskaart (of bronnen-balken) + marktenkaart + selectie */}
           <div className="flex flex-col gap-3 lg:col-span-5">
             {toonKaart ? <WereldKaartTegel counts={regios} /> : <BronnenTegel bronnen={topBronnen} />}
+            {markten.length > 0 && <MarktenTegel indices={markten} />}
             {selectie.length > 0 && <SelectieTegel items={selectie} />}
           </div>
         </div>

@@ -39,37 +39,35 @@ export function ProfielKiezer({ profiles }: Props) {
 
   return (
     <div className="mx-auto mt-12 max-w-sm text-center">
-      <p className="mr-kicker font-bold text-blue">Daily paper</p>
-      <h1 className="mt-2 text-2xl font-extrabold tracking-tight">Wie ben je?</h1>
-      <p className="mt-2 text-sm text-muted">Je keuze wordt op dit apparaat onthouden.</p>
+      <h1 className="text-xl font-semibold">Wie ben je?</h1>
+      <p className="mt-2 text-sm text-stone-500">
+        Je keuze wordt op dit apparaat onthouden.
+      </p>
 
-      <div className="mt-7 flex flex-col gap-2.5">
+      <div className="mt-6 flex flex-col gap-2">
         {profiles.map((profile) => (
           <button
             key={profile.id}
             onClick={() => kies(profile.id)}
             disabled={busy}
-            className="mr-card mr-lift flex items-center gap-3 px-4 py-3 text-left font-bold disabled:opacity-50"
+            className="rounded-lg border border-stone-300 px-4 py-3 text-left font-medium hover:bg-stone-100 disabled:opacity-50 dark:border-stone-700 dark:hover:bg-stone-900"
           >
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue text-xs font-bold text-card">
-              {profile.name.slice(0, 2).toUpperCase()}
-            </span>
             {profile.name}
           </button>
         ))}
       </div>
 
-      <form onSubmit={maakAan} className="mt-7 flex gap-2">
+      <form onSubmit={maakAan} className="mt-6 flex gap-2">
         <input
           value={naam}
           onChange={(event) => setNaam(event.target.value)}
           placeholder="Nieuw profiel…"
-          className="min-w-0 flex-1 rounded-lg border bg-card px-3 py-2 text-sm placeholder:text-faint"
+          className="flex-1 rounded-lg border border-stone-300 px-3 py-2 text-sm dark:border-stone-700 dark:bg-stone-900"
         />
         <button
           type="submit"
           disabled={busy || !naam.trim()}
-          className="rounded-lg bg-ink px-4 py-2 text-sm font-bold text-paper disabled:opacity-50"
+          className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-stone-100 dark:text-stone-900"
         >
           Aanmaken
         </button>

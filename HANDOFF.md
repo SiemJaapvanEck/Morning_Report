@@ -8,8 +8,8 @@
 De pipeline is **opgeschaald** (16 → 71 bronnen, incl. podcast/video-media) en de
 **editie is herontworpen als een kalender**: elke dag is hetzelfde Atlas-dashboard,
 met Dag/Week/Maand/Jaar-navigatie en veeg-bladeren. Een editie kost nu ±€0,14
-(plafond €0,30). Alle poorten groen (lint/tsc/test/build). **Deze sessie is nog
-NIET naar GitHub gepusht** — zie "Wat nu openstaat".
+(plafond €0,30). Alle poorten groen (lint/tsc/test/build) en **gepusht naar
+`main`** (Vercel-deploy loopt; zie ook de design-resolutie hieronder).
 
 ### Fase 1 — ingestie-opschaling + media-plumbing (migratie 0007)
 - **71 actieve bronnen** (was 16): de volledige §5-lijst uit `docs/ontwerp.md`
@@ -47,6 +47,17 @@ NIET naar GitHub gepusht** — zie "Wat nu openstaat".
   (voedt de stippen/overzichten), `EditionScreen` (nav + dag/overzicht). ESLint negeert nu
   de untracked map `Morning Report design/`.
 
+### Designsysteem = Atlas (Dispatch overschreven, 14 juni)
+Tijdens het pushen bleek `main` gedivergeerd: een collega had het **"Dispatch"-
+designsysteem** gepusht (commit `f0ed210`): nieuwe `docs/design.md`, CLAUDE.md-
+designsectie omgezet naar verplichte tokens/`mr-*`-klassen, en `ItemRating`/
+`ProfielKiezer`/`CaptureFormulier`/manifest herstyled — maar **zonder de tokens in
+`app/globals.css`** (die ontbreken), dus die klassen waren ongedefinieerd. Op verzoek
+van Siem is **Atlas geforceerd als de vaste stijl**: CLAUDE.md-designsectie en
+`docs/design.md` herschreven naar Atlas, en de vier Dispatch-bestanden teruggezet naar
+hun pre-Dispatch (Atlas) versie. **Dispatch blijft in de git-history** (`f0ed210`).
+**Nog te coördineren met de collega** over de definitieve richting.
+
 ### Volgende track: de "Redactie" (afgesproken, nog te bouwen)
 Een klein AI-redactieteam als **persona-prompts + stappen (GEEN agent-runtime)**:
 Tech-, Politiek-, Financieel-expert + Journalist (generalist), met **Sol als
@@ -65,10 +76,9 @@ volledige krant.
 - Accountvoorkeuren/onboarding, developer-modus + thema's, weer + markten-kaart: ongewijzigd.
 
 ## Wat nu nog openstaat
-1. **Pushen naar `main` / Vercel-deploy.** Deze commit staat lokaal; productie draait nog
-   de oude code tegen de nieuwe DB. Migratie 0007 is puur additief (oude code negeert
-   `sources.medium`), dus veilig — maar de nieuwe UI + bredere ingestie zijn pas live ná
-   een push. Wachten op groen licht van Siem.
+1. **Designrichting afstemmen met de collega.** Atlas is nu geforceerd (zie
+   "Designsysteem = Atlas"); Dispatch (`f0ed210`) staat in de history. Beslis samen wat
+   de vaste richting wordt voordat er meer UI-werk gebeurt.
 2. **Redactie-track bouwen** (zie boven) — eerstvolgende functionele klus.
 3. **Restant masterplan** (zie `project-scale-pipeline-goal`): story-clustering, deep-research
    6–12 topics, Sol per-categorie/per-continent, select-caps → ~160 zichtbare items, budget→€0,50.

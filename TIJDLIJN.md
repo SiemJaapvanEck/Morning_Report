@@ -75,3 +75,10 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   kaart-kalender, jaar = mini-maanden), `app/lib/dates.ts`, `listEditionSummaries`.
   Lees-hiërarchie: dashboard → volledige krant op `/editie/[datum]/krant`. Lege dag =
   LegeHero (geen 404). Volledig responsief; poorten groen. Volgende track: de Redactie.
+- **14 juni 2026 (vervolg 2) — Gepusht; design-divergentie opgelost (Atlas).** Bij het
+  pushen bleek `main` gedivergeerd met een collega-commit (`f0ed210`, "Dispatch"-
+  designsysteem). Gemerged (kalender-pagina's behouden) en daarna op verzoek van Siem
+  **Atlas als vaste stijl geforceerd**: CLAUDE.md-designsectie en `docs/design.md`
+  herschreven naar Atlas, Dispatch-componenten (ItemRating/ProfielKiezer/CaptureFormulier
+  + manifest) teruggezet naar pre-Dispatch. Dispatch blijft in de history. Nog af te
+  stemmen met de collega.

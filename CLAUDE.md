@@ -65,21 +65,20 @@ Begin elke nieuwe sessie met het lezen van `HANDOFF.md`.
 
 ## Designrichtlijnen (UI)
 
-- **De vormgeving is vast: het "Dispatch"-designsysteem** (Claude
-  Design-ronde 11 juni 2026). Tokens en `mr-*`-componentklassen staan op
-  één plek, `app/globals.css`; regels en patronen in `docs/design.md` —
-  eerst lezen vóór UI-werk.
-- Componenten gebruiken uitsluitend tokens (`bg-paper`, `bg-card`,
-  `text-ink`, `text-muted`, `text-faint`, `border-line`, `text-blue`,
-  `bg-blue-soft`, `text-red`, `text-green`, `rounded-card` …) en de
-  `mr-*`-klassen. **Nooit** losse hexwaarden of standaard-paletten
-  (stone/amber/sky), **geen** `dark:`-klassen — donker loopt automatisch
-  via de tokens.
-- Typografie: Archivo (koppen/tekst) + Space Mono (labels/metadata/data),
-  geladen in `app/layout.tsx`. Kleursemantiek: blauw = interactie/Sol/
-  volgen, rood = live/nu/negatief, groen = positief.
-- Shell `max-w-5xl`; leespagina's (editie, archief, instellingen) een
-  binnenkolom `max-w-3xl` — de krant blijft een rustige leeskolom.
+- **De vormgeving is het "Atlas"-systeem** (gekozen 14 juni 2026; overschrijft
+  bewust de eerder voorgestelde "Dispatch"-richting). Een bold bento-dashboard:
+  elke editie is een dashboard van tegels. Referentie: `Morning Report
+  design/atlas-daily.jsx` en de `Edition*`-componenten
+  (`app/components/EditionView.tsx` e.a.); notities in `docs/design.md`.
+- Accentkleur **`#2f6df0`** (blauw = interactie/Sol/volgen); `stone`-palet als
+  basis, amber voor "in de maak"-status, emerald/rose voor markt-winst/verlies.
+  Licht- én donkermodus via `dark:`-klassen (class-based, anti-flits-script in
+  `layout.tsx`; thema's Krant/Sepia/Mint/Nacht).
+- Lettertypen: **Archivo** (koppen), **Space Grotesk** (tekst), **Space Mono**
+  (labels/metadata/data) — via `next/font`, gescoped in de Atlas-componenten.
+- Tegels: `rounded-2xl border` kaarten; vol-breed shell, leespagina's houden een
+  rustige kolom. Kalendernavigatie (Dag/Week/Maand/Jaar, veeg-bladeren) zit in
+  `EditionNav` / `SwipePager` / `EditionOverview`.
 - Nederlandstalige UI-teksten, geen lorem ipsum.
 - Geen zware component-libraries; kleine client-componenten alleen waar
   interactie nodig is, de rest server components.

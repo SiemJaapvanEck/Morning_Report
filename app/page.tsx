@@ -7,13 +7,18 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { hasDbConfig } from "@/modules/shared/db";
 import { todayLocal } from "@/modules/shared/config";
+import { isRegioCode } from "@/modules/shared/regios";
 import { getProfiles, getEdition, listEditions } from "@/app/lib/queries";
 import { ProfielKiezer } from "@/app/components/ProfielKiezer";
 import { VoorpaginaAtlas } from "@/app/components/VoorpaginaAtlas";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ regio?: string }>;
+}) {
   if (!hasDbConfig()) {
     return (
       <div className="mx-auto mt-12 max-w-md text-center">
@@ -41,6 +46,9 @@ export default async function Home() {
     redirect("/onboarding");
   }
 
+  const { regio } = await searchParams;
+  const selectedRegio = isRegioCode(regio) ? regio : null;
+
   const today = todayLocal();
   const [view, editions] = await Promise.all([
     getEdition(profileId, today),
@@ -54,7 +62,7 @@ export default async function Home() {
           Deze editie is nog in de maak — wat je ziet groeit nog aan.
         </div>
       )}
-      <VoorpaginaAtlas view={view} editions={editions} today={today} profileName={profile.name} />
+      <VoorpaginaAtlas view={view} editions={editions} today={today} profileName={profile.name} selectedRegio={selectedRegio} />
     </div>
   );
 }

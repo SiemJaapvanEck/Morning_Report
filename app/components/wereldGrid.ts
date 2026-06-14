@@ -1,7 +1,7 @@
 // Gedeelde stippen-wereldkaart-geometrie (uit het Atlas-ontwerp): de continenten
 // als raster van stippen. Gebruikt door zowel de nieuws- als de markten-kaart.
 
-import type { RegioCode } from "@/modules/shared/regios";
+import { REGIO_CODES, type RegioCode } from "@/modules/shared/regios";
 
 export const COLS = 46;
 export const ROWS = 22;
@@ -42,3 +42,9 @@ for (let r = 0; r < ROWS; r++) {
     else OCEAN.push({ c, r });
   }
 }
+
+// land-stippen gegroepeerd per regio — voor klikbare regio's op de nieuwskaart
+export const LAND_BY_REGIO = Object.fromEntries(
+  REGIO_CODES.map((c) => [c, [] as { c: number; r: number }[]]),
+) as Record<RegioCode, { c: number; r: number }[]>;
+for (const d of LAND) LAND_BY_REGIO[d.reg].push({ c: d.c, r: d.r });

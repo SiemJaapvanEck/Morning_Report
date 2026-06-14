@@ -23,6 +23,7 @@ export interface SectionView {
     url: string | null;
     image_url: string | null;
     source_name: string | null;
+    regio: string | null;
   }[];
 }
 
@@ -52,7 +53,7 @@ export async function getEdition(profileId: string, date: string): Promise<Editi
     await db()
       .from("edition_items")
       .select(
-        "id, item_id, section_id, band, position, summary_text, sol_note, match_score, items(title, url, image_url, sources(name))",
+        "id, item_id, section_id, band, position, summary_text, sol_note, match_score, items(title, url, image_url, scan_meta, sources(name))",
       )
       .eq("edition_id", edition.id)
       .order("position"),
@@ -68,6 +69,7 @@ export async function getEdition(profileId: string, date: string): Promise<Editi
       title: string;
       url: string | null;
       image_url: string | null;
+      scan_meta: { regio?: string | null } | null;
       sources: { name: string } | null;
     };
   }[];
@@ -88,6 +90,7 @@ export async function getEdition(profileId: string, date: string): Promise<Editi
         url: row.items.url,
         image_url: row.items.image_url,
         source_name: row.items.sources?.name ?? null,
+        regio: row.items.scan_meta?.regio ?? null,
       })),
   }));
 

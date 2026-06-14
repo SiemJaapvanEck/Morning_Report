@@ -252,28 +252,33 @@ function WeerStrook({ weather }: { weather: import("@/modules/shared/types").Wea
 }
 
 // ── "Waar het nieuws vandaan komt" — stippen-wereldkaart op échte regio-tellingen ─
-function WereldKaartTegel({ counts }: { counts: Record<string, number> }) {
+function WereldKaartTegel({ counts, selectedRegio }: { counts: Record<string, number>; selectedRegio?: string | null }) {
   const { topCode, topAantal } = regioStats(counts);
+  const selNaam = selectedRegio ? REGIO_NAAM[selectedRegio as RegioCode] : null;
   return (
     <div className={`${TILE} flex flex-1 flex-col p-6`}>
       <div className="mb-3 flex items-center gap-2">
         <Icon.Globe className="h-4 w-4 text-stone-700 dark:text-stone-200" />
         <span className="font-[family-name:var(--font-archivo)] text-[13px] font-extrabold tracking-tight">Waar het nieuws vandaan komt</span>
         <span className="flex-1" />
-        <span className="font-[family-name:var(--font-space-mono)] text-[9.5px] font-bold tracking-widest text-stone-400">PER REGIO</span>
+        <span className="font-[family-name:var(--font-space-mono)] text-[9.5px] font-bold tracking-widest text-stone-400">KLIK EEN REGIO</span>
       </div>
       <div className="relative min-h-0 flex-1">
-        <WereldKaart counts={counts} />
+        <WereldKaart counts={counts} selectedRegio={selectedRegio} />
       </div>
       <div className="mt-3 flex items-center gap-3">
         <span className="text-[10.5px] font-semibold text-stone-400">Minder</span>
         <span className="h-[7px] flex-1 rounded-full bg-[linear-gradient(90deg,rgba(47,109,240,0.16),rgba(47,109,240,1))]" />
         <span className="text-[10.5px] font-semibold text-stone-400">Meer</span>
-        {topAantal > 0 && (
+        {selNaam ? (
+          <Link href="/#sol-selectie" className="whitespace-nowrap rounded-full bg-[#2f6df0] px-2.5 py-1 font-[family-name:var(--font-archivo)] text-[10px] font-extrabold text-white hover:opacity-90">
+            {selNaam} ✕
+          </Link>
+        ) : topAantal > 0 ? (
           <span className="whitespace-nowrap rounded-full bg-[#2f6df0] px-2.5 py-1 font-[family-name:var(--font-archivo)] text-[10px] font-extrabold text-white">
             {REGIO_NAAM[topCode]} heetst
           </span>
-        )}
+        ) : null}
       </div>
     </div>
   );
@@ -405,11 +410,13 @@ export function VoorpaginaAtlas({
   editions,
   today,
   profileName,
+  selectedRegio,
 }: {
   view: EditionView | null;
   editions: Edition[];
   today: string;
   profileName?: string;
+  selectedRegio?: string | null;
 }) {
   const weather = view?.sections.find((s) => s.section.kind === "weather")?.weather ?? null;
 
@@ -441,7 +448,11 @@ export function VoorpaginaAtlas({
 
   const headline = ranked[0]?.title ?? "Je ochtendeditie staat klaar";
   const bullets = ranked.slice(1, 6); // kop is al de #1 — niet herhalen
-  const kaarten = ranked.slice(0, 8);
+
+  // klik op een continent → filter de selectie op die regio (via ?regio=…)
+  const regioFilter = selectedRegio && selectedRegio in REGIO_NAAM ? selectedRegio : null;
+  const regioNaam = regioFilter ? REGIO_NAAM[regioFilter as RegioCode] : null;
+  const kaarten = regioFilter ? ranked.filter((it) => it.regio === regioFilter) : ranked.slice(0, 8);
 
   const datumLang = fmtDatum(today, { weekday: "long", day: "numeric", month: "long" });
   const initialen = (profileName ?? "Lezer").trim().slice(0, 2).toUpperCase();
@@ -477,25 +488,36 @@ export function VoorpaginaAtlas({
 
           {/* rechterkolom: nieuwskaart (of bronnen-balken) + marktenkaart */}
           <div className="flex flex-col gap-3 lg:col-span-5">
-            {toonKaart ? <WereldKaartTegel counts={regios} /> : <BronnenTegel bronnen={topBronnen} />}
+            {toonKaart ? <WereldKaartTegel counts={regios} selectedRegio={selectedRegio} /> : <BronnenTegel bronnen={topBronnen} />}
             {markten.length > 0 && <MarktenTegel indices={markten} />}
           </div>
         </div>
 
-        {/* beste verhalen van vandaag */}
-        {kaarten.length > 0 && (
-          <section className="mt-8">
+        {/* Sol's selectie — filtert op regio bij klik op de kaart */}
+        {(kaarten.length > 0 || regioFilter) && (
+          <section id="sol-selectie" className="mt-8 scroll-mt-6">
             <div className="flex items-center gap-2.5 pb-4">
               <Icon.Trending className="h-4 w-4 text-[#2f6df0]" />
-              <span className="font-[family-name:var(--font-archivo)] text-[13px] font-extrabold tracking-tight">Sol&apos;s selectie</span>
+              <span className="font-[family-name:var(--font-archivo)] text-[13px] font-extrabold tracking-tight">
+                Sol&apos;s selectie{regioNaam ? ` · ${regioNaam}` : ""}
+              </span>
+              {regioFilter && (
+                <Link href="/#sol-selectie" className="text-[11px] font-semibold text-[#2f6df0] hover:underline">
+                  ✕ alle regio&apos;s
+                </Link>
+              )}
               <span className="ml-1 h-px flex-1 bg-stone-200 dark:bg-stone-800" />
               <span className="font-[family-name:var(--font-space-mono)] text-[10.5px] font-bold tracking-wide text-stone-400">OP MATCH</span>
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {kaarten.map((item) => (
-                <VerhaalKaart key={item.id} item={item} />
-              ))}
-            </div>
+            {kaarten.length > 0 ? (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {kaarten.map((item) => (
+                  <VerhaalKaart key={item.id} item={item} />
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-stone-400">Geen nieuws uit {regioNaam} in deze editie.</p>
+            )}
           </section>
         )}
       </div>

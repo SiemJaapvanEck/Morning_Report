@@ -346,45 +346,6 @@ function BronnenTegel({ bronnen }: { bronnen: { naam: string; n: number }[] }) {
   );
 }
 
-// ── "Sol's selectie" — top items op match-score (variant op "hottest topics") ─
-function SelectieTegel({ items }: { items: KaartItem[] }) {
-  return (
-    <div className={`${TILE} flex flex-1 flex-col p-6`}>
-      <div className="mb-3 flex items-center gap-2">
-        <Icon.Trending className="h-4 w-4 text-[#2f6df0]" />
-        <span className="font-[family-name:var(--font-archivo)] text-[13px] font-extrabold tracking-tight">Sol&apos;s selectie</span>
-        <span className="flex-1" />
-        <span className="font-[family-name:var(--font-space-mono)] text-[9.5px] font-bold tracking-widest text-stone-400">OP MATCH</span>
-      </div>
-      <ol className="flex flex-col">
-        {items.map((it, i) => {
-          const pct = it.match_score != null ? Math.round(it.match_score * 100) : null;
-          return (
-            <li key={it.id} className="-mx-2 flex items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-stone-50 dark:hover:bg-stone-800/50">
-              <span className="w-4 shrink-0 font-[family-name:var(--font-space-mono)] text-[13px] font-bold text-stone-400">{i + 1}</span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13.5px] font-semibold leading-snug">
-                  {it.url ? (
-                    <a href={it.url} target="_blank" rel="noreferrer" className="hover:underline">{it.title}</a>
-                  ) : (
-                    it.title
-                  )}
-                </span>
-                <span className="mt-0.5 block font-[family-name:var(--font-space-mono)] text-[10.5px] text-stone-400">{it.categorie}</span>
-              </span>
-              {pct != null && (
-                <span className="shrink-0 rounded-full bg-[#2f6df0]/10 px-2 py-0.5 font-[family-name:var(--font-archivo)] text-[11px] font-extrabold text-[#2f6df0]">
-                  {pct}%
-                </span>
-              )}
-            </li>
-          );
-        })}
-      </ol>
-    </div>
-  );
-}
-
 // ── één verhaalkaart in het grid ─────────────────────────────────────────────
 function VerhaalKaart({ item }: { item: KaartItem }) {
   const pct = item.match_score != null ? Math.round(item.match_score * 100) : null;
@@ -480,7 +441,6 @@ export function VoorpaginaAtlas({
 
   const headline = ranked[0]?.title ?? "Je ochtendeditie staat klaar";
   const bullets = ranked.slice(1, 6); // kop is al de #1 — niet herhalen
-  const selectie = ranked.slice(0, 6);
   const kaarten = ranked.slice(0, 8);
 
   const datumLang = fmtDatum(today, { weekday: "long", day: "numeric", month: "long" });
@@ -515,11 +475,10 @@ export function VoorpaginaAtlas({
             <WeerStrook weather={weather} />
           </div>
 
-          {/* rechterkolom: nieuwskaart (of bronnen-balken) + marktenkaart + selectie */}
+          {/* rechterkolom: nieuwskaart (of bronnen-balken) + marktenkaart */}
           <div className="flex flex-col gap-3 lg:col-span-5">
             {toonKaart ? <WereldKaartTegel counts={regios} /> : <BronnenTegel bronnen={topBronnen} />}
             {markten.length > 0 && <MarktenTegel indices={markten} />}
-            {selectie.length > 0 && <SelectieTegel items={selectie} />}
           </div>
         </div>
 
@@ -528,7 +487,7 @@ export function VoorpaginaAtlas({
           <section className="mt-8">
             <div className="flex items-center gap-2.5 pb-4">
               <Icon.Trending className="h-4 w-4 text-[#2f6df0]" />
-              <span className="font-[family-name:var(--font-archivo)] text-[13px] font-extrabold tracking-tight">Beste verhalen vandaag</span>
+              <span className="font-[family-name:var(--font-archivo)] text-[13px] font-extrabold tracking-tight">Sol&apos;s selectie</span>
               <span className="ml-1 h-px flex-1 bg-stone-200 dark:bg-stone-800" />
               <span className="font-[family-name:var(--font-space-mono)] text-[10.5px] font-bold tracking-wide text-stone-400">OP MATCH</span>
             </div>

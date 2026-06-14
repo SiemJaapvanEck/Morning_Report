@@ -8,12 +8,13 @@
 import { db, unwrap } from "../shared/db";
 import { currentBudgetMode } from "../shared/budget";
 import { fetchWeather } from "../weather";
+import { fetchMarkten } from "../markten";
 import { activeSources, ingestSource } from "../ingest";
 import { scanBatch, loadScoreContext, priority, assignBands } from "../rank";
 import { summarizeSection, deepDive } from "../generate";
 import { writeIntro } from "../sol";
 import { dedupeForEdition } from "../archive";
-import type { Edition, Item, PipelineStep, Band } from "../shared/types";
+import type { Edition, Item, PipelineStep, Band, MarktSnapshot } from "../shared/types";
 
 export interface StepContext {
   edition: Edition;
@@ -60,6 +61,7 @@ const planStep: StepHandler = async ({ edition }) => {
 
   const steps = [
     { kind: "weather", payload: {} },
+    { kind: "markten", payload: {} },
     ...ingestSteps,
     { kind: "scan_rank", payload: {} },
     { kind: "select", payload: {} },
@@ -105,6 +107,17 @@ const weatherStep: StepHandler = async ({ edition }) => {
 };
 
 // ============================================================
+// markten — beurssnapshot per regio (gratis bron, €0/call)
+// ============================================================
+
+const marktenStep: StepHandler = async () => {
+  // niet-blokkerend: fetchMarkten slaat falende indices over en gooit nooit;
+  // de snapshot komt in het stap-result en wordt bij finalize in front_page gezet
+  const snapshot = await fetchMarkten();
+  return { markten: snapshot, opgehaald: snapshot.indices.length };
+};
+
+// ============================================================
 // ingest — batch van bronnen binnenhalen
 // ============================================================
 
@@ -140,14 +153,29 @@ const scanRankStep: StepHandler = async ({ edition, step }) => {
       .limit(50),
   );
 
+  // topiclijst voor de toewijzing: zo werken topic-voorkeuren (ook eigen,
+  // heel specifieke topics) door in priority() → Sol's match-score
+  const topics = unwrap(
+    await db().from("topics").select("id, name, query_text"),
+  ) as { id: string; name: string; query_text: string | null }[];
+
+  const vastTopic = new Map(items.map((item) => [item.id, item.topic_id]));
+
   let scanned = 0;
   for (let i = 0; i < items.length; i += 25) {
     const batch = items.slice(i, i + 25);
-    const verdicts = await scanBatch(batch, edition.id, step.id);
+    const verdicts = await scanBatch(batch, edition.id, step.id, topics);
     for (const [itemId, verdict] of verdicts) {
       await db()
         .from("items")
-        .update({ importance: verdict.belang, is_ad: verdict.isReclame })
+        .update({
+          importance: verdict.belang,
+          is_ad: verdict.isReclame,
+          // een bron-gekoppeld topic (gezet bij ingestie) wint van de AI-gok
+          topic_id: vastTopic.get(itemId) ?? verdict.topicId,
+          // wereldregio voor de "waar komt het nieuws vandaan"-kaart
+          scan_meta: { regio: verdict.regio },
+        })
         .eq("id", itemId);
       scanned++;
     }
@@ -372,6 +400,15 @@ const finalizeStep: StepHandler = async ({ edition }) => {
     .eq("kind", "weather")
     .maybeSingle();
 
+  // beurssnapshot uit de markten-stap halen (kan ontbreken → null)
+  const marktenRow = await db()
+    .from("pipeline_steps")
+    .select("result")
+    .eq("edition_id", edition.id)
+    .eq("kind", "markten")
+    .maybeSingle();
+  const markten = (marktenRow.data?.result?.markten as MarktSnapshot | undefined) ?? null;
+
   const topRows = unwrap(
     await db()
       .from("edition_items")
@@ -385,9 +422,23 @@ const finalizeStep: StepHandler = async ({ edition }) => {
     edition_sections: { title: string } | null;
   }[];
 
+  // regio-telling voor de "waar komt het nieuws vandaan"-kaart: tel de items
+  // van deze editie per wereldregio (scan_meta.regio, gezet in scan_rank)
+  const geoRows = unwrap(
+    await db().from("edition_items").select("items(scan_meta)").eq("edition_id", edition.id),
+  ) as unknown as { items: { scan_meta: { regio?: string | null } | null } | null }[];
+
+  const regios: Record<string, number> = {};
+  for (const row of geoRows) {
+    const regio = row.items?.scan_meta?.regio;
+    if (regio && regio !== "geen") regios[regio] = (regios[regio] ?? 0) + 1;
+  }
+
   const frontPage = {
     intro,
     weather: weather.data?.payload ?? null,
+    markten,
+    regios,
     top_items: topRows.map((row) => ({
       item_id: row.item_id,
       title: row.items.title,
@@ -410,6 +461,7 @@ const finalizeStep: StepHandler = async ({ edition }) => {
 export const stepRegistry: Record<string, StepHandler> = {
   plan: planStep,
   weather: weatherStep,
+  markten: marktenStep,
   ingest: ingestStep,
   scan_rank: scanRankStep,
   select: selectStep,

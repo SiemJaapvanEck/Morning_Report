@@ -27,6 +27,8 @@ export interface ProfileSettings {
   lat?: number;
   lon?: number;
   plaats?: string;
+  /** true zodra de gebruiker de voorkeuren-onboarding heeft afgerond */
+  voorkeuren_ingesteld?: boolean;
 }
 
 export interface Category {
@@ -44,6 +46,8 @@ export interface Topic {
   cadence: Cadence;
   query_mode: boolean;
   query_text: string | null;
+  /** optionele vaste bron: items uit deze bron krijgen dit topic direct */
+  source_id: string | null;
   created_at: string;
 }
 
@@ -101,6 +105,26 @@ export interface FrontPage {
   intro?: string;
   top_items?: { item_id: string; title: string; section_title: string }[];
   weather?: WeatherSnapshot;
+  /** aantal items per wereldregio (RegioCode → telling) voor de nieuwskaart */
+  regios?: Record<string, number>;
+  /** beurssnapshot per regio voor de markten-kaart */
+  markten?: MarktSnapshot;
+}
+
+/** Eén beursindex met dagrendement, voor de markten-per-regio-kaart. */
+export interface MarktIndex {
+  /** RegioCode (na, eu, …) */
+  regio: string;
+  /** bron-symbool, bv. ^GSPC */
+  symbool: string;
+  naam: string;
+  /** procentuele verandering t.o.v. de vorige slotkoers */
+  d: number;
+}
+
+export interface MarktSnapshot {
+  indices: MarktIndex[];
+  opgehaald_op: string;
 }
 
 export interface PipelineStep {

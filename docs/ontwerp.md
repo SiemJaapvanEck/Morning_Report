@@ -190,7 +190,7 @@ Gesponsorde berichten, advertorials en affiliate-gedreven "deals"-content worden
 ## 6. Features & subsystemen
 
 ### Subsysteem 1 — Interesse-/rankingmotor
-E�n model dat per onderwerp een interessescore bijhoudt en daarmee de volgorde, de voorpagina en de deep-dive-keuze stuurt.
+E�n model dat per onderwerp een interessescore bijhoudt en daarmee de volgorde, de voorpagina en de deep-dive-keuze stuurt.
 
 - **Hoofdgebaar: een gegradeerde rating.** Per item geef je een rating op een schaal (de "sterretjes"; icoon en vormgeving komen later in een design-ronde). De hoge kant = "meer hiervan" (boost), de lage kant = "minder hiervan" en opent de per-geval-keuze hieronder. Eén gebaar dekt zo de hele meer/minder-as.
 - **Gescheiden hiervan: de volg-markering.** Een apart, eigen icoon waarmee je een onderwerp/categorie markeert als "actief volgen" — dit trekt ook Sol's aandacht. Bewust losgekoppeld van de rating, zodat "goed item" en "wil ik blijven volgen" niet door elkaar lopen.
@@ -204,7 +204,7 @@ E�n model dat per onderwerp een interessescore bijhoudt en daarmee de volgorde
 **Score → actie (de kostenpoort).** Interesse-score × de **algemene belang-ranking** geeft een prioriteit, verdeeld in banden: topband krijgt een dure deep-dive + Sol-commentaar, middenband een korte samenvatting, onderkant wordt ingeklapt of overgeslagen. Hier zit de kostenbeheersing. De belang-ranking gaat elke ochtend de hele onderwerpenlijst langs en sorteert op actuele relevantie; die sortering stuurt ook de voorpagina en de volgorde van het rapport.
 
 ### Subsysteem 2 — Archief / geheugen
-E�n persistente, **in secties opgedeelde** store (per categorie/onderwerp) die meerdere functies tegelijk draagt:
+E�n persistente, **in secties opgedeelde** store (per categorie/onderwerp) die meerdere functies tegelijk draagt:
 - **Editie-historie** — oude edities terugvinden in de app.
 - **Gesectioneerd** — zo is in één oogopslag te zien of iets eerder gerapporteerd is.
 - **Dedupe / "geen oud nieuws"** — nieuwe items worden tegen de juiste sectie gecheckt.
@@ -256,7 +256,7 @@ Dagelijkse weermodule via gratis API's (Open-Meteo / KNMI / Buienradar), met mog
 - Definitieve **naam** voor Sol (werknaam "Daily Paper" / D.P.).
 - **Cadans per onderwerp**: altijd / wekelijks / alleen bij groot nieuws (sommige items zijn "af en toe", zoals fun/trivia).
 - **Portfolio-instrumenten**: jouw daadwerkelijke instrumenten zijn nodig om het portfolio-spoor (earnings/dividend/short-interest) te koppelen.
-- **Volg-icoon**: de stijl is vastgelegd (zie §8, "Vormgeving"), maar het definitieve icoon voor de volg-markering (nu ◉) staat nog open.
+- **Vormgeving** (design-ronde): iconen/schaal voor de rating en de volg-markering, en de look van voorpagina, secties en Sol's blok.
 
 **Voorgestelde volgende ronde:** Sol's mechaniek in detail — hoe zijn geheugen werkt en gecomprimeerd wordt, hoe hij kiest waar hij commentaar op geeft, hoe hij verbanden legt, en hoe zijn karakter evolueert maar herkenbaar blijft. (Of, als je liever iets kleins afrondt: de cadans per onderwerp.)
 
@@ -280,4 +280,6 @@ Dagelijkse weermodule via gratis API's (Open-Meteo / KNMI / Buienradar), met mog
 - **Invoer:** iOS Shortcut + web-app, incl. bron- en onderwerp-toevoeging.
 - **Bouwprincipe:** één modulaire versie, geen v2/v3.
 - **Voorpagina-dashboard (schets 11 juni 2026):** telefoon-eerst layout — kopstrook met weer- en stats-blok plus een puntenrij van afgelopen edities (tik = editie openen), grote "Daily paper"-kaart naar de volledige editie (/editie/[datum]), en "Sol's selectie": artikelkaarten met afbeelding (uit de feed: media:content/thumbnail/enclosure/inline img), categorie, titel, beschrijving en **Sol's match-percentage** (de select-prioriteit, geclampt 0..1, opgeslagen als `edition_items.match_score`), gerangschikt op match. Rating-gebaar in de UI: **−2…+2** (intern blijft de 1–5-schaal, UI-waarde +3).
-- **Vormgeving (design-ronde 11 juni 2026):** vaste stijl **"Dispatch"** (Claude Design, richting D) — warm papier-palet, witte kaarten met lijn-randen, Archivo (koppen/tekst) + Space Mono (labels/data); kleursemantiek blauw = interactie/Sol/volgen, rood = live/nu/negatief, groen = positief; donkere modus als afgeleide van hetzelfde palet. Tokens en componentklassen staan op één plek (`app/globals.css`), documentatie en regels in `docs/design.md`. Gereserveerde patronen voor latere modules: tickerbalk (financieel), commentary/markets-rails, horizontale onderwerp-tijdlijn, categorie-hues.
+- **Accountvoorkeuren (12 juni 2026):** voorkeuren zijn het startpunt van de interessemotor — geen aparte laag. Onboarding (nieuw profiel → /onboarding) + bewerkbaar onder Instellingen, met dezelfde kiezer. Per topic: volgen/niet + relevantie −2…+2; relevantie ×0.3 → beginscore in topic_scores (−0.6…+0.6, ruimte voor leren tot ±1 via ratings); niet-volgen = demping (−0.6), groot nieuws breekt door (geen harde filter). Standaard-voorselectie: tech, financieel, wereld, wetenschap én nieuwe categorie goed-nieuws (Good News Network + Positive News als bronnen, migratie 0005). Eigen topics — hoe specifiek ook (bv. één bedrijf) — kunnen erbij, evt. in een eigen categorie en met zoektekst (query_mode, fase 3 zoekt actief). De scan-stap wijst sindsdien per item het best passende topic toe (topic_index in de batch-call), zodat topic-relevantie daadwerkelijk doorwerkt in priority() → match-%.
+- **Topic ↔ bron-koppeling (12 juni 2026):** een topic kan optioneel aan één vaste bron hangen (`topics.source_id`, migratie 0006). Gekoppeld: items uit die bron krijgen het topic direct bij de ingestie en de scan-stap overschrijft dat niet (bron-koppeling wint van de AI-gok). Niet gekoppeld (default): de normale zoekweg — AI-topic-toewijzing over alle feeds, later aangevuld met de query-zoekweg (fase 3).
+- **Developer-modus + thema's (12 juni 2026):** Instellingen → Developer: quick pipeline test (tick-lus vanuit de UI met live log — zelfde stappenmachine als productie), oude test-edities seeden (modules/dev; complete edities op oude datums, dev-guid-voorvoegsel, gratis) en testdata opruimen. Kleurthema's met stip-knoppen in de koptekst (Krant/Sepia/Mint/Nacht): CSS-variabelen per data-theme, donker class-based (custom variant) met anti-flits-script; keuze in localStorage, volgt OS als er niets gekozen is.

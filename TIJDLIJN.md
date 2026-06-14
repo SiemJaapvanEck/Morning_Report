@@ -46,10 +46,18 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   edition_items.match_score) toegepast; feedparser haalt afbeeldingen uit
   feeds; select-stap schrijft match_score. Editie van vandaag gebackfilld
   (55 scores, 32 afbeeldingen). Alle poorten groen.
-- **11 juni 2026 (vervolg 6, account Jesse)** — Vaste vormgeving ingevoerd:
-  het "Dispatch"-designsysteem uit de Claude Design-ronde (richting D).
-  Tokens + mr-*-klassen op één plek in app/globals.css (licht én donker,
-  geen dark:-klassen meer), Archivo + Space Mono via next/font, alle
-  pagina's/componenten omgezet (header/footer, dashboard, krant, rating,
-  profielkiezer, archief, instellingen). Nieuw: docs/design.md;
-  CLAUDE.md-designrichtlijnen en ontwerp-log bijgewerkt. Alle poorten groen.
+- **12 juni 2026** — Accountvoorkeuren gebouwd: onboarding-stap (defaults
+  voorgeselecteerd: tech/financieel/wereld/wetenschap/goed-nieuws) +
+  bewerkbare Interesses in Instellingen. Relevantie −2…+2 seedt topic_scores
+  (×0.3); eigen (hyper-specifieke) topics met evt. nieuwe categorie en
+  zoektekst. Migratie 0005 (goed-nieuws + 2 bronnen). Scan-stap wijst nu per
+  artikel een topic toe zodat topic-voorkeuren echt in de match-% doorwerken.
+- **12 juni 2026 (vervolg)** — Topic ↔ bron-koppeling: eigen onderwerpen
+  kunnen optioneel aan één vaste bron hangen (migratie 0006,
+  topics.source_id). Ingest zet het topic dan direct; scan respecteert dat.
+  Zonder koppeling de normale zoekweg. Bron-dropdown in de voorkeurenkiezer.
+- **12 juni 2026 (vervolg 2)** — Developer-modus in Instellingen: quick
+  pipeline test met live log, oude test-edities seeden + opruimen
+  (modules/dev, /api/dev). 3 oude edities (8–10 juni, 24 artikelen) geseed.
+  Kleurthema's Krant/Sepia/Mint/Nacht als stip-knoppen in de koptekst
+  (class-based dark, anti-flits-script, localStorage).

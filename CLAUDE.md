@@ -54,8 +54,10 @@ Begin elke nieuwe sessie met het lezen van `HANDOFF.md`.
 
 ## Documentatierichtlijnen
 
-- Gebruikersgerichte teksten (UI, docs, commits) in het **Nederlands**;
-  code-identifiers in het Engels.
+- **Code in het Engels:** comments, identifiers én commit messages. Een
+  volledige retro-vertaling van de bestaande Nederlandse code is gepland.
+- Gebruikersgerichte **UI-teksten** en **Sol-prompts** blijven Nederlands;
+  `docs/` mag Nederlands.
 - `docs/ontwerp.md` is het levende ontwerpdocument: nieuwe ontwerpbeslissingen
   daar vastleggen, inclusief het beslissingen-log (§8). Niet forken naar
   losse notities.

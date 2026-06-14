@@ -11,7 +11,8 @@
 import { db, unwrap } from "../shared/db";
 import { askAIJson } from "../shared/ai";
 import { budgetPolicy } from "../shared/budget";
-import type { BudgetMode, Item, TopicScore, Band } from "../shared/types";
+import { REGIO_CODES, REGIO_GEEN, REGIO_NAAM, isRegioCode } from "../shared/regios";
+import type { BudgetMode, Item, Topic, TopicScore, Band } from "../shared/types";
 
 // ============================================================
 // Scan: belang-classificatie (Haiku, batch)
@@ -21,6 +22,10 @@ interface ScanVerdict {
   index: number;
   belang: number; // 0..1
   is_reclame: boolean;
+  /** index in de meegegeven topiclijst; −1 = geen passend topic */
+  topic_index: number;
+  /** wereldregio waar het nieuws over gaat, of "geen" */
+  regio: string;
 }
 
 const SCAN_SCHEMA = {
@@ -34,8 +39,10 @@ const SCAN_SCHEMA = {
           index: { type: "integer" },
           belang: { type: "number" },
           is_reclame: { type: "boolean" },
+          topic_index: { type: "integer" },
+          regio: { type: "string", enum: [...REGIO_CODES, REGIO_GEEN] },
         },
-        required: ["index", "belang", "is_reclame"],
+        required: ["index", "belang", "is_reclame", "topic_index", "regio"],
         additionalProperties: false,
       },
     },
@@ -44,42 +51,68 @@ const SCAN_SCHEMA = {
   additionalProperties: false,
 } as const;
 
+/** Wat de scan per topic nodig heeft om te kunnen matchen. */
+export type ScanTopic = Pick<Topic, "id" | "name" | "query_text">;
+
+export interface ScanUitslag {
+  belang: number;
+  isReclame: boolean;
+  /** best passende topic, of null als geen enkel topic past */
+  topicId: string | null;
+  /** wereldregio waar het nieuws over gaat, of null als geen duidelijke plek */
+  regio: string | null;
+}
+
 /**
- * Classificeert een batch items op algemeen nieuwsbelang.
- * Eén Haiku-call per batch van ~25 — dit is de goedkope brede scan.
+ * Classificeert een batch items op algemeen nieuwsbelang én wijst het best
+ * passende topic toe (zo werken topic-voorkeuren — hoe specifiek ook — door
+ * in de match-score). Eén call per batch van ~25 — de goedkope brede scan.
  */
 export async function scanBatch(
   items: Item[],
   editionId: string,
   stepId?: string,
-): Promise<Map<string, { belang: number; isReclame: boolean }>> {
+  topics: ScanTopic[] = [],
+): Promise<Map<string, ScanUitslag>> {
   if (items.length === 0) return new Map();
 
   const lijst = items
     .map((item, i) => `${i}. ${item.title}${item.raw_summary ? ` — ${item.raw_summary.slice(0, 150)}` : ""}`)
     .join("\n");
 
+  const topicLijst = topics
+    .map((topic, i) => `${i}. ${topic.name}${topic.query_text ? ` (${topic.query_text})` : ""}`)
+    .join("\n");
+
   const { data } = await askAIJson<{ items: ScanVerdict[] }>({
     tier: "scan",
     editionId,
     stepId,
-    maxTokens: 2000,
+    maxTokens: 3000,
     jsonSchema: SCAN_SCHEMA as unknown as Record<string, unknown>,
     system:
       "Je beoordeelt nieuwsitems voor een persoonlijk ochtendrapport. " +
       "Geef per item een belang-score van 0.0 (triviaal) tot 1.0 (groot nieuws met brede impact). " +
       "Markeer is_reclame=true voor gesponsorde content, advertorials en deals-artikelen — " +
-      "officiële persberichten van fabrikanten zijn GEEN reclame.",
-    prompt: `Beoordeel deze items:\n\n${lijst}`,
+      "officiële persberichten van fabrikanten zijn GEEN reclame. " +
+      "Kies per item daarnaast het best passende onderwerp uit de onderwerpenlijst " +
+      "(topic_index; specifieke onderwerpen winnen van brede) of −1 als niets echt past. " +
+      "Bepaal tot slot de wereldregio waar het nieuws over gáát (niet de bron): " +
+      `${REGIO_CODES.map((c) => `${c}=${REGIO_NAAM[c]}`).join(", ")}. ` +
+      `Nederland valt onder eu. Gebruik "${REGIO_GEEN}" als er geen duidelijke geografische plek is ` +
+      "(bv. algemeen tech-, wetenschap- of marktnieuws).",
+    prompt: `Onderwerpen:\n${topicLijst || "(geen)"}\n\nBeoordeel deze items:\n\n${lijst}`,
   });
 
-  const verdicts = new Map<string, { belang: number; isReclame: boolean }>();
+  const verdicts = new Map<string, ScanUitslag>();
   for (const verdict of data.items) {
     const item = items[verdict.index];
     if (item) {
       verdicts.set(item.id, {
         belang: Math.max(0, Math.min(1, verdict.belang)),
         isReclame: verdict.is_reclame,
+        topicId: topics[verdict.topic_index]?.id ?? null,
+        regio: isRegioCode(verdict.regio) ? verdict.regio : null,
       });
     }
   }

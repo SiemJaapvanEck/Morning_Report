@@ -1,121 +1,88 @@
 # HANDOFF — stand van zaken
 
-> Laatst bijgewerkt: 12 juni 2026, sessie op account Siem.
+> Laatst bijgewerkt: 14 juni 2026, sessie op account Siem.
 > Lees dit eerst bij het oppakken van het project; werkafspraken staan in CLAUDE.md.
 
 ## Waar we staan
 
-**De eerste editie is live gegenereerd. 🎉** De volledige pipeline draait
-end-to-end: 212 items binnengehaald, gescand, geselecteerd, samengevat,
-Sol-intro geschreven, voorpagina samengesteld. Kosten: **±€0,03 per editie**
-(plafond €0,30). Alle pipeline-stappen blijven onder de 10s dankzij het
-vervolgstap-patroon (`requeue` in `modules/pipeline/steps.ts`).
+De pipeline is **opgeschaald** (16 → 71 bronnen, incl. podcast/video-media) en de
+**editie is herontworpen als een kalender**: elke dag is hetzelfde Atlas-dashboard,
+met Dag/Week/Maand/Jaar-navigatie en veeg-bladeren. Een editie kost nu ±€0,14
+(plafond €0,30). Alle poorten groen (lint/tsc/test/build). **Deze sessie is nog
+NIET naar GitHub gepusht** — zie "Wat nu openstaat".
 
-**De voorpagina is nu het dashboard van de whiteboard-schets** (11 juni):
-kopstrook met weer- en stats-blok, een puntenrij van afgelopen edities
-(tik = die editie openen), de grote "Daily paper"-kaart naar
-`/editie/[datum]`, en "Sol's selectie" — artikelkaarten met afbeelding,
-categorie, beschrijving, **Sol's match-percentage** en rating **−2…+2**
-(intern blijft 1–5; zie `ItemRating`). Daarvoor: migratie 0004
-(`items.image_url`, `edition_items.match_score`), afbeelding-extractie in
-`modules/shared/feeds.ts` (`extractImage`, met tests), select-stap schrijft
-`match_score` (prioriteit geclampt 0..1). De editie van vandaag is eenmalig
-gebackfilld (55 scores, 32 afbeeldingen); vanaf morgen vult de pipeline dit
-zelf. De volledige krant-weergave (`EditieWeergave`) is ongewijzigd en leeft
-op `/editie/[datum]`.
+### Fase 1 — ingestie-opschaling + media-plumbing (migratie 0007)
+- **71 actieve bronnen** (was 16): de volledige §5-lijst uit `docs/ontwerp.md`
+  (wire/tech/AI/wetenschap/games/finance/NL-lokaal/subreddits) + een curated set
+  **uitleg-media**. Migratie `0007_sources_expand.sql` (idempotent, geguard op url).
+- **Media als bron** via een nieuwe kolom `sources.medium` (`article`/`podcast`/`video`).
+  Podcasts (RSS-enclosure) en YouTube-kanalen (`feeds/videos.xml?channel_id=…`, keyless)
+  komen via dezelfde `fetchFeed`. `modules/shared/feeds.ts` kreeg `extractMedia()` +
+  `parseDuration()` (+ `itunes:duration`-veld); de afspeel-URL/duur landt in
+  `items.scan_meta.media` (`MediaMeta` in types.ts).
+- **Media slaat de 48u-versheidsregel over** (uitleg is evergreen) — `modules/ingest`.
+  De scan-stap **merget** nu `scan_meta` i.p.v. overschrijven, zodat media bewaard blijft.
+- **scan_rank-cap 6 → 12 rondes** (~600 items/dag) voor de bredere bronnenlijst.
+- Geverifieerd: 6/6 YouTube-channel-id's geldig, ~725 media-items opgehaald
+  (vooral podcast-backcatalogs). **Bekend:** Reddit + BleepingComputer geven 403 aan
+  bots (niet-blokkerend, bewust gelaten); 1 media-item lekt nu nog in een gewone sectie
+  (routing eruit = latere fase).
 
-**Accountvoorkeuren staan erin (12 juni).** Nieuw profiel → `/onboarding`
-(defaults voorgeselecteerd: tech, financieel, wereld, wetenschap, goed-nieuws
-— die laatste is nieuw, migratie 0005, met Good News Network + Positive News
-als feeds). Per topic volgen/niet + relevantie −2…+2; dat seedt
-`topic_scores` (×0.3, dus −0.6…+0.6 — ruimte voor het leren via ratings).
-Eigen topics kunnen hoe specifiek ook (bv. één bedrijf), evt. met nieuwe
-categorie en zoektekst (`query_mode`; fase 3 gaat die actief opzoeken).
-Zelfde kiezer is bewerkbaar onder Instellingen → Interesses
-(`VoorkeurenKiezer`, `modules/preferences`, `/api/voorkeuren`,
-`app/lib/voorkeuren.ts`). Belangrijk: de scan-stap wijst nu per item een
-topic toe (`scanBatch` krijgt de topiclijst mee), waardoor topic-voorkeuren
-écht doorwerken in `priority()` → match-%. Een eigen topic kan bovendien aan
-één **vaste bron** hangen (`topics.source_id`, migratie 0006): items uit die
-bron krijgen het topic direct bij ingestie en de scan respecteert dat; zonder
-koppeling geldt de normale zoekweg.
+### Editie-UI = kalender (homepage én /editie/[datum] zijn hetzelfde scherm)
+- **`EditionView`** (`app/components/EditionView.tsx`) is de gedeelde Atlas-dashboard­weergave
+  van één editie (verving en verwijderde `VoorpaginaAtlas`). Datum-gebaseerd; de
+  "Lees de krant"-knop wijst naar de volledige krant. `WereldKaart` kreeg een `basePath`
+  zodat de regio-klik op een datumpagina op die pagina blijft.
+- **`EditionNav`** (client): `‹ Today ›` (springt naar de dichtstbijzijnde dag mét editie),
+  een **mini-maandkiezer** met stippen op dagen die een editie hebben, en een
+  **Dag/Week/Maand/Jaar**-schakelaar. URL-gedreven (`?view=`), deelbaar.
+- **`SwipePager`** (client): veeg / horizontaal scrollen / pijltjes ←→ bladert tussen
+  edities (prefetcht buren).
+- **`EditionOverview`**: Week = horizontale dagkaarten (7-op-desktop → 2-op-mobiel),
+  Maand = kaart-kalender (kop op sm+, dag+stip op mobiel), Jaar = 12 mini-maanden.
+- **Lees-hiërarchie (3 lagen):** cover = dashboard → "Lees de krant" → **volledige krant**
+  op **`/editie/[datum]/krant`** (`EditieWeergave`, hierheen verplaatst). Een datum zonder
+  editie toont `LegeHero` (geen 404), zodat je vrij kunt bladeren.
+- Nieuw: `app/lib/dates.ts` (datumhelpers), `listEditionSummaries` in `app/lib/queries.ts`
+  (voedt de stippen/overzichten), `EditionScreen` (nav + dag/overzicht). ESLint negeert nu
+  de untracked map `Morning Report design/`.
 
-**Developer-modus & thema's (12 juni).** Instellingen → Developer:
-⚡ quick pipeline test (tick-lus vanuit de browser, live log, echte
-AI-kosten), oude test-edities seeden en testdata opruimen (`modules/dev`,
-`/api/dev`, herkenbaar aan guid-voorvoegsel `dev-test-`). Er staan nu 3
-geseedde edities (8–10 juni, 24 artikelen, picsum-afbeeldingen) — opruimen
-kan altijd met één knop. Kleurthema's (Krant/Sepia/Mint/Nacht) als
-stip-knoppen in de koptekst; donker is sindsdien **class-based** (custom
-variant in globals.css) met een anti-flits-script in layout.tsx, keuze in
-localStorage (`mr_thema`), zonder keuze volgt het OS. **Let op:** bestaande profielen
-zonder `voorkeuren_ingesteld`-vlag (dus ook Siem) worden bij het eerste
-bezoek éénmalig naar `/onboarding` gestuurd — defaults staan klaar, één tik
-op "Klaar" volstaat.
+### Volgende track: de "Redactie" (afgesproken, nog te bouwen)
+Een klein AI-redactieteam als **persona-prompts + stappen (GEEN agent-runtime)**:
+Tech-, Politiek-, Financieel-expert + Journalist (generalist), met **Sol als
+hoofdredacteur** die de **Daily Paper** schrijft (de "bigger summary" achter de
+Sol-knop = depth-2 in de lees-hiërarchie). Dit is fase 4–5 van het masterplan,
+omgezet naar genoemde desks. Tot die er is, linkt de "Lees de krant"-knop naar de
+volledige krant.
 
-**AI-provider is "voor nu" Grok (xAI)** via de provider-router in
-`modules/shared/ai.ts` (`askAI()`/`askAIJson()`). Modellen:
-`grok-4.20-0309-non-reasoning` (scan) en `grok-4.3` (deep/Sol), beide
-$1,25/$2,50 per MTok. Anthropic/Claude blijft ingebouwd: schakel om met
-`AI_PROVIDER=anthropic` + `ANTHROPIC_API_KEY` in `.env.local`.
-
-**Supabase staat live én beveiligd**: project "Morning Report."
-(`iqhyndhrlhjfdrwjvmjv`, eu-west-1). Drie migraties toegepast (schema,
-starterset, RLS aan op alle 18 tabellen — geen policies nodig, alleen
-service-role-toegang). Profiel "Siem" bestaat; Jesse kan via de UI worden
-aangemaakt. `.env.local` is compleet (Supabase-keys + xAI-key + geheimen).
+### Onveranderd, nog steeds geldig
+- **AI-provider = Grok (xAI)** via `modules/shared/ai.ts` (`askAI()`): `grok-4.20…` (scan)
+  + `grok-4.3` (deep/Sol). Anthropic omschakelbaar (`AI_PROVIDER=anthropic`).
+- **Supabase live + RLS**: project "Morning Report." (`iqhyndhrlhjfdrwjvmjv`, eu-west-1),
+  alleen service-role. Migratie 0007 is **al toegepast** op de live DB.
+- **Vercel**: auto-deploy op elke push naar `main`. Vaste URL:
+  `morning-report-siemjaapvanecks-projects.vercel.app`. Deployment Protection uit.
+- Accountvoorkeuren/onboarding, developer-modus + thema's, weer + markten-kaart: ongewijzigd.
 
 ## Wat nu nog openstaat
-
-1. **Vercel: gekoppeld ✓ en live geverifieerd.** Repo geïmporteerd, env-vars
-   gezet, auto-deploy op elke push naar `main`. Vercel Authentication is
-   **uitgezet** (Deployment Protection → Disabled) — bewust, want het ontwerp
-   is login-loos; gevoelige endpoints zijn beveiligd met hun eigen geheimen.
-   - **Vaste productie-URL:** `https://morning-report-siemjaapvanecks-projects.vercel.app`
-   - Geverifieerd: `/api/pipeline/tick` geeft 401 zonder geheim, 200 + JSON
-     mét `Authorization: Bearer <CRON_SECRET>`. Productie praat correct met
-     Supabase (zag de al-gegenereerde editie van vandaag).
-2. **cron-job.org-scheduler** instellen — **de laatste open stap.** Volledig
-   uitgewerkt met exacte velden in `docs/setup.md` §4. Kernpunten:
-   - URL: `https://morning-report-siemjaapvanecks-projects.vercel.app/api/pipeline/tick`
-   - **Request method op POST** (niet de default GET!)
-   - Header `Authorization: Bearer <CRON_SECRET>` (waarde in `.env.local`)
-   - Schedule: minuten `*/2`, uren `6,7,8`, **timezone Europe/Amsterdam**
-   - Er zit bewust **geen** Vercel-cron / `vercel.json` in het project —
-     Vercel-cron kan op Hobby alleen 1×/dag en alleen UTC. Zie §4 voor de
-     redenering (voor als Jesse zich afvraagt waar de cron is).
-3. Daarna draait het rapport elke ochtend vanzelf.
+1. **Pushen naar `main` / Vercel-deploy.** Deze commit staat lokaal; productie draait nog
+   de oude code tegen de nieuwe DB. Migratie 0007 is puur additief (oude code negeert
+   `sources.medium`), dus veilig — maar de nieuwe UI + bredere ingestie zijn pas live ná
+   een push. Wachten op groen licht van Siem.
+2. **Redactie-track bouwen** (zie boven) — eerstvolgende functionele klus.
+3. **Restant masterplan** (zie `project-scale-pipeline-goal`): story-clustering, deep-research
+   6–12 topics, Sol per-categorie/per-continent, select-caps → ~160 zichtbare items, budget→€0,50.
+4. **Eerder openstaand:** retro-vertaling NL → Engels van bestaande code; bevestigen dat de
+   cron-job.org-job daadwerkelijk loopt (`docs/setup.md` §4).
 
 ## Bekende aandachtspunten
-
-- **Cron live getest (11 juni):** editie van vandaag verwijderd en via de
-  productie-`/api/pipeline/tick` opnieuw opgebouwd — 23 tikken, alle stappen
-  <12s, status `done`, €0,048. De scheduler-route werkt dus end-to-end op
-  Vercel. (cron-job.org-job zelf nog door Siem aan te maken.)
-- **Open-Meteo is wisselvallig** (gratis publieke API): tijdens de test gaf
-  hij afwisselend 200 en connectie-fouten. De weermodule heeft nu 4 interne
-  retries; faalt het alsnog, dan slaat de pipeline de weersectie over en
-  bouwt de rest gewoon door (niet-blokkerend, by design). Latere robuustheid:
-  KNMI/Buienradar als fallback-bron (ontwerp §weer).
-- De xAI-key is in de chat geplakt geweest; hij staat nu in `.env.local`.
-  Overweeg rotatie als hij ooit elders rondzwerft.
-- Postgres `current_date` is UTC; editie-datums komen uit `todayLocal()`
-  (Europe/Amsterdam). Bij handmatige SQL op datums: expliciet de datum
-  noemen, niet `current_date` (we liepen hier al eens tegenaan).
-- `sources.last_error` in Instellingen toont feed-fouten; de starter-feedlijst
-  draait, fase 3 breidt bronnen uit.
-- **Git-auth:** een OAuth-token (account SiemJaapvanEck) staat in de
-  macOS-keychain; `git push/pull` werkt direct. `gh auth status` zegt
-  "niet ingelogd" — dat klopt (token mist de read:org-scope die gh eist),
-  maar git zelf werkt. Op een ander account/apparaat: opnieuw device-flow.
-- **Oud prototype in historie:** de repo bevatte een eerdere Vite+FastAPI-
-  versie; die is via een ours-merge vervangen door dit platform en blijft
-  alleen in de git-historie bestaan. Niet hervatten — architectuur is
-  vastgelegd in docs/ontwerp.md.
-
-## Volgende bouwfase (als bovenstaande klaar is)
-
-**Fase 3 — volledige ingestie**: alle bronnen uit `docs/ontwerp.md` §5,
-subreddits (RSS), query-modus voor vrije onderwerpen (web-search),
-capture-verwerking (captures → topics/sources), AI-reclamefilter aanscherpen.
-Daarna fase 4 (interessemotor compleet) — zie README voor de volledige roadmap.
+- **Preview-editie `2099-01-01`** staat nog in de DB (handige niet-vandaag-testfixture; mag weg).
+- **Media-backcatalog is groot** (~725 items): podcast-feeds leveren honderden oude afleveringen
+  doordat media de versheidsgrens overslaat. Prima voor de latere catch-up-bibliotheek; eventueel
+  later per media-feed cappen.
+- **403-feeds** (Reddit-subreddits, BleepingComputer): blokkeren datacenter-requests, geven ⚠ in
+  Instellingen, niet-blokkerend.
+- **Open-Meteo** (weer) wisselvallig: 4 retries, niet-blokkerend.
+- **Postgres `current_date` is UTC**; editie-datums via `todayLocal()` (Europe/Amsterdam).
+- **Git-auth**: OAuth-token (SiemJaapvanEck) in de macOS-keychain; `git push/pull` werkt.
+  `gh auth status` zegt "niet ingelogd" (token mist read:org) — dat klopt, git zelf werkt.

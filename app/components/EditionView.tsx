@@ -1,20 +1,21 @@
-// Voorpagina in de "Atlas"-stijl (zie Morning Report design/atlas-daily.jsx):
-// een bold bento-dashboard met de blauwe Daily Briefing-hero, een weerstrook,
-// twee data-tegels rechts en een grid met de beste verhalen. De finance- en
-// wereldkaart-tegels uit het ontwerp draaiden op verzonnen data; die zijn hier
-// vervangen door eerlijke equivalenten op échte data: "Waar Sol vandaag las"
-// (bronnen) en "Sol's selectie" (items op match-score).
+// De Atlas-dashboardweergave van één editie (was VoorpaginaAtlas). Gebruikt
+// voor zowel de homepage (vandaag) als /editie/[datum]: een bold bento-dashboard
+// met de blauwe Daily Briefing-hero, een weerstrook, twee data-tegels rechts en
+// "Sol's selectie". Op échte data. De kalendernavigatie (vorige/volgende, Today,
+// week/maand/jaar) zit in EditionNav + SwipePager eromheen; deze component rendert
+// alleen de dag zelf. De "Lees de krant"-knop gaat naar de volledige krant
+// (/editie/<datum>/krant) — de Daily Paper-synthese (Redactie) komt later.
 
 import Link from "next/link";
 import { Archivo, Space_Grotesk, Space_Mono } from "next/font/google";
-import type { Edition, MarktIndex } from "@/modules/shared/types";
-import type { EditionView, SectionView } from "@/app/lib/queries";
+import type { MarktIndex } from "@/modules/shared/types";
+import type { EditionView as EditionViewData, SectionView } from "@/app/lib/queries";
 import { REGIO_NAAM, type RegioCode } from "@/modules/shared/regios";
 import { ItemRating } from "./ItemRating";
 import { WereldKaart, regioStats } from "./WereldKaart";
 import { MarktenKaart } from "./MarktenKaart";
 
-// Lettertypen van het ontwerp — alleen op de voorpagina via de variabel-classes.
+// Lettertypen van het ontwerp — alleen op deze weergave via de variabel-classes.
 const archivo = Archivo({ subsets: ["latin"], weight: ["600", "700", "800"], variable: "--font-archivo" });
 const grotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-grotesk" });
 const spaceMono = Space_Mono({ subsets: ["latin"], weight: ["400", "700"], variable: "--font-space-mono" });
@@ -36,11 +37,6 @@ const Icon = {
   Sources: (p: { className?: string }) => (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={p.className}>
       <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" />
-    </svg>
-  ),
-  Clock: (p: { className?: string }) => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={p.className}>
-      <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" /><path d="M12 7v5l3 2" />
     </svg>
   ),
   Arrow: (p: { className?: string }) => (
@@ -66,48 +62,25 @@ function fmtDatum(date: string, opts: Intl.DateTimeFormatOptions) {
   return new Date(date + "T00:00:00").toLocaleDateString("nl-NL", opts);
 }
 
-// ── recente edities als puntenrij (tik = die dag openen) ─────────────────────
-function EditieDots({ editions, today }: { editions: Edition[]; today: string }) {
-  const reeks = [...editions].reverse().slice(-8);
-  if (reeks.length === 0) return null;
-  return (
-    <div className="flex items-center gap-1.5">
-      {reeks.map((e) => {
-        const isVandaag = e.date === today;
-        return (
-          <Link
-            key={e.id}
-            href={`/editie/${e.date}`}
-            title={fmtDatum(e.date, { weekday: "long", day: "numeric", month: "long" })}
-            aria-label={`Editie van ${fmtDatum(e.date, { weekday: "long", day: "numeric", month: "long" })}`}
-            className={
-              isVandaag
-                ? "h-2.5 w-2.5 rounded-full bg-[#2f6df0] ring-2 ring-[#2f6df0]/25"
-                : "h-2 w-2 rounded-full bg-stone-300 transition-colors hover:bg-[#2f6df0]/60 dark:bg-stone-700"
-            }
-          />
-        );
-      })}
-    </div>
-  );
-}
-
 // ── de blauwe Daily Briefing-hero ────────────────────────────────────────────
 function BriefingHero({
-  view,
-  today,
+  hasEdition,
+  date,
+  krantHref,
   headline,
+  intro,
   bullets,
   stats,
 }: {
-  view: EditionView | null;
-  today: string;
+  hasEdition: boolean;
+  date: string;
+  krantHref: string;
   headline: string;
+  intro: string | null;
   bullets: KaartItem[];
   stats: { artikelen: number; secties: number; bronnen: number };
 }) {
-  const intro = view?.edition.front_page?.intro ?? null;
-  const datumKort = fmtDatum(today, { day: "numeric", month: "short" }).toUpperCase();
+  const datumKort = fmtDatum(date, { day: "numeric", month: "short" }).toUpperCase();
 
   return (
     <div className="flex flex-1 flex-col rounded-2xl bg-[#2f6df0] p-7 text-white sm:p-8">
@@ -145,7 +118,7 @@ function BriefingHero({
       {bullets.length > 0 && (
         <>
           <div className="mt-auto pt-6 font-[family-name:var(--font-archivo)] text-[11px] font-bold tracking-[0.15em] opacity-80">
-            MEEST INTERESSANT VANDAAG
+            MEEST INTERESSANT
           </div>
           <ul className="mt-3 flex flex-col gap-3">
             {bullets.map((b) => {
@@ -176,10 +149,10 @@ function BriefingHero({
         </>
       )}
 
-      {view && (
+      {hasEdition && (
         <div className="mt-6">
           <Link
-            href={`/editie/${today}`}
+            href={krantHref}
             className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 font-[family-name:var(--font-archivo)] text-[13px] font-extrabold text-[#2f6df0] transition-transform hover:-translate-y-0.5"
           >
             Lees de krant <Icon.Arrow className="h-4 w-4" />
@@ -190,18 +163,19 @@ function BriefingHero({
   );
 }
 
-// ── lege-hero (nog geen editie) ──────────────────────────────────────────────
-function LegeHero({ today }: { today: string }) {
-  const datum = fmtDatum(today, { weekday: "long", day: "numeric", month: "long" });
+// ── lege-hero (nog geen editie op deze dag) ──────────────────────────────────
+function LegeHero({ date, isToday }: { date: string; isToday: boolean }) {
+  const datum = fmtDatum(date, { weekday: "long", day: "numeric", month: "long" });
   return (
     <div className="flex flex-1 flex-col justify-center rounded-2xl bg-[#2f6df0] p-8 text-white">
       <span className="font-[family-name:var(--font-space-mono)] text-[11px] font-bold uppercase tracking-wide opacity-85">{datum}</span>
       <h1 className="mt-3 font-[family-name:var(--font-archivo)] text-[30px] font-extrabold tracking-tight">
-        Nog geen editie vandaag
+        {isToday ? "Nog geen editie vandaag" : "Geen editie op deze dag"}
       </h1>
       <p className="mt-3 max-w-md text-[15px] leading-relaxed opacity-90">
-        De pipeline draait &apos;s ochtends tussen 06:30 en 08:15. Zodra Sol klaar is,
-        verschijnt hier de briefing van vandaag.
+        {isToday
+          ? "De pipeline draait 's ochtends tussen 06:30 en 08:15. Zodra Sol klaar is, verschijnt hier de briefing van vandaag."
+          : "Op deze datum is er geen editie samengesteld. Blader met de pijlen of de kalender naar een dag met nieuws."}
       </p>
     </div>
   );
@@ -216,8 +190,6 @@ function WeerStrook({ weather }: { weather: import("@/modules/shared/types").Wea
         <span className="font-[family-name:var(--font-archivo)] text-[13px] font-extrabold tracking-tight">
           Weer — {weather?.plaats ?? "onbekend"}
         </span>
-        <span className="flex-1" />
-        <span className="font-[family-name:var(--font-space-mono)] text-[9.5px] font-bold tracking-widest text-stone-400">VANDAAG</span>
       </div>
       {weather ? (
         <>
@@ -252,7 +224,15 @@ function WeerStrook({ weather }: { weather: import("@/modules/shared/types").Wea
 }
 
 // ── "Waar het nieuws vandaan komt" — stippen-wereldkaart op échte regio-tellingen ─
-function WereldKaartTegel({ counts, selectedRegio }: { counts: Record<string, number>; selectedRegio?: string | null }) {
+function WereldKaartTegel({
+  counts,
+  selectedRegio,
+  basePath,
+}: {
+  counts: Record<string, number>;
+  selectedRegio?: string | null;
+  basePath: string;
+}) {
   const { topCode, topAantal } = regioStats(counts);
   const selNaam = selectedRegio ? REGIO_NAAM[selectedRegio as RegioCode] : null;
   return (
@@ -264,14 +244,14 @@ function WereldKaartTegel({ counts, selectedRegio }: { counts: Record<string, nu
         <span className="font-[family-name:var(--font-space-mono)] text-[9.5px] font-bold tracking-widest text-stone-400">KLIK EEN REGIO</span>
       </div>
       <div className="relative min-h-0 flex-1">
-        <WereldKaart counts={counts} selectedRegio={selectedRegio} />
+        <WereldKaart counts={counts} selectedRegio={selectedRegio} basePath={basePath} />
       </div>
       <div className="mt-3 flex items-center gap-3">
         <span className="text-[10.5px] font-semibold text-stone-400">Minder</span>
         <span className="h-[7px] flex-1 rounded-full bg-[linear-gradient(90deg,rgba(47,109,240,0.16),rgba(47,109,240,1))]" />
         <span className="text-[10.5px] font-semibold text-stone-400">Meer</span>
         {selNaam ? (
-          <Link href="/#sol-selectie" className="whitespace-nowrap rounded-full bg-[#2f6df0] px-2.5 py-1 font-[family-name:var(--font-archivo)] text-[10px] font-extrabold text-white hover:opacity-90">
+          <Link href={`${basePath}#sol-selectie`} className="whitespace-nowrap rounded-full bg-[#2f6df0] px-2.5 py-1 font-[family-name:var(--font-archivo)] text-[10px] font-extrabold text-white hover:opacity-90">
             {selNaam} ✕
           </Link>
         ) : topAantal > 0 ? (
@@ -294,7 +274,7 @@ function MarktenTegel({ indices }: { indices: MarktIndex[] }) {
         <Icon.Pulse className="h-4 w-4 text-stone-700 dark:text-stone-200" />
         <span className="font-[family-name:var(--font-archivo)] text-[13px] font-extrabold tracking-tight">Markten per regio</span>
         <span className="flex-1" />
-        <span className="font-[family-name:var(--font-space-mono)] text-[9.5px] font-bold tracking-widest text-stone-400">VANDAAG</span>
+        <span className="font-[family-name:var(--font-space-mono)] text-[9.5px] font-bold tracking-widest text-stone-400">SNAPSHOT</span>
       </div>
       <div className="relative min-h-0 flex-1">
         <MarktenKaart indices={indices} />
@@ -320,15 +300,14 @@ function MarktenTegel({ indices }: { indices: MarktIndex[] }) {
   );
 }
 
-// ── "Waar Sol vandaag las" — top bronnen als balken (terugval als er nog te
-//    weinig geo-data is voor de kaart) ──────────────────────────────────────────
+// ── "Waar Sol vandaag las" — top bronnen als balken (terugval voor de kaart) ──
 function BronnenTegel({ bronnen }: { bronnen: { naam: string; n: number }[] }) {
   const max = Math.max(1, ...bronnen.map((b) => b.n));
   return (
     <div className={`${TILE} flex flex-col p-6`}>
       <div className="mb-3 flex items-center gap-2">
         <Icon.Globe className="h-4 w-4 text-stone-700 dark:text-stone-200" />
-        <span className="font-[family-name:var(--font-archivo)] text-[13px] font-extrabold tracking-tight">Waar Sol vandaag las</span>
+        <span className="font-[family-name:var(--font-archivo)] text-[13px] font-extrabold tracking-tight">Waar Sol las</span>
         <span className="flex-1" />
         <span className="font-[family-name:var(--font-space-mono)] text-[9.5px] font-bold tracking-widest text-stone-400">PER BRON</span>
       </div>
@@ -345,7 +324,7 @@ function BronnenTegel({ bronnen }: { bronnen: { naam: string; n: number }[] }) {
           ))}
         </div>
       ) : (
-        <p className="text-sm text-stone-400">nog geen bronnen vandaag</p>
+        <p className="text-sm text-stone-400">geen bronnen op deze dag</p>
       )}
     </div>
   );
@@ -404,20 +383,21 @@ function VerhaalKaart({ item }: { item: KaartItem }) {
   );
 }
 
-// ── hoofdcomponent ───────────────────────────────────────────────────────────
-export function VoorpaginaAtlas({
+// ── hoofdcomponent: één editie als Atlas-dashboard ───────────────────────────
+export function EditionView({
   view,
-  editions,
-  today,
+  date,
+  isToday,
   profileName,
   selectedRegio,
 }: {
-  view: EditionView | null;
-  editions: Edition[];
-  today: string;
+  view: EditionViewData | null;
+  date: string;
+  isToday: boolean;
   profileName?: string;
   selectedRegio?: string | null;
 }) {
+  const basePath = isToday ? "/" : `/editie/${date}`;
   const weather = view?.sections.find((s) => s.section.kind === "weather")?.weather ?? null;
 
   const categorySections = (view?.sections ?? []).filter((s) => s.section.kind === "category");
@@ -437,8 +417,7 @@ export function VoorpaginaAtlas({
   for (const it of allItems) if (it.source_name) bronTel.set(it.source_name, (bronTel.get(it.source_name) ?? 0) + 1);
   const topBronnen = [...bronTel.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([naam, n]) => ({ naam, n }));
 
-  // regio-tellingen voor de wereldkaart (gezet door de pipeline bij finalize);
-  // pas tonen als er genoeg spreiding is, anders de bronnen-balken
+  // regio-tellingen voor de wereldkaart (gezet door de pipeline bij finalize)
   const regios = view?.edition.front_page?.regios ?? {};
   const geo = regioStats(regios);
   const toonKaart = geo.totaal >= 3 && geo.actief >= 2;
@@ -446,7 +425,8 @@ export function VoorpaginaAtlas({
   // beurssnapshot voor de markten-kaart (leeg → tegel wordt niet getoond)
   const markten = view?.edition.front_page?.markten?.indices ?? [];
 
-  const headline = ranked[0]?.title ?? "Je ochtendeditie staat klaar";
+  const intro = view?.edition.front_page?.intro ?? null;
+  const headline = ranked[0]?.title ?? "Je editie staat klaar";
   const bullets = ranked.slice(1, 6); // kop is al de #1 — niet herhalen
 
   // klik op een continent → filter de selectie op die regio (via ?regio=…)
@@ -454,21 +434,19 @@ export function VoorpaginaAtlas({
   const regioNaam = regioFilter ? REGIO_NAAM[regioFilter as RegioCode] : null;
   const kaarten = regioFilter ? ranked.filter((it) => it.regio === regioFilter) : ranked.slice(0, 8);
 
-  const datumLang = fmtDatum(today, { weekday: "long", day: "numeric", month: "long" });
+  const datumLang = fmtDatum(date, { weekday: "long", day: "numeric", month: "long" });
   const initialen = (profileName ?? "Lezer").trim().slice(0, 2).toUpperCase();
 
   return (
-    // de layout-container is nu zelf vol-breed; hier alleen de lettertypen scopen
     <div className={`${grotesk.variable} ${archivo.variable} ${spaceMono.variable} font-[family-name:var(--font-grotesk)]`}>
       <div>
-        {/* datumstrook met recente edities + avatar */}
+        {/* datumstrook met avatar */}
         <div className="flex items-center gap-3 pb-5">
           <span className="h-1.5 w-1.5 rounded-full bg-[#2f6df0]" />
           <span className="font-[family-name:var(--font-space-mono)] text-[11px] font-bold uppercase tracking-widest text-stone-500">
-            {datumLang}
+            {datumLang}{isToday ? " · vandaag" : ""}
           </span>
           <span className="flex-1" />
-          <EditieDots editions={editions} today={today} />
           <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#2f6df0] text-[12px] font-bold text-white">
             {initialen}
           </span>
@@ -479,16 +457,24 @@ export function VoorpaginaAtlas({
           {/* linkerkolom: hero + weer */}
           <div className="flex flex-col gap-3 lg:col-span-7">
             {view ? (
-              <BriefingHero view={view} today={today} headline={headline} bullets={bullets} stats={stats} />
+              <BriefingHero
+                hasEdition
+                date={date}
+                krantHref={`${basePath === "/" ? `/editie/${date}` : basePath}/krant`}
+                headline={headline}
+                intro={intro}
+                bullets={bullets}
+                stats={stats}
+              />
             ) : (
-              <LegeHero today={today} />
+              <LegeHero date={date} isToday={isToday} />
             )}
             <WeerStrook weather={weather} />
           </div>
 
           {/* rechterkolom: nieuwskaart (of bronnen-balken) + marktenkaart */}
           <div className="flex flex-col gap-3 lg:col-span-5">
-            {toonKaart ? <WereldKaartTegel counts={regios} selectedRegio={selectedRegio} /> : <BronnenTegel bronnen={topBronnen} />}
+            {toonKaart ? <WereldKaartTegel counts={regios} selectedRegio={selectedRegio} basePath={basePath} /> : <BronnenTegel bronnen={topBronnen} />}
             {markten.length > 0 && <MarktenTegel indices={markten} />}
           </div>
         </div>
@@ -502,7 +488,7 @@ export function VoorpaginaAtlas({
                 Sol&apos;s selectie{regioNaam ? ` · ${regioNaam}` : ""}
               </span>
               {regioFilter && (
-                <Link href="/#sol-selectie" className="text-[11px] font-semibold text-[#2f6df0] hover:underline">
+                <Link href={`${basePath}#sol-selectie`} className="text-[11px] font-semibold text-[#2f6df0] hover:underline">
                   ✕ alle regio&apos;s
                 </Link>
               )}

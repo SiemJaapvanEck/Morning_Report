@@ -61,3 +61,17 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   (modules/dev, /api/dev). 3 oude edities (8–10 juni, 24 artikelen) geseed.
   Kleurthema's Krant/Sepia/Mint/Nacht als stip-knoppen in de koptekst
   (class-based dark, anti-flits-script, localStorage).
+- **14 juni 2026 — Fase 1: ingestie-opschaling + media-plumbing.** Bronnen
+  16 → 71 (volledige §5-lijst + curated uitleg-media), migratie 0007 met
+  nieuwe kolom `sources.medium`. Podcasts/YouTube komen via dezelfde RSS-weg:
+  `extractMedia()`/`parseDuration()` in feeds.ts → `items.scan_meta.media`;
+  media slaat de 48u-versheidsregel over en de scan merget scan_meta i.p.v.
+  overschrijven. scan_rank-cap 6 → 12 rondes. Geverifieerd op een preview-editie
+  (67 items, €0,14, ~725 media-items). Poorten groen.
+- **14 juni 2026 (vervolg) — Editie-UI herontworpen als kalender.** Gedeelde
+  `EditionView` (Atlas-stijl, verving `VoorpaginaAtlas`) voor homepage én
+  /editie/[datum]. Nieuw: `EditionNav` (Today/mini-maandkiezer/Dag-Week-Maand-Jaar),
+  `SwipePager` (veeg/scroll/pijltjes), `EditionOverview` (week = dagkaarten, maand =
+  kaart-kalender, jaar = mini-maanden), `app/lib/dates.ts`, `listEditionSummaries`.
+  Lees-hiërarchie: dashboard → volledige krant op `/editie/[datum]/krant`. Lege dag =
+  LegeHero (geen 404). Volledig responsief; poorten groen. Volgende track: de Redactie.

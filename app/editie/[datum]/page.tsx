@@ -1,17 +1,24 @@
-// Eén specifieke editie uit het archief (datum = YYYY-MM-DD).
+// Eén editie uit het archief (datum = YYYY-MM-DD), getoond als hetzelfde
+// Atlas-dashboard als de homepage, met kalendernavigatie. Een datum zonder
+// editie toont een lege staat (geen 404) zodat je vrij kunt bladeren; de
+// volledige krant staat op /editie/[datum]/krant.
 
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { hasDbConfig } from "@/modules/shared/db";
-import { getEdition } from "@/app/lib/queries";
-import { EditieWeergave } from "@/app/components/EditieWeergave";
+import { todayLocal } from "@/modules/shared/config";
+import { isRegioCode } from "@/modules/shared/regios";
+import { getEdition, getProfiles, listEditionSummaries } from "@/app/lib/queries";
+import { EditionScreen, parseView } from "@/app/components/EditionScreen";
 
 export const dynamic = "force-dynamic";
 
 export default async function EditiePagina({
   params,
+  searchParams,
 }: {
   params: Promise<{ datum: string }>;
+  searchParams: Promise<{ regio?: string; view?: string }>;
 }) {
   const { datum } = await params;
   if (!hasDbConfig() || !/^\d{4}-\d{2}-\d{2}$/.test(datum)) notFound();
@@ -20,8 +27,28 @@ export default async function EditiePagina({
   const profileId = cookieStore.get("mr_profile")?.value;
   if (!profileId) notFound();
 
-  const view = await getEdition(profileId, datum);
-  if (!view) notFound();
+  const profiles = await getProfiles();
+  const profile = profiles.find((p) => p.id === profileId);
+  if (!profile) notFound();
 
-  return <EditieWeergave view={view} />;
+  const { regio, view } = await searchParams;
+  const selectedRegio = isRegioCode(regio) ? regio : null;
+
+  const today = todayLocal();
+  const [editionView, summaries] = await Promise.all([
+    getEdition(profileId, datum),
+    listEditionSummaries(profileId),
+  ]);
+
+  return (
+    <EditionScreen
+      date={datum}
+      today={today}
+      view={parseView(view)}
+      profileName={profile.name}
+      selectedRegio={selectedRegio}
+      editionView={editionView}
+      summaries={summaries}
+    />
+  );
 }

@@ -1,23 +1,22 @@
-// Voorpagina: dashboard met weer/stats, editie-punten, de Daily paper-kaart
-// en Sol's selectie (schets 2026-06-11). De volledige krant leeft op
-// /editie/[datum]. Geen profiel-cookie → profielkiezer. Geen Supabase-config
-// → setupscherm.
+// Voorpagina = de editie van vandaag, als Atlas-dashboard met kalendernavigatie.
+// Bladeren naar andere dagen gebeurt via /editie/[datum] (zelfde scherm).
+// Geen profiel-cookie → profielkiezer. Geen Supabase-config → setupscherm.
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { hasDbConfig } from "@/modules/shared/db";
 import { todayLocal } from "@/modules/shared/config";
 import { isRegioCode } from "@/modules/shared/regios";
-import { getProfiles, getEdition, listEditions } from "@/app/lib/queries";
+import { getProfiles, getEdition, listEditionSummaries } from "@/app/lib/queries";
 import { ProfielKiezer } from "@/app/components/ProfielKiezer";
-import { VoorpaginaAtlas } from "@/app/components/VoorpaginaAtlas";
+import { EditionScreen, parseView } from "@/app/components/EditionScreen";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ regio?: string }>;
+  searchParams: Promise<{ regio?: string; view?: string }>;
 }) {
   if (!hasDbConfig()) {
     return (
@@ -46,23 +45,32 @@ export default async function Home({
     redirect("/onboarding");
   }
 
-  const { regio } = await searchParams;
+  const { regio, view } = await searchParams;
   const selectedRegio = isRegioCode(regio) ? regio : null;
+  const calendarView = parseView(view);
 
   const today = todayLocal();
-  const [view, editions] = await Promise.all([
+  const [editionView, summaries] = await Promise.all([
     getEdition(profileId, today),
-    listEditions(profileId, 10),
+    listEditionSummaries(profileId),
   ]);
 
   return (
     <div>
-      {view && view.edition.status !== "done" && (
+      {calendarView === "day" && editionView && editionView.edition.status !== "done" && (
         <div className="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">
           Deze editie is nog in de maak — wat je ziet groeit nog aan.
         </div>
       )}
-      <VoorpaginaAtlas view={view} editions={editions} today={today} profileName={profile.name} selectedRegio={selectedRegio} />
+      <EditionScreen
+        date={today}
+        today={today}
+        view={calendarView}
+        profileName={profile.name}
+        selectedRegio={selectedRegio}
+        editionView={editionView}
+        summaries={summaries}
+      />
     </div>
   );
 }

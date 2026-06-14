@@ -2,7 +2,14 @@
 // modules/ en de API-routes.
 
 import { db, unwrap } from "@/modules/shared/db";
-import type { Edition, EditionSection, Profile, WeatherSnapshot } from "@/modules/shared/types";
+import type {
+  Edition,
+  EditionSection,
+  EditionStatus,
+  FrontPage,
+  Profile,
+  WeatherSnapshot,
+} from "@/modules/shared/types";
 
 export interface EditionView {
   edition: Edition;
@@ -106,4 +113,43 @@ export async function listEditions(profileId: string, limit = 30): Promise<Editi
       .order("date", { ascending: false })
       .limit(limit),
   );
+}
+
+/** Lichtgewicht editie-metadata voor de kalendernavigatie en de overzichten. */
+export interface EditionSummary {
+  date: string;
+  status: EditionStatus;
+  /** korte kop voor de kalendercel: beste top-item, anders Sol's intro */
+  headline: string | null;
+}
+
+/** Pure functie: leid een korte kop af uit de front_page van een editie. */
+export function deriveHeadline(frontPage: FrontPage | null): string | null {
+  if (!frontPage) return null;
+  const top = frontPage.top_items?.[0]?.title;
+  if (top) return top;
+  const intro = frontPage.intro?.trim();
+  if (intro) return intro.split(/(?<=[.!?])\s/)[0]; // eerste zin
+  return null;
+}
+
+/**
+ * Alle edities van een profiel als lichte samenvattingen (datum + status + kop).
+ * Voedt de kalender-stippen, de vorige/volgende-sprong en de week/maand/jaar-
+ * overzichten. Eén goedkope select (geen secties/items).
+ */
+export async function listEditionSummaries(profileId: string): Promise<EditionSummary[]> {
+  const rows = unwrap(
+    await db()
+      .from("editions")
+      .select("date, status, front_page")
+      .eq("profile_id", profileId)
+      .order("date", { ascending: false }),
+  ) as { date: string; status: EditionStatus; front_page: FrontPage | null }[];
+
+  return rows.map((row) => ({
+    date: row.date,
+    status: row.status,
+    headline: deriveHeadline(row.front_page),
+  }));
 }

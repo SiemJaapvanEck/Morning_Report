@@ -26,9 +26,12 @@ export function regioStats(counts: Record<string, number>) {
 export function WereldKaart({
   counts,
   selectedRegio,
+  basePath = "/",
 }: {
   counts: Record<string, number>;
   selectedRegio?: string | null;
+  /** pad van de huidige editie ("/" voor vandaag, "/editie/<datum>" anders) */
+  basePath?: string;
 }) {
   const max = Math.max(1, ...REGIO_CODES.map((c) => counts[c] ?? 0));
   const { topCode, topAantal } = regioStats(counts);
@@ -69,7 +72,7 @@ export function WereldKaart({
           <a
             key={code}
             className="regio-link"
-            href={isSel ? "/#sol-selectie" : `/?regio=${code}#sol-selectie`}
+            href={isSel ? `${basePath}#sol-selectie` : `${basePath}?regio=${code}#sol-selectie`}
             style={{ cursor: "pointer" }}
             aria-label={`Nieuws uit ${naam} (${n})`}
           >

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { looksLikeAd, contentHash, extractImage } from "./feeds";
+import { looksLikeAd, contentHash, extractImage, extractMedia, parseDuration } from "./feeds";
 
 describe("looksLikeAd (reclamefilter, heuristische laag)", () => {
   it("herkent gesponsorde content en advertorials", () => {
@@ -78,5 +78,54 @@ describe("extractImage (artikelafbeelding uit feed-item)", () => {
   it("negeert relatieve img-paden en geeft null zonder afbeelding", () => {
     expect(extractImage({ content: '<img src="/images/rel.jpg">' })).toBeNull();
     expect(extractImage({})).toBeNull();
+  });
+});
+
+describe("parseDuration (itunes:duration → seconden)", () => {
+  it("leest een kale secondenwaarde", () => {
+    expect(parseDuration("3600")).toBe(3600);
+  });
+
+  it("leest mm:ss en hh:mm:ss", () => {
+    expect(parseDuration("45:30")).toBe(2730);
+    expect(parseDuration("1:02:03")).toBe(3723);
+  });
+
+  it("geeft null bij leeg of onleesbaar", () => {
+    expect(parseDuration(null)).toBeNull();
+    expect(parseDuration("")).toBeNull();
+    expect(parseDuration("onzin")).toBeNull();
+  });
+});
+
+describe("extractMedia (afspeelbare media uit feed-item)", () => {
+  it("pakt een audio-enclosure met duur (podcast)", () => {
+    expect(
+      extractMedia({
+        enclosure: { url: "https://cdn.example/ep.mp3", type: "audio/mpeg" },
+        itunesDuration: "45:30",
+      }),
+    ).toEqual({ url: "https://cdn.example/ep.mp3", durationSec: 2730 });
+  });
+
+  it("pakt een video-enclosure", () => {
+    expect(
+      extractMedia({ enclosure: { url: "https://cdn.example/clip.mp4", type: "video/mp4" } }),
+    ).toEqual({ url: "https://cdn.example/clip.mp4", durationSec: null });
+  });
+
+  it("gebruikt de watch-URL van een YouTube-feed-item", () => {
+    expect(extractMedia({ link: "https://www.youtube.com/watch?v=abc123" })).toEqual({
+      url: "https://www.youtube.com/watch?v=abc123",
+      durationSec: null,
+    });
+  });
+
+  it("geeft null voor een gewoon artikel of niet-afspeelbare enclosure", () => {
+    expect(extractMedia({ link: "https://news.example/article" })).toBeNull();
+    expect(
+      extractMedia({ enclosure: { url: "https://cdn.example/a.jpg", type: "image/jpeg" } }),
+    ).toBeNull();
+    expect(extractMedia({})).toBeNull();
   });
 });

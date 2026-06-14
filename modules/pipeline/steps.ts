@@ -160,6 +160,8 @@ const scanRankStep: StepHandler = async ({ edition, step }) => {
   ) as { id: string; name: string; query_text: string | null }[];
 
   const vastTopic = new Map(items.map((item) => [item.id, item.topic_id]));
+  // bestaande scan_meta bewaren (bv. media van media-bronnen) bij de update
+  const existingMeta = new Map(items.map((item) => [item.id, item.scan_meta ?? {}]));
 
   let scanned = 0;
   for (let i = 0; i < items.length; i += 25) {
@@ -173,18 +175,20 @@ const scanRankStep: StepHandler = async ({ edition, step }) => {
           is_ad: verdict.isReclame,
           // een bron-gekoppeld topic (gezet bij ingestie) wint van de AI-gok
           topic_id: vastTopic.get(itemId) ?? verdict.topicId,
-          // wereldregio voor de "waar komt het nieuws vandaan"-kaart
-          scan_meta: { regio: verdict.regio },
+          // wereldregio voor de "waar komt het nieuws vandaan"-kaart; merge zodat
+          // eerder gezette velden (bv. media) niet verloren gaan
+          scan_meta: { ...existingMeta.get(itemId), regio: verdict.regio },
         })
         .eq("id", itemId);
       scanned++;
     }
   }
 
-  // meer ongescande items? volgende ronde inplannen (max 6 ≈ 300 items)
+  // meer ongescande items? volgende ronde inplannen (max 12 ≈ 600 items) —
+  // ruim genoeg voor de bredere bronnenlijst (~500 items/dag) na fase 1
   let vervolg = false;
   if (items.length === 50) {
-    vervolg = await requeue(step, 6);
+    vervolg = await requeue(step, 12);
   }
   return { geclassificeerd: scanned, vervolg };
 };

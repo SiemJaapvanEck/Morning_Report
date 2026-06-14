@@ -15,6 +15,8 @@ export interface FeedItem {
   publishedAt: string | null;
   isAd: boolean;
   imageUrl: string | null;
+  /** Playable media (podcast audio / YouTube video), or null for plain articles. */
+  media: { url: string; durationSec: number | null } | null;
 }
 
 const AD_PATTERNS = [
@@ -80,6 +82,45 @@ export function extractImage(item: RawFeedItemMedia): string | null {
   return null;
 }
 
+/** Velden die de media-extractie (catch-up) nodig heeft. */
+export interface RawFeedMedia {
+  enclosure?: { url?: string; type?: string };
+  itunesDuration?: string;
+  /** item-link; bij YouTube-feeds is dit de watch-URL */
+  link?: string;
+}
+
+/**
+ * Pure functie: een itunes:duration ("3600", "62:03", "1:02:03") naar hele
+ * seconden. Geeft null bij een lege of onleesbare waarde.
+ */
+export function parseDuration(raw?: string | null): number | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (trimmed === "") return null;
+  if (/^\d+$/.test(trimmed)) return Number(trimmed); // al in seconden
+  const parts = trimmed.split(":").map(Number);
+  if (parts.length === 0 || parts.some((n) => Number.isNaN(n))) return null;
+  return parts.reduce((acc, n) => acc * 60 + n, 0);
+}
+
+/**
+ * Pure functie: de afspeelbare media-URL + duur uit een feed-item, voor de
+ * catch-up-aanbeveling. Podcasts hebben een audio/video-enclosure (+ vaak
+ * itunes:duration); YouTube-kanaalfeeds zetten de watch-URL in de item-link.
+ * Geeft null als er niets afspeelbaars is (gewoon artikel).
+ */
+export function extractMedia(item: RawFeedMedia): { url: string; durationSec: number | null } | null {
+  const enc = item.enclosure;
+  if (enc?.url && (enc.type?.startsWith("audio/") || enc.type?.startsWith("video/"))) {
+    return { url: enc.url, durationSec: parseDuration(item.itunesDuration) };
+  }
+  if (item.link && /(?:youtube\.com\/watch|youtu\.be\/)/i.test(item.link)) {
+    return { url: item.link, durationSec: parseDuration(item.itunesDuration) };
+  }
+  return null;
+}
+
 const parser = new Parser({
   timeout: 8000,
   customFields: {
@@ -87,6 +128,7 @@ const parser = new Parser({
       ["media:content", "mediaContent", { keepArray: true }],
       ["media:thumbnail", "mediaThumbnail", { keepArray: true }],
       ["content:encoded", "content:encoded"],
+      ["itunes:duration", "itunesDuration"],
     ],
   },
 });
@@ -105,6 +147,7 @@ export async function fetchFeed(url: string): Promise<FeedItem[]> {
       publishedAt: item.isoDate ?? null,
       isAd: looksLikeAd(title, summary, item.categories),
       imageUrl: extractImage(item as RawFeedItemMedia),
+      media: extractMedia(item as RawFeedMedia),
     };
   });
 }

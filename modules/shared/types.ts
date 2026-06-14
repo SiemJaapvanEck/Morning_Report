@@ -56,12 +56,21 @@ export interface Source {
   category_id: string | null;
   name: string;
   kind: "rss" | "api" | "query";
+  /** content type: plain article vs explainer media for the catch-up step */
+  medium: "article" | "podcast" | "video";
   url: string | null;
   active: boolean;
   weight: number;
   last_fetched_at: string | null;
   last_error: string | null;
   created_at: string;
+}
+
+/** Playable media on an item (catch-up). Stored under items.scan_meta.media. */
+export interface MediaMeta {
+  type: "podcast" | "video";
+  url: string;
+  durationSec: number | null;
 }
 
 export interface TopicScore {

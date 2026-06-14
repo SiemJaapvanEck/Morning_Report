@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Untracked design-reference JSX (not part of the app build).
+    "Morning Report design/**",
   ]),
 ]);
 

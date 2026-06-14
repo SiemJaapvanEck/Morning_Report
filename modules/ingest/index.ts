@@ -6,7 +6,7 @@
 
 import { db, unwrap } from "../shared/db";
 import { fetchFeed, contentHash } from "../shared/feeds";
-import type { Source } from "../shared/types";
+import type { MediaMeta, Source } from "../shared/types";
 
 export interface IngestResult {
   sourceId: string;
@@ -48,11 +48,17 @@ export async function ingestSource(source: Source): Promise<IngestResult> {
     return result;
   }
 
-  // Recente items eerst; oudere dan 48u zijn geen "ochtendnieuws" meer
+  // Media-bronnen (podcast/video) leveren uitlegcontent die evergreen is: die
+  // slaan de "geen oud nieuws"-grens bewust over zodat een oudere uitlegvideo
+  // over het onderwerp van vandaag alsnog kan worden aanbevolen. De expliciete
+  // check valt veilig terug op artikel-gedrag als de medium-kolom (nog) ontbreekt.
+  const isMedia = source.medium === "podcast" || source.medium === "video";
   const cutoff = Date.now() - 48 * 60 * 60 * 1000;
-  const fresh = feedItems.filter(
-    (item) => !item.publishedAt || new Date(item.publishedAt).getTime() > cutoff,
-  );
+  const fresh = isMedia
+    ? feedItems
+    : feedItems.filter(
+        (item) => !item.publishedAt || new Date(item.publishedAt).getTime() > cutoff,
+      );
 
   // is een topic aan deze bron gekoppeld, dan krijgen de items dat topic
   // direct mee (de scan-stap respecteert dit); anders de normale zoekweg
@@ -64,19 +70,28 @@ export async function ingestSource(source: Source): Promise<IngestResult> {
     .maybeSingle();
   const pinnedTopicId: string | null = pinned.data?.id ?? null;
 
-  const rows = fresh.map((item) => ({
-    source_id: source.id,
-    category_id: source.category_id,
-    topic_id: pinnedTopicId,
-    guid: item.guid,
-    url: item.url,
-    title: item.title,
-    raw_summary: item.summary,
-    published_at: item.publishedAt,
-    content_hash: contentHash(item.title),
-    is_ad: item.isAd,
-    image_url: item.imageUrl,
-  }));
+  const rows = fresh.map((item) => {
+    // playable media lands in scan_meta.media; the scan-stap merges its regio in
+    // (modules/rank), so it is not clobbered. type comes from the source medium.
+    const media: MediaMeta | null =
+      isMedia && item.media
+        ? { type: source.medium as "podcast" | "video", url: item.media.url, durationSec: item.media.durationSec }
+        : null;
+    return {
+      source_id: source.id,
+      category_id: source.category_id,
+      topic_id: pinnedTopicId,
+      guid: item.guid,
+      url: item.url,
+      title: item.title,
+      raw_summary: item.summary,
+      published_at: item.publishedAt,
+      content_hash: contentHash(item.title),
+      is_ad: item.isAd,
+      image_url: item.imageUrl,
+      scan_meta: media ? { media } : null,
+    };
+  });
 
   if (rows.length > 0) {
     // upsert met ignoreDuplicates: alleen echt nieuwe items komen erin

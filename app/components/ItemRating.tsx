@@ -3,6 +3,7 @@
 // Het hoofdgebaar van de interessemotor: een gegradeerde rating van −2 tot +2
 // (schets 2026-06-11) plus een aparte volg-markering. Intern blijft de schaal
 // 1–5 (API en ratingToDelta ongewijzigd): UI-waarde + 3.
+// Stijl: Dispatch-tokens — positief groen, negatief rood, volgen blauw.
 
 import { useState } from "react";
 
@@ -42,20 +43,20 @@ export function ItemRating({ targetType, targetId }: Props) {
   }
 
   return (
-    <span className="inline-flex items-center gap-px text-stone-400">
+    <span className="inline-flex items-center gap-px font-mono text-faint">
       {SCHAAL.map((value) => (
         <button
           key={value}
           onClick={() => rate(value)}
           title={value > 0 ? `+${value}` : `${value}`}
-          className={`min-w-6 rounded px-1 py-0.5 text-xs font-medium leading-none transition-colors ${
+          className={`min-w-6 rounded-tag border px-1 py-0.5 text-[11px] leading-none transition-colors ${
             given === value
               ? value > 0
-                ? "bg-amber-100 text-amber-600 dark:bg-amber-950"
+                ? "border-current font-bold text-green"
                 : value < 0
-                  ? "bg-stone-200 text-stone-600 dark:bg-stone-800 dark:text-stone-300"
-                  : "bg-stone-100 text-stone-500 dark:bg-stone-800"
-              : "hover:text-amber-500"
+                  ? "border-current font-bold text-red"
+                  : "border-current font-bold text-muted"
+              : "border-transparent hover:text-blue"
           }`}
         >
           {value > 0 ? `+${value}` : value}
@@ -64,8 +65,8 @@ export function ItemRating({ targetType, targetId }: Props) {
       <button
         onClick={volg}
         title={following ? "Niet meer volgen" : "Actief volgen"}
-        className={`ml-1.5 text-sm leading-none transition-colors hover:text-sky-500 ${
-          following ? "text-sky-500" : ""
+        className={`ml-1.5 text-sm leading-none transition-colors hover:text-blue ${
+          following ? "text-blue" : ""
         }`}
       >
         ◉

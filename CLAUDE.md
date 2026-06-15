@@ -6,6 +6,10 @@ Dit bestand is de bron van waarheid voor hoe we in dit project werken, op
 elk account en in elke sessie. Het staat in git; **wijzig je het lokaal,
 commit en push het dan ook.**
 
+## Aanspreekvorm
+
+Spreek de gebruiker altijd bij naam aan met **"Siem"**.
+
 ## Project in één zin
 
 Persoonlijk ochtendrapport (PWA op Vercel + Supabase + Claude API) met een
@@ -88,7 +92,6 @@ Begin elke nieuwe sessie met het lezen van `HANDOFF.md`.
 ```bash
 npm run lint && npx tsc --noEmit && npm test && npm run build
 ```
-
 Pure functies in `modules/` krijgen vitest-tests (zie bestaande `*.test.ts`).
 
 ## Omgevingen & geheimen

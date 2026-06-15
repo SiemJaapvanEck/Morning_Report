@@ -7,7 +7,9 @@
 
 De pipeline is **opgeschaald** (16 → 71 bronnen, incl. podcast/video-media) en de
 **editie is herontworpen als een kalender**: elke dag is hetzelfde Atlas-dashboard,
-met Dag/Week/Maand/Jaar-navigatie en veeg-bladeren. Een editie kost nu ±€0,14
+met Dag/Week/Maand/Jaar-navigatie en veeg-bladeren. **Nieuw deze sessie: de
+AI-redactie (slice 1)** — vijf vakredacteuren schrijven beat-samenvattingen en
+**Sol stelt als hoofdredacteur de Daily Paper samen**. Een editie kost nu ±€0,16
 (plafond €0,30). Alle poorten groen (lint/tsc/test/build) en **gepusht naar
 `main`** (Vercel-deploy loopt; zie ook de design-resolutie hieronder).
 
@@ -58,13 +60,26 @@ van Siem is **Atlas geforceerd als de vaste stijl**: CLAUDE.md-designsectie en
 hun pre-Dispatch (Atlas) versie. **Dispatch blijft in de git-history** (`f0ed210`).
 **Nog te coördineren met de collega** over de definitieve richting.
 
-### Volgende track: de "Redactie" (afgesproken, nog te bouwen)
-Een klein AI-redactieteam als **persona-prompts + stappen (GEEN agent-runtime)**:
-Tech-, Politiek-, Financieel-expert + Journalist (generalist), met **Sol als
-hoofdredacteur** die de **Daily Paper** schrijft (de "bigger summary" achter de
-Sol-knop = depth-2 in de lees-hiërarchie). Dit is fase 4–5 van het masterplan,
-omgezet naar genoemde desks. Tot die er is, linkt de "Lees de krant"-knop naar de
-volledige krant.
+### Redactie (Daily Paper) — slice 1 gebouwd
+Een klein AI-redactieteam als **persona-prompts + stappen (GEEN agent-runtime)**.
+- **`modules/redactie`**: vijf redacteuren met persona-prompts in
+  `modules/redactie/prompts/*.md` — Tech & Wetenschap, Politiek & Wereld,
+  Financieel, Algemeen (journalist) en **Voor jou** (de persoonlijke, gebruiker-
+  specifieke desk). De desk→categorie-map is config. `writeDeskSummary()` +
+  `assembleUserContext()` (cross-ref axis A: markeert gevolgde onderwerpen met ★).
+- **Pipeline**: nieuwe stap `desks` (één desk per tick, requeue, idempotent) +
+  `sol_daily_paper`. `modules/sol` kreeg `writeDailyPaper()` (Sol = hoofdredacteur).
+  `finalize` zet de beat-samenvattingen + de Daily Paper in `front_page`
+  (`FrontPage.desks` + `daily_paper`). Volgorde: … generate → desks →
+  sol_daily_paper → sol_intro → finalize.
+- **UI**: de Daily Paper (Sol's hoofdartikel + de 5 beat-samenvattingen) rendert
+  bovenaan de "Lees de krant"-pagina (`EditieWeergave`).
+- **Geverifieerd** op preview-editie `2099-01-02`: 5 desks + Daily Paper, €0,156,
+  geen console-fouten, alle poorten groen.
+- **Volgende slices** (zie `project-scale-pipeline-goal` + plan): entity-extractie +
+  story-clustering (de rijke cross-ref-sleutel), per-desk deep-research-briefs,
+  cross-ref axis B (eerder nieuws → "verwijzing") en C (portefeuille-hook),
+  Sol-geheugen schrijven/compacteren, en een eigen depth-2 Daily-Paper-route.
 
 ### Onveranderd, nog steeds geldig
 - **AI-provider = Grok (xAI)** via `modules/shared/ai.ts` (`askAI()`): `grok-4.20…` (scan)
@@ -79,14 +94,19 @@ volledige krant.
 1. **Designrichting afstemmen met de collega.** Atlas is nu geforceerd (zie
    "Designsysteem = Atlas"); Dispatch (`f0ed210`) staat in de history. Beslis samen wat
    de vaste richting wordt voordat er meer UI-werk gebeurt.
-2. **Redactie-track bouwen** (zie boven) — eerstvolgende functionele klus.
+2. **Redactie afmaken** (volgende slices, zie boven): entity-extractie + clustering,
+   per-desk deep-research-briefs, cross-ref B/C, Sol-geheugen, depth-2 Daily-Paper-route.
 3. **Restant masterplan** (zie `project-scale-pipeline-goal`): story-clustering, deep-research
    6–12 topics, Sol per-categorie/per-continent, select-caps → ~160 zichtbare items, budget→€0,50.
 4. **Eerder openstaand:** retro-vertaling NL → Engels van bestaande code; bevestigen dat de
    cron-job.org-job daadwerkelijk loopt (`docs/setup.md` §4).
 
 ## Bekende aandachtspunten
-- **Preview-editie `2099-01-01`** staat nog in de DB (handige niet-vandaag-testfixture; mag weg).
+- **Preview-edities `2099-01-01` en `2099-01-02`** staan nog in de DB (testfixtures;
+  `2099-01-02` draagt de redactie/Daily Paper; mogen weg).
+- **`.claude/`-tooling untracked**: de `push-main`/`start`-skills, de `guard-push-main`-hook
+  en `settings.json` staan lokaal (niet in git, net als `launch.json`). Bewust gelaten;
+  commit ze als je ze tussen accounts wilt delen.
 - **Media-backcatalog is groot** (~725 items): podcast-feeds leveren honderden oude afleveringen
   doordat media de versheidsgrens overslaat. Prima voor de latere catch-up-bibliotheek; eventueel
   later per media-feed cappen.

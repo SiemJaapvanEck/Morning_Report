@@ -12,7 +12,8 @@ import { fetchMarkten } from "../markten";
 import { activeSources, ingestSource } from "../ingest";
 import { scanBatch, loadScoreContext, priority, assignBands } from "../rank";
 import { summarizeSection, deepDive } from "../generate";
-import { writeIntro } from "../sol";
+import { writeIntro, writeDailyPaper } from "../sol";
+import { DESKS, assembleUserContext, writeDeskSummary, type DeskItem } from "../redactie";
 import { dedupeForEdition } from "../archive";
 import type { Edition, Item, PipelineStep, Band, MarktSnapshot } from "../shared/types";
 
@@ -66,6 +67,8 @@ const planStep: StepHandler = async ({ edition }) => {
     { kind: "scan_rank", payload: {} },
     { kind: "select", payload: {} },
     { kind: "generate", payload: {} },
+    { kind: "desks", payload: {} },
+    { kind: "sol_daily_paper", payload: {} },
     { kind: "sol_intro", payload: {} },
     { kind: "finalize", payload: {} },
   ];
@@ -356,6 +359,127 @@ const generateStep: StepHandler = async ({ edition, step }) => {
 };
 
 // ============================================================
+// desks — beat-samenvattingen van de redactie (één desk per aanroep)
+// ============================================================
+
+const desksStep: StepHandler = async ({ edition, step }) => {
+  const mode = await currentBudgetMode(edition.id);
+
+  // welke desks zijn al klaar? (eerdere 'desks'-resultaten van deze editie)
+  const doneRows = unwrap(
+    await db()
+      .from("pipeline_steps")
+      .select("result")
+      .eq("edition_id", edition.id)
+      .eq("kind", "desks")
+      .eq("status", "done"),
+  ) as { result: { desk?: string } | null }[];
+  const doneIds = new Set(doneRows.map((r) => r.result?.desk).filter(Boolean) as string[]);
+
+  const pending = DESKS.filter((d) => !doneIds.has(d.id));
+  if (pending.length === 0) return { klaar: true };
+  const desk = pending[0];
+
+  // editie-items met tekst, categorie, topic en bron
+  const rows = unwrap(
+    await db()
+      .from("edition_items")
+      .select("match_score, items(title, raw_summary, category_id, topic_id, sources(name))")
+      .eq("edition_id", edition.id),
+  ) as unknown as {
+    match_score: number | null;
+    items: {
+      title: string;
+      raw_summary: string | null;
+      category_id: string | null;
+      topic_id: string | null;
+      sources: { name: string } | null;
+    };
+  }[];
+
+  const categories = unwrap(await db().from("categories").select("id, slug, name")) as {
+    id: string;
+    slug: string;
+    name: string;
+  }[];
+  const slugById = new Map(categories.map((c) => [c.id, c.slug]));
+  const nameById = new Map(categories.map((c) => [c.id, c.name]));
+
+  const ctx = await assembleUserContext(edition.profile_id);
+  const isFollowed = (topicId: string | null, catId: string | null) =>
+    Boolean((topicId && ctx.followedTopicIds.has(topicId)) || (catId && ctx.followedCategoryIds.has(catId)));
+
+  // items voor deze desk verzamelen
+  let deskRows: typeof rows;
+  if (desk.personal) {
+    // gevolgde onderwerpen/categorieën, anders de best-passende items
+    const followed = rows.filter((r) => isFollowed(r.items.topic_id, r.items.category_id));
+    deskRows =
+      followed.length > 0
+        ? followed
+        : [...rows].sort((a, b) => (b.match_score ?? 0) - (a.match_score ?? 0)).slice(0, 6);
+  } else {
+    deskRows = rows.filter((r) => {
+      const slug = r.items.category_id ? slugById.get(r.items.category_id) : null;
+      return slug ? desk.categories.includes(slug) : false;
+    });
+  }
+  deskRows.sort((a, b) => (b.match_score ?? 0) - (a.match_score ?? 0));
+
+  const items: DeskItem[] = deskRows.map((r) => ({
+    title: r.items.title,
+    summary: r.items.raw_summary,
+    categorie: (r.items.category_id ? nameById.get(r.items.category_id) : null) ?? "—",
+    bron: r.items.sources?.name ?? null,
+    gevolgd: isFollowed(r.items.topic_id, r.items.category_id),
+  }));
+
+  const summary = await writeDeskSummary(desk, items, ctx, mode, edition.id, step.id);
+
+  // nog desks open? volgende ronde inplannen
+  let vervolg = false;
+  if (pending.length > 1) vervolg = await requeue(step, DESKS.length + 1);
+
+  return { desk: desk.id, naam: desk.naam, summary, items: items.length, vervolg };
+};
+
+// ============================================================
+// sol_daily_paper — Sol als hoofdredacteur stelt de Daily Paper samen
+// ============================================================
+
+const solDailyPaperStep: StepHandler = async ({ edition, step }) => {
+  const mode = await currentBudgetMode(edition.id);
+
+  const deskRows = unwrap(
+    await db()
+      .from("pipeline_steps")
+      .select("result")
+      .eq("edition_id", edition.id)
+      .eq("kind", "desks")
+      .eq("status", "done"),
+  ) as { result: { desk?: string; naam?: string; summary?: string | null } | null }[];
+
+  const desks = deskRows
+    .map((r) => r.result)
+    .filter((r): r is { desk: string; naam: string; summary: string } => Boolean(r?.summary))
+    .map((r) => ({ naam: r.naam, summary: r.summary }));
+
+  const topRows = unwrap(
+    await db()
+      .from("edition_items")
+      .select("band, position, items(title), edition_sections(title)")
+      .eq("edition_id", edition.id)
+      .in("band", ["deep", "summary"])
+      .order("position")
+      .limit(8),
+  ) as unknown as { items: { title: string }; edition_sections: { title: string } | null }[];
+  const topItems = topRows.map((r) => ({ title: r.items.title, sectionTitle: r.edition_sections?.title ?? "" }));
+
+  const daily = await writeDailyPaper(edition.profile_id, edition.id, desks, topItems, step.id, mode);
+  return { daily_paper: daily, desks_used: desks.length };
+};
+
+// ============================================================
 // sol_intro
 // ============================================================
 
@@ -438,8 +562,32 @@ const finalizeStep: StepHandler = async ({ edition }) => {
     if (regio && regio !== "geen") regios[regio] = (regios[regio] ?? 0) + 1;
   }
 
+  // beat-samenvattingen + Daily Paper uit de redactie-stappen
+  const deskResultRows = unwrap(
+    await db()
+      .from("pipeline_steps")
+      .select("result")
+      .eq("edition_id", edition.id)
+      .eq("kind", "desks")
+      .eq("status", "done"),
+  ) as { result: { desk?: string; naam?: string; summary?: string | null } | null }[];
+  const desks = deskResultRows
+    .map((r) => r.result)
+    .filter((r): r is { desk: string; naam: string; summary: string } => Boolean(r?.summary))
+    .map((r) => ({ desk: r.desk, naam: r.naam, summary: r.summary }));
+
+  const dpRow = await db()
+    .from("pipeline_steps")
+    .select("result")
+    .eq("edition_id", edition.id)
+    .eq("kind", "sol_daily_paper")
+    .maybeSingle();
+  const daily_paper = (dpRow.data?.result?.daily_paper as string | undefined) ?? null;
+
   const frontPage = {
     intro,
+    daily_paper,
+    desks,
     weather: weather.data?.payload ?? null,
     markten,
     regios,
@@ -470,6 +618,8 @@ export const stepRegistry: Record<string, StepHandler> = {
   scan_rank: scanRankStep,
   select: selectStep,
   generate: generateStep,
+  desks: desksStep,
+  sol_daily_paper: solDailyPaperStep,
   sol_intro: solIntroStep,
   finalize: finalizeStep,
 };

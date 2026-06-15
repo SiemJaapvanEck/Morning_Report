@@ -82,3 +82,12 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   herschreven naar Atlas, Dispatch-componenten (ItemRating/ProfielKiezer/CaptureFormulier
   + manifest) teruggezet naar pre-Dispatch. Dispatch blijft in de history. Nog af te
   stemmen met de collega.
+- **14 juni 2026 (vervolg 3) — Redactie slice 1 (Daily Paper).** Nieuwe module
+  `modules/redactie` met vijf vakredacteuren als persona-prompts (Tech & Wetenschap,
+  Politiek & Wereld, Financieel, Algemeen, en "Voor jou" — de persoonlijke desk) +
+  desk→categorie-map. Pipeline-stappen `desks` (per desk, requeue) en `sol_daily_paper`;
+  Sol schrijft als hoofdredacteur de Daily Paper uit de beat-samenvattingen. Basale
+  cross-referentie (axis A: gevolgde onderwerpen). Daily Paper rendert op de
+  "Lees de krant"-pagina. Geverifieerd op preview-editie 2099-01-02 (€0,156); poorten
+  groen (41 tests). Volgende: entity-extractie/clustering, deep-research-briefs,
+  cross-ref B/C, Sol-geheugen.

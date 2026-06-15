@@ -49,6 +49,35 @@ export function EditieWeergave({ view }: { view: EditionView }) {
         )}
       </header>
 
+      {/* Daily Paper — Sol als hoofdredacteur + de beat-samenvattingen van de redactie */}
+      {(frontPage?.daily_paper || (frontPage?.desks?.length ?? 0) > 0) && (
+        <section className="border-b border-stone-200 py-6 dark:border-stone-800">
+          <div className="flex items-center gap-2">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#2f6df0] text-[10px] font-bold text-white">
+              S
+            </span>
+            <h2 className="text-lg font-semibold tracking-tight">Daily Paper</h2>
+          </div>
+          {frontPage?.daily_paper && (
+            <div className="mt-3 max-w-3xl space-y-3 leading-relaxed">
+              {frontPage.daily_paper.split(/\n\n+/).map((alinea, i) => (
+                <p key={i}>{alinea}</p>
+              ))}
+            </div>
+          )}
+          {(frontPage?.desks?.length ?? 0) > 0 && (
+            <div className="mt-6 grid gap-5 sm:grid-cols-2">
+              {frontPage!.desks!.map((d) => (
+                <div key={d.desk}>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">{d.naam}</p>
+                  <p className="mt-1 text-sm leading-relaxed text-stone-600 dark:text-stone-300">{d.summary}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
       {/* Secties */}
       {categorySections.map(({ section, items }) => (
         <section key={section.id} className="border-b border-stone-200 py-6 last:border-0 dark:border-stone-800">

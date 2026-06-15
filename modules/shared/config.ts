@@ -52,6 +52,31 @@ export const config = {
     tickBudgetMs: 7000,
   },
 
+  scan: {
+    // Pre-rank gate: most ingested items never reach an edition (~78% waste),
+    // so a cheap source-weight × recency × interest score decides which items
+    // are worth an LLM scan. Each round scans the top-scored batch of the
+    // still-unscanned pool, so batchSize × maxRounds is the top-K we keep —
+    // that is the main scan-cost dial. The threshold only drops the genuinely
+    // stale/weak tail; user-selected topics are always scanned.
+    /** items per LLM scan call; bigger batches amortize the fixed prompt overhead */
+    batchSize: Number(process.env.SCAN_BATCH ?? "40"),
+    /** floor: items scoring below this skip the LLM (unless user-selected) */
+    preRankThreshold: Number(process.env.SCAN_PRERANK_THRESHOLD ?? "0.5"),
+    /** cost dial: batchSize × maxRounds = max items scanned (≈280 → ~€0.05/edition) */
+    maxRounds: Number(process.env.SCAN_MAX_ROUNDS ?? "7"),
+    /** how many fresh, unscanned candidates to load and rank per tick */
+    candidatePool: Number(process.env.SCAN_CANDIDATE_POOL ?? "800"),
+  },
+
+  ingest: {
+    // Media feeds (podcast/video) are evergreen and skip the 48h freshness
+    // rule, so an unbounded feed pulls its whole backcatalog (e.g. ~500
+    // episodes) straight into the scanner. Cap intake to the newest few.
+    /** newest N items kept per podcast/video feed per ingest */
+    mediaMaxPerFeed: Number(process.env.INGEST_MEDIA_MAX ?? "3"),
+  },
+
   weather: {
     // Default: Arnhem
     lat: Number(process.env.WEATHER_LAT ?? "51.98"),

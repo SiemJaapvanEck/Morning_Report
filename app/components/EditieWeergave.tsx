@@ -1,5 +1,5 @@
-// Server-component die een volledige editie rendert: voorpagina (Sol-intro,
-// weer, top-items) gevolgd door de secties met hun banden.
+// Server-component die een volledige editie rendert: voorpagina (weer + de
+// rode draad van de dag) gevolgd door de secties met hun banden.
 
 import type { EditionView } from "@/app/lib/queries";
 import type { FrontPage, WeatherSnapshot } from "@/modules/shared/types";
@@ -41,40 +41,17 @@ export function EditieWeergave({ view }: { view: EditionView }) {
             <WeerBlok weather={weatherSection.weather} />
           </div>
         )}
-        {frontPage?.intro && (
-          <div className="mt-5 max-w-3xl rounded-xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
-            <p className="text-xs font-medium uppercase tracking-wide text-stone-400">Sol</p>
-            <p className="mt-2 leading-relaxed">{frontPage.intro}</p>
-          </div>
-        )}
       </header>
 
-      {/* Daily Paper — Sol als hoofdredacteur + de beat-samenvattingen van de redactie */}
-      {(frontPage?.daily_paper || (frontPage?.desks?.length ?? 0) > 0) && (
+      {/* De rode draad — neutrale, topic-gedreven dwarsdoorsnede van de dag */}
+      {frontPage?.daily_paper && (
         <section className="border-b border-stone-200 py-6 dark:border-stone-800">
-          <div className="flex items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#2f6df0] text-[10px] font-bold text-white">
-              S
-            </span>
-            <h2 className="text-lg font-semibold tracking-tight">Daily Paper</h2>
+          <h2 className="text-lg font-semibold tracking-tight">De rode draad</h2>
+          <div className="mt-3 max-w-3xl space-y-3 leading-relaxed">
+            {frontPage.daily_paper.split(/\n\n+/).map((alinea, i) => (
+              <p key={i}>{alinea}</p>
+            ))}
           </div>
-          {frontPage?.daily_paper && (
-            <div className="mt-3 max-w-3xl space-y-3 leading-relaxed">
-              {frontPage.daily_paper.split(/\n\n+/).map((alinea, i) => (
-                <p key={i}>{alinea}</p>
-              ))}
-            </div>
-          )}
-          {(frontPage?.desks?.length ?? 0) > 0 && (
-            <div className="mt-6 grid gap-5 sm:grid-cols-2">
-              {frontPage!.desks!.map((d) => (
-                <div key={d.desk}>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">{d.naam}</p>
-                  <p className="mt-1 text-sm leading-relaxed text-stone-600 dark:text-stone-300">{d.summary}</p>
-                </div>
-              ))}
-            </div>
-          )}
         </section>
       )}
 

@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { priority, assignBands, ratingToDelta, type ScoreContext } from "./index";
+import {
+  priority,
+  assignBands,
+  ratingToDelta,
+  recencyFactor,
+  preRankScore,
+  isUserSelected,
+  selectForScan,
+  type ScoreContext,
+} from "./index";
 
 function ctx(overrides: Partial<ScoreContext> = {}): ScoreContext {
   return {
@@ -93,5 +102,95 @@ describe("ratingToDelta", () => {
     expect(ratingToDelta(3)).toBe(0);
     expect(ratingToDelta(5)).toBeCloseTo(0.3);
     expect(ratingToDelta(1)).toBeCloseTo(-0.3);
+  });
+});
+
+describe("recencyFactor", () => {
+  const now = Date.UTC(2026, 5, 15, 12, 0, 0);
+  const hoursAgo = (h: number) => new Date(now - h * 3_600_000).toISOString();
+
+  it("fresh items keep full weight", () => {
+    expect(recencyFactor(hoursAgo(0), now)).toBeCloseTo(1);
+  });
+
+  it("decays toward the floor across the window", () => {
+    expect(recencyFactor(hoursAgo(24), now)).toBeCloseTo(0.65); // halfway
+    expect(recencyFactor(hoursAgo(48), now)).toBeCloseTo(0.3); // floor at window edge
+  });
+
+  it("never drops below the floor, even past the window", () => {
+    expect(recencyFactor(hoursAgo(500), now)).toBe(0.3);
+  });
+
+  it("a missing date stays neutral", () => {
+    expect(recencyFactor(null, now)).toBe(0.5);
+  });
+});
+
+describe("preRankScore (no LLM needed)", () => {
+  const now = Date.UTC(2026, 5, 15, 12, 0, 0);
+  const fresh = new Date(now).toISOString();
+
+  it("neutral start: source weight × recency, interest factor 1", () => {
+    const s = preRankScore({ source_id: null, category_id: null, topic_id: null, published_at: fresh }, ctx(), now);
+    expect(s).toBeCloseTo(1);
+  });
+
+  it("low source weight pushes an item below a fresh item", () => {
+    const context = ctx({ sourceWeights: new Map([["weak", 0.4]]) });
+    const weak = preRankScore({ source_id: "weak", category_id: null, topic_id: null, published_at: fresh }, context, now);
+    expect(weak).toBeCloseTo(0.4);
+  });
+
+  it("interest in a category lifts the score", () => {
+    const context = ctx({ categoryScores: new Map([["cat-1", 1.0]]) });
+    const s = preRankScore({ source_id: null, category_id: "cat-1", topic_id: null, published_at: fresh }, context, now);
+    expect(s).toBeCloseTo(1.75); // interest 1.0 → factor 1.75
+  });
+});
+
+describe("isUserSelected", () => {
+  const followedTopics = new Set(["topic-1"]);
+  const followedCats = new Set(["cat-1"]);
+
+  it("matches on a followed topic or category", () => {
+    expect(isUserSelected({ source_id: null, category_id: null, topic_id: "topic-1", published_at: null }, followedTopics, followedCats)).toBe(true);
+    expect(isUserSelected({ source_id: null, category_id: "cat-1", topic_id: null, published_at: null }, followedTopics, followedCats)).toBe(true);
+  });
+
+  it("is false when neither is followed", () => {
+    expect(isUserSelected({ source_id: null, category_id: "cat-x", topic_id: "topic-x", published_at: null }, followedTopics, followedCats)).toBe(false);
+  });
+});
+
+describe("selectForScan (pre-scan gate)", () => {
+  const now = Date.UTC(2026, 5, 15, 12, 0, 0);
+  const fresh = new Date(now).toISOString();
+  const stale = new Date(now - 80 * 3_600_000).toISOString(); // well past the window
+
+  it("drops items below the threshold but keeps fresh ones", () => {
+    const candidates = [
+      { id: "fresh", source_id: null, category_id: null, topic_id: null, published_at: fresh },
+      { id: "stale", source_id: null, category_id: null, topic_id: null, published_at: stale },
+    ];
+    const picked = selectForScan(candidates, ctx(), new Set(), new Set(), 0.5, now);
+    expect(picked.map((p) => p.id)).toEqual(["fresh"]);
+  });
+
+  it("always keeps a user-selected item, even when it would fail the threshold", () => {
+    const candidates = [
+      { id: "stale-followed", source_id: null, category_id: "cat-1", topic_id: null, published_at: stale },
+    ];
+    const picked = selectForScan(candidates, ctx(), new Set(), new Set(["cat-1"]), 0.5, now);
+    expect(picked.map((p) => p.id)).toEqual(["stale-followed"]);
+  });
+
+  it("orders forced items first, then by score", () => {
+    const candidates = [
+      { id: "fresh", source_id: null, category_id: null, topic_id: null, published_at: fresh },
+      { id: "stale-followed", source_id: null, category_id: "cat-1", topic_id: null, published_at: stale },
+    ];
+    const picked = selectForScan(candidates, ctx(), new Set(), new Set(["cat-1"]), 0.5, now);
+    expect(picked.map((p) => p.id)).toEqual(["stale-followed", "fresh"]);
   });
 });

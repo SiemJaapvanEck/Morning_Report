@@ -5,6 +5,7 @@
 // ligt er al (sources.kind = 'query').
 
 import { db, unwrap } from "../shared/db";
+import { config } from "../shared/config";
 import { fetchFeed, contentHash } from "../shared/feeds";
 import type { MediaMeta, Source } from "../shared/types";
 
@@ -48,14 +49,19 @@ export async function ingestSource(source: Source): Promise<IngestResult> {
     return result;
   }
 
-  // Media-bronnen (podcast/video) leveren uitlegcontent die evergreen is: die
-  // slaan de "geen oud nieuws"-grens bewust over zodat een oudere uitlegvideo
-  // over het onderwerp van vandaag alsnog kan worden aanbevolen. De expliciete
-  // check valt veilig terug op artikel-gedrag als de medium-kolom (nog) ontbreekt.
+  // Media sources (podcast/video) carry evergreen explainer content, so they
+  // deliberately skip the "no old news" cutoff — an older explainer about
+  // today's topic can still be recommended. But an unbounded media feed pulls
+  // its whole backcatalog (hundreds of episodes) into the scanner, so we cap
+  // intake to the newest few per feed. Falls back safely to article behaviour
+  // if the medium column is (still) missing.
   const isMedia = source.medium === "podcast" || source.medium === "video";
   const cutoff = Date.now() - 48 * 60 * 60 * 1000;
+  const publishedMs = (at: string | null) => (at ? new Date(at).getTime() : 0);
   const fresh = isMedia
-    ? feedItems
+    ? [...feedItems]
+        .sort((a, b) => publishedMs(b.publishedAt) - publishedMs(a.publishedAt))
+        .slice(0, config.ingest.mediaMaxPerFeed)
     : feedItems.filter(
         (item) => !item.publishedAt || new Date(item.publishedAt).getTime() > cutoff,
       );

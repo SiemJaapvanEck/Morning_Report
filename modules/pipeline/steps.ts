@@ -7,13 +7,13 @@
 
 import { db, unwrap } from "../shared/db";
 import { currentBudgetMode } from "../shared/budget";
+import { config } from "../shared/config";
 import { fetchWeather } from "../weather";
 import { fetchMarkten } from "../markten";
 import { activeSources, ingestSource } from "../ingest";
-import { scanBatch, loadScoreContext, priority, assignBands } from "../rank";
+import { scanBatch, loadScoreContext, priority, assignBands, selectForScan } from "../rank";
 import { summarizeSection, deepDive } from "../generate";
-import { writeIntro, writeDailyPaper } from "../sol";
-import { DESKS, assembleUserContext, writeDeskSummary, type DeskItem } from "../redactie";
+import { assembleUserContext, writeDailyDigest, type DigestTopic } from "../redactie";
 import { dedupeForEdition } from "../archive";
 import type { Edition, Item, PipelineStep, Band, MarktSnapshot } from "../shared/types";
 
@@ -67,9 +67,7 @@ const planStep: StepHandler = async ({ edition }) => {
     { kind: "scan_rank", payload: {} },
     { kind: "select", payload: {} },
     { kind: "generate", payload: {} },
-    { kind: "desks", payload: {} },
-    { kind: "sol_daily_paper", payload: {} },
-    { kind: "sol_intro", payload: {} },
+    { kind: "daily_paper", payload: {} },
     { kind: "finalize", payload: {} },
   ];
 
@@ -142,10 +140,10 @@ const ingestStep: StepHandler = async ({ step }) => {
 // ============================================================
 
 const scanRankStep: StepHandler = async ({ edition, step }) => {
-  // items van de afgelopen 48u die nog geen belang-score hebben;
-  // max 2 batches (~50 items) per aanroep i.v.m. de 10s-limiet
+  // Fresh, still-unscanned items from the last 48h, newest first — a bounded
+  // candidate pool, not the whole firehose.
   const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
-  const items: Item[] = unwrap(
+  const candidates: Item[] = unwrap(
     await db()
       .from("items")
       .select("*")
@@ -153,8 +151,23 @@ const scanRankStep: StepHandler = async ({ edition, step }) => {
       .eq("is_ad", false)
       .gte("fetched_at", cutoff)
       .order("published_at", { ascending: false })
-      .limit(50),
+      .limit(config.scan.candidatePool),
   );
+
+  // Pre-scan gate: rank candidates by free signals (source weight × recency ×
+  // interest) and only LLM-scan what clears the threshold. Items the reader
+  // actively follows are always scanned, so their relevant news is never
+  // gated away. Skipped items keep importance=null and age out of the window.
+  const scoreCtx = await loadScoreContext(edition.profile_id);
+  const userCtx = await assembleUserContext(edition.profile_id);
+  const qualifying = selectForScan(
+    candidates,
+    scoreCtx,
+    userCtx.followedTopicIds,
+    userCtx.followedCategoryIds,
+    config.scan.preRankThreshold,
+  );
+  const batch = qualifying.slice(0, config.scan.batchSize);
 
   // topiclijst voor de toewijzing: zo werken topic-voorkeuren (ook eigen,
   // heel specifieke topics) door in priority() → Sol's match-score
@@ -162,13 +175,12 @@ const scanRankStep: StepHandler = async ({ edition, step }) => {
     await db().from("topics").select("id, name, query_text"),
   ) as { id: string; name: string; query_text: string | null }[];
 
-  const vastTopic = new Map(items.map((item) => [item.id, item.topic_id]));
+  const vastTopic = new Map(batch.map((item) => [item.id, item.topic_id]));
   // bestaande scan_meta bewaren (bv. media van media-bronnen) bij de update
-  const existingMeta = new Map(items.map((item) => [item.id, item.scan_meta ?? {}]));
+  const existingMeta = new Map(batch.map((item) => [item.id, item.scan_meta ?? {}]));
 
   let scanned = 0;
-  for (let i = 0; i < items.length; i += 25) {
-    const batch = items.slice(i, i + 25);
+  if (batch.length > 0) {
     const verdicts = await scanBatch(batch, edition.id, step.id, topics);
     for (const [itemId, verdict] of verdicts) {
       await db()
@@ -187,13 +199,18 @@ const scanRankStep: StepHandler = async ({ edition, step }) => {
     }
   }
 
-  // meer ongescande items? volgende ronde inplannen (max 12 ≈ 600 items) —
-  // ruim genoeg voor de bredere bronnenlijst (~500 items/dag) na fase 1
+  // More qualifying items than fit this batch? Plan the next round. The scanned
+  // items now have importance set, so they drop out of the pool next tick.
   let vervolg = false;
-  if (items.length === 50) {
-    vervolg = await requeue(step, 12);
+  if (qualifying.length > batch.length) {
+    vervolg = await requeue(step, config.scan.maxRounds);
   }
-  return { geclassificeerd: scanned, vervolg };
+  return {
+    geclassificeerd: scanned,
+    gekwalificeerd: qualifying.length,
+    kandidaten: candidates.length,
+    vervolg,
+  };
 };
 
 // ============================================================
@@ -359,150 +376,48 @@ const generateStep: StepHandler = async ({ edition, step }) => {
 };
 
 // ============================================================
-// desks — beat-samenvattingen van de redactie (één desk per aanroep)
+// daily_paper — one neutral, topic-driven cross-reference synthesis
 // ============================================================
 
-const desksStep: StepHandler = async ({ edition, step }) => {
+const dailyPaperStep: StepHandler = async ({ edition, step }) => {
   const mode = await currentBudgetMode(edition.id);
+  const ctx = await assembleUserContext(edition.profile_id);
 
-  // welke desks zijn al klaar? (eerdere 'desks'-resultaten van deze editie)
-  const doneRows = unwrap(
-    await db()
-      .from("pipeline_steps")
-      .select("result")
-      .eq("edition_id", edition.id)
-      .eq("kind", "desks")
-      .eq("status", "done"),
-  ) as { result: { desk?: string } | null }[];
-  const doneIds = new Set(doneRows.map((r) => r.result?.desk).filter(Boolean) as string[]);
-
-  const pending = DESKS.filter((d) => !doneIds.has(d.id));
-  if (pending.length === 0) return { klaar: true };
-  const desk = pending[0];
-
-  // editie-items met tekst, categorie, topic en bron
+  // Today's edition items, grouped by their category section. The section
+  // title is the category name; only categories that actually have items today
+  // become topics — that is what keeps the digest topic-driven.
   const rows = unwrap(
     await db()
       .from("edition_items")
-      .select("match_score, items(title, raw_summary, category_id, topic_id, sources(name))")
-      .eq("edition_id", edition.id),
+      .select("position, items(title, topic_id, category_id), edition_sections(title)")
+      .eq("edition_id", edition.id)
+      .order("position"),
   ) as unknown as {
-    match_score: number | null;
-    items: {
-      title: string;
-      raw_summary: string | null;
-      category_id: string | null;
-      topic_id: string | null;
-      sources: { name: string } | null;
-    };
+    items: { title: string; topic_id: string | null; category_id: string | null } | null;
+    edition_sections: { title: string } | null;
   }[];
 
-  const categories = unwrap(await db().from("categories").select("id, slug, name")) as {
-    id: string;
-    slug: string;
-    name: string;
-  }[];
-  const slugById = new Map(categories.map((c) => [c.id, c.slug]));
-  const nameById = new Map(categories.map((c) => [c.id, c.name]));
-
-  const ctx = await assembleUserContext(edition.profile_id);
-  const isFollowed = (topicId: string | null, catId: string | null) =>
-    Boolean((topicId && ctx.followedTopicIds.has(topicId)) || (catId && ctx.followedCategoryIds.has(catId)));
-
-  // items voor deze desk verzamelen
-  let deskRows: typeof rows;
-  if (desk.personal) {
-    // gevolgde onderwerpen/categorieën, anders de best-passende items
-    const followed = rows.filter((r) => isFollowed(r.items.topic_id, r.items.category_id));
-    deskRows =
-      followed.length > 0
-        ? followed
-        : [...rows].sort((a, b) => (b.match_score ?? 0) - (a.match_score ?? 0)).slice(0, 6);
-  } else {
-    deskRows = rows.filter((r) => {
-      const slug = r.items.category_id ? slugById.get(r.items.category_id) : null;
-      return slug ? desk.categories.includes(slug) : false;
-    });
+  const byCategory = new Map<string, DigestTopic>();
+  for (const row of rows) {
+    const name = row.edition_sections?.title;
+    if (!name || !row.items) continue;
+    const followed = Boolean(
+      (row.items.topic_id && ctx.followedTopicIds.has(row.items.topic_id)) ||
+        (row.items.category_id && ctx.followedCategoryIds.has(row.items.category_id)),
+    );
+    const topic = byCategory.get(name) ?? { name, followed: false, headlines: [] };
+    topic.followed = topic.followed || followed;
+    if (topic.headlines.length < 4) topic.headlines.push(row.items.title); // a few headlines per topic
+    byCategory.set(name, topic);
   }
-  deskRows.sort((a, b) => (b.match_score ?? 0) - (a.match_score ?? 0));
 
-  const items: DeskItem[] = deskRows.map((r) => ({
-    title: r.items.title,
-    summary: r.items.raw_summary,
-    categorie: (r.items.category_id ? nameById.get(r.items.category_id) : null) ?? "—",
-    bron: r.items.sources?.name ?? null,
-    gevolgd: isFollowed(r.items.topic_id, r.items.category_id),
-  }));
+  const topics: DigestTopic[] = [...byCategory.values()];
+  const daily = await writeDailyDigest(topics, mode, edition.id, step.id);
+  // The calendar covers reuse a short lead — derive it from the digest's first
+  // sentence so there is no separate (persona) intro call.
+  const intro = daily ? daily.split(/(?<=[.!?])\s/)[0].trim() : null;
 
-  const summary = await writeDeskSummary(desk, items, ctx, mode, edition.id, step.id);
-
-  // nog desks open? volgende ronde inplannen
-  let vervolg = false;
-  if (pending.length > 1) vervolg = await requeue(step, DESKS.length + 1);
-
-  return { desk: desk.id, naam: desk.naam, summary, items: items.length, vervolg };
-};
-
-// ============================================================
-// sol_daily_paper — Sol als hoofdredacteur stelt de Daily Paper samen
-// ============================================================
-
-const solDailyPaperStep: StepHandler = async ({ edition, step }) => {
-  const mode = await currentBudgetMode(edition.id);
-
-  const deskRows = unwrap(
-    await db()
-      .from("pipeline_steps")
-      .select("result")
-      .eq("edition_id", edition.id)
-      .eq("kind", "desks")
-      .eq("status", "done"),
-  ) as { result: { desk?: string; naam?: string; summary?: string | null } | null }[];
-
-  const desks = deskRows
-    .map((r) => r.result)
-    .filter((r): r is { desk: string; naam: string; summary: string } => Boolean(r?.summary))
-    .map((r) => ({ naam: r.naam, summary: r.summary }));
-
-  const topRows = unwrap(
-    await db()
-      .from("edition_items")
-      .select("band, position, items(title), edition_sections(title)")
-      .eq("edition_id", edition.id)
-      .in("band", ["deep", "summary"])
-      .order("position")
-      .limit(8),
-  ) as unknown as { items: { title: string }; edition_sections: { title: string } | null }[];
-  const topItems = topRows.map((r) => ({ title: r.items.title, sectionTitle: r.edition_sections?.title ?? "" }));
-
-  const daily = await writeDailyPaper(edition.profile_id, edition.id, desks, topItems, step.id, mode);
-  return { daily_paper: daily, desks_used: desks.length };
-};
-
-// ============================================================
-// sol_intro
-// ============================================================
-
-const solIntroStep: StepHandler = async ({ edition, step }) => {
-  const mode = await currentBudgetMode(edition.id);
-
-  const topRows = unwrap(
-    await db()
-      .from("edition_items")
-      .select("band, position, items(title), edition_sections(title)")
-      .eq("edition_id", edition.id)
-      .in("band", ["deep", "summary"])
-      .order("position")
-      .limit(8),
-  ) as unknown as { items: { title: string }; edition_sections: { title: string } | null }[];
-
-  const topItems = topRows.map((row) => ({
-    title: row.items.title,
-    sectionTitle: row.edition_sections?.title ?? "",
-  }));
-
-  const intro = await writeIntro(edition.profile_id, edition.id, topItems, step.id, mode);
-  return { intro_geschreven: Boolean(intro), intro };
+  return { daily_paper: daily, intro, topics: topics.length };
 };
 
 // ============================================================
@@ -510,16 +425,19 @@ const solIntroStep: StepHandler = async ({ edition, step }) => {
 // ============================================================
 
 const finalizeStep: StepHandler = async ({ edition }) => {
-  // intro uit de sol_intro-stap halen
-  const solStep = unwrap(
-    await db()
-      .from("pipeline_steps")
-      .select("result")
-      .eq("edition_id", edition.id)
-      .eq("kind", "sol_intro")
-      .single(),
-  );
-  const intro = (solStep.result?.intro as string | undefined) ?? null;
+  // Daily digest + the short lead derived from it (from the daily_paper step).
+  // Take the latest done one, so a re-run never trips over an earlier row.
+  const dpRow = await db()
+    .from("pipeline_steps")
+    .select("result")
+    .eq("edition_id", edition.id)
+    .eq("kind", "daily_paper")
+    .eq("status", "done")
+    .order("finished_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const daily_paper = (dpRow.data?.result?.daily_paper as string | undefined) ?? null;
+  const intro = (dpRow.data?.result?.intro as string | undefined) ?? null;
 
   const weather = await db()
     .from("edition_sections")
@@ -562,32 +480,9 @@ const finalizeStep: StepHandler = async ({ edition }) => {
     if (regio && regio !== "geen") regios[regio] = (regios[regio] ?? 0) + 1;
   }
 
-  // beat-samenvattingen + Daily Paper uit de redactie-stappen
-  const deskResultRows = unwrap(
-    await db()
-      .from("pipeline_steps")
-      .select("result")
-      .eq("edition_id", edition.id)
-      .eq("kind", "desks")
-      .eq("status", "done"),
-  ) as { result: { desk?: string; naam?: string; summary?: string | null } | null }[];
-  const desks = deskResultRows
-    .map((r) => r.result)
-    .filter((r): r is { desk: string; naam: string; summary: string } => Boolean(r?.summary))
-    .map((r) => ({ desk: r.desk, naam: r.naam, summary: r.summary }));
-
-  const dpRow = await db()
-    .from("pipeline_steps")
-    .select("result")
-    .eq("edition_id", edition.id)
-    .eq("kind", "sol_daily_paper")
-    .maybeSingle();
-  const daily_paper = (dpRow.data?.result?.daily_paper as string | undefined) ?? null;
-
   const frontPage = {
     intro,
     daily_paper,
-    desks,
     weather: weather.data?.payload ?? null,
     markten,
     regios,
@@ -618,8 +513,6 @@ export const stepRegistry: Record<string, StepHandler> = {
   scan_rank: scanRankStep,
   select: selectStep,
   generate: generateStep,
-  desks: desksStep,
-  sol_daily_paper: solDailyPaperStep,
-  sol_intro: solIntroStep,
+  daily_paper: dailyPaperStep,
   finalize: finalizeStep,
 };

@@ -91,3 +91,12 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   "Lees de krant"-pagina. Geverifieerd op preview-editie 2099-01-02 (€0,156); poorten
   groen (41 tests). Volgende: entity-extractie/clustering, deep-research-briefs,
   cross-ref B/C, Sol-geheugen.
+- **15 June 2026 — Working language → English; halved edition cost; removed editorial
+  personas.** (1) Flipped all dev-facing work to English (CLAUDE.md + `/start`//`push-main`
+  skills; `CLAUDE.md` is now gitignored as a per-contributor file). (2) Lever A — scan cost:
+  pre-scan gate in `modules/rank` (`source_weight × recency × interest`, no LLM) +
+  media intake cap, so scan_rank only LLM-scans the top ~280 of ~600 items;
+  scan_rank ~€0.119 → ~€0.05, verified live on same-day data. (3) Lever B — removed the
+  5 editor personas + Sol's character, replaced `desks`/`sol_daily_paper`/`sol_intro`
+  with one neutral, topic-driven cross-reference synthesis ("De rode draad"); deep
+  research kept. Edition ~€0,156 → ~€0,077. Gates green (52 tests); verified live + pushed.

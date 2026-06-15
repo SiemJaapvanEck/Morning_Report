@@ -176,6 +176,87 @@ export function priority(
 }
 
 // ============================================================
+// Pre-scan gate: which items are worth an LLM scan at all
+// ============================================================
+//
+// scan_rank is the dominant AI cost, and most ingested items never reach an
+// edition. So before spending tokens we score every candidate with signals we
+// already have for free — source weight, recency, and interest — and only
+// LLM-scan the ones that clear a threshold. Items the user actively selected
+// (followed topic/category) are always scanned, so their relevant news is
+// never dropped by the gate.
+
+/** Just the fields the pre-rank needs — no importance (that is what we save). */
+export type PreRankItem = Pick<Item, "source_id" | "category_id" | "topic_id" | "published_at">;
+
+/**
+ * Recency multiplier in [floor, 1]: freshest items keep full weight, decaying
+ * linearly toward the floor across the window. A missing date stays neutral.
+ */
+export function recencyFactor(
+  publishedAt: string | null,
+  now = Date.now(),
+  windowHours = 48,
+  floor = 0.3,
+): number {
+  if (!publishedAt) return 0.5;
+  const ageHours = (now - new Date(publishedAt).getTime()) / 3_600_000;
+  if (ageHours <= 0) return 1;
+  const decayed = 1 - (1 - floor) * (ageHours / windowHours);
+  return Math.max(floor, Math.min(1, decayed));
+}
+
+/** Did the reader actively select this item's topic or category? */
+export function isUserSelected(
+  item: PreRankItem,
+  followedTopicIds: Set<string>,
+  followedCategoryIds: Set<string>,
+): boolean {
+  return Boolean(
+    (item.topic_id && followedTopicIds.has(item.topic_id)) ||
+      (item.category_id && followedCategoryIds.has(item.category_id)),
+  );
+}
+
+/**
+ * Pure: cheap pre-scan score (no LLM). Same interest-inheritance shape as
+ * priority(), but without importance — higher means more worth scanning.
+ */
+export function preRankScore(item: PreRankItem, ctx: ScoreContext, now = Date.now()): number {
+  const interest =
+    (item.topic_id != null ? ctx.topicScores.get(item.topic_id) : undefined) ??
+    (item.category_id != null ? ctx.categoryScores.get(item.category_id) : undefined) ??
+    0;
+  const interestFactor = 1 + interest * 0.75; // -1..1 → 0.25..1.75, mirrors priority()
+  const sourceWeight = item.source_id != null ? (ctx.sourceWeights.get(item.source_id) ?? 1.0) : 1.0;
+  return sourceWeight * recencyFactor(item.published_at, now) * interestFactor;
+}
+
+/**
+ * Pure: pick which candidates get an LLM scan, best first. User-selected items
+ * are always kept; the rest must clear `threshold`. The caller scans these in
+ * batches across requeued ticks (already-scanned items drop out of the pool).
+ */
+export function selectForScan<T extends PreRankItem & { id: string }>(
+  candidates: T[],
+  ctx: ScoreContext,
+  followedTopicIds: Set<string>,
+  followedCategoryIds: Set<string>,
+  threshold: number,
+  now = Date.now(),
+): T[] {
+  return candidates
+    .map((item) => ({
+      item,
+      forced: isUserSelected(item, followedTopicIds, followedCategoryIds),
+      score: preRankScore(item, ctx, now),
+    }))
+    .filter((entry) => entry.forced || entry.score >= threshold)
+    .sort((a, b) => Number(b.forced) - Number(a.forced) || b.score - a.score)
+    .map((entry) => entry.item);
+}
+
+// ============================================================
 // Kostenpoort: prioriteit → band
 // ============================================================
 

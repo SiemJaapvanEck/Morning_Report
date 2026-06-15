@@ -1,118 +1,109 @@
-# HANDOFF — stand van zaken
+# HANDOFF — current state
 
-> Laatst bijgewerkt: 14 juni 2026, sessie op account Siem.
-> Lees dit eerst bij het oppakken van het project; werkafspraken staan in CLAUDE.md.
+> Last updated: 15 June 2026, session on Siem's account.
+> Read this first when picking up the project; working agreements live in CLAUDE.md.
 
-## Waar we staan
+## Where we stand
 
-De pipeline is **opgeschaald** (16 → 71 bronnen, incl. podcast/video-media) en de
-**editie is herontworpen als een kalender**: elke dag is hetzelfde Atlas-dashboard,
-met Dag/Week/Maand/Jaar-navigatie en veeg-bladeren. **Nieuw deze sessie: de
-AI-redactie (slice 1)** — vijf vakredacteuren schrijven beat-samenvattingen en
-**Sol stelt als hoofdredacteur de Daily Paper samen**. Een editie kost nu ±€0,16
-(plafond €0,30). Alle poorten groen (lint/tsc/test/build) en **gepusht naar
-`main`** (Vercel-deploy loopt; zie ook de design-resolutie hieronder).
+The pipeline is **cost-optimised** and the **editorial layer is now persona-free**.
+A full edition dropped from **~€0.156 to ~€0.077** (measured live on today's edition),
+while keeping deep research and *adding* real cross-referencing. The "Daily Paper"
++ five editor personas + Sol's character are gone, replaced by **one neutral,
+topic-driven cross-reference synthesis ("De rode draad")**. All gates green
+(lint/tsc/52 tests/build) and pushed to `main`.
 
-### Fase 1 — ingestie-opschaling + media-plumbing (migratie 0007)
-- **71 actieve bronnen** (was 16): de volledige §5-lijst uit `docs/ontwerp.md`
-  (wire/tech/AI/wetenschap/games/finance/NL-lokaal/subreddits) + een curated set
-  **uitleg-media**. Migratie `0007_sources_expand.sql` (idempotent, geguard op url).
-- **Media als bron** via een nieuwe kolom `sources.medium` (`article`/`podcast`/`video`).
-  Podcasts (RSS-enclosure) en YouTube-kanalen (`feeds/videos.xml?channel_id=…`, keyless)
-  komen via dezelfde `fetchFeed`. `modules/shared/feeds.ts` kreeg `extractMedia()` +
-  `parseDuration()` (+ `itunes:duration`-veld); de afspeel-URL/duur landt in
-  `items.scan_meta.media` (`MediaMeta` in types.ts).
-- **Media slaat de 48u-versheidsregel over** (uitleg is evergreen) — `modules/ingest`.
-  De scan-stap **merget** nu `scan_meta` i.p.v. overschrijven, zodat media bewaard blijft.
-- **scan_rank-cap 6 → 12 rondes** (~600 items/dag) voor de bredere bronnenlijst.
-- Geverifieerd: 6/6 YouTube-channel-id's geldig, ~725 media-items opgehaald
-  (vooral podcast-backcatalogs). **Bekend:** Reddit + BleepingComputer geven 403 aan
-  bots (niet-blokkerend, bewust gelaten); 1 media-item lekt nu nog in een gewone sectie
-  (routing eruit = latere fase).
+This session had three threads: the working-language flip, the scan-cost lever
+(A), and the persona removal (B).
 
-### Editie-UI = kalender (homepage én /editie/[datum] zijn hetzelfde scherm)
-- **`EditionView`** (`app/components/EditionView.tsx`) is de gedeelde Atlas-dashboard­weergave
-  van één editie (verving en verwijderde `VoorpaginaAtlas`). Datum-gebaseerd; de
-  "Lees de krant"-knop wijst naar de volledige krant. `WereldKaart` kreeg een `basePath`
-  zodat de regio-klik op een datumpagina op die pagina blijft.
-- **`EditionNav`** (client): `‹ Today ›` (springt naar de dichtstbijzijnde dag mét editie),
-  een **mini-maandkiezer** met stippen op dagen die een editie hebben, en een
-  **Dag/Week/Maand/Jaar**-schakelaar. URL-gedreven (`?view=`), deelbaar.
-- **`SwipePager`** (client): veeg / horizontaal scrollen / pijltjes ←→ bladert tussen
-  edities (prefetcht buren).
-- **`EditionOverview`**: Week = horizontale dagkaarten (7-op-desktop → 2-op-mobiel),
-  Maand = kaart-kalender (kop op sm+, dag+stip op mobiel), Jaar = 12 mini-maanden.
-- **Lees-hiërarchie (3 lagen):** cover = dashboard → "Lees de krant" → **volledige krant**
-  op **`/editie/[datum]/krant`** (`EditieWeergave`, hierheen verplaatst). Een datum zonder
-  editie toont `LegeHero` (geen 404), zodat je vrij kunt bladeren.
-- Nieuw: `app/lib/dates.ts` (datumhelpers), `listEditionSummaries` in `app/lib/queries.ts`
-  (voedt de stippen/overzichten), `EditionScreen` (nav + dag/overzicht). ESLint negeert nu
-  de untracked map `Morning Report design/`.
+### Working language → English (dev-facing)
+- All code, comments, commits, docs, the `.claude/` skills, `HANDOFF.md`/`TIJDLIJN.md`
+  and conversation are now **English**. Rewrote `CLAUDE.md` and the `/start` +
+  `/push-main` skills accordingly. `AGENTS.md` was already English.
+- **The product stays Dutch for now** (separate decision, not yet made): the app's
+  user-facing UI copy and the synthesis prompt (in `modules/redactie/index.ts`,
+  which generates Dutch output).
+- **`CLAUDE.md` is now gitignored** and removed from the repo — it is a personal,
+  per-contributor workflow file (Siem keeps his, a colleague keeps theirs). See
+  Known issues for the pull-side consequence.
 
-### Designsysteem = Atlas (Dispatch overschreven, 14 juni)
-Tijdens het pushen bleek `main` gedivergeerd: een collega had het **"Dispatch"-
-designsysteem** gepusht (commit `f0ed210`): nieuwe `docs/design.md`, CLAUDE.md-
-designsectie omgezet naar verplichte tokens/`mr-*`-klassen, en `ItemRating`/
-`ProfielKiezer`/`CaptureFormulier`/manifest herstyled — maar **zonder de tokens in
-`app/globals.css`** (die ontbreken), dus die klassen waren ongedefinieerd. Op verzoek
-van Siem is **Atlas geforceerd als de vaste stijl**: CLAUDE.md-designsectie en
-`docs/design.md` herschreven naar Atlas, en de vier Dispatch-bestanden teruggezet naar
-hun pre-Dispatch (Atlas) versie. **Dispatch blijft in de git-history** (`f0ed210`).
-**Nog te coördineren met de collega** over de definitieve richting.
+### Lever A — scan cost (the real driver, not the redaction)
+`scan_rank` was ~76% of an edition's cost: pure volume from the 71-source scale-up
++ the 6→12 round cap (~600 items LLM-classified/day), and ~78% of scanned items
+never reach an edition. On Grok the scan and deep models cost the same, so the
+tier split saves nothing — only volume matters.
+- **Pre-scan gate** (`modules/rank/index.ts`): `preRankScore` ranks candidates by
+  `source_weight × recency × interest` with **no LLM**; `selectForScan` keeps the
+  ones clearing a threshold, **always including the reader's followed topics**.
+  `scanRankStep` LLM-scans only the top batch per round; skipped items keep
+  `importance = null` and age out. Pure functions, unit-tested.
+- **Cost dial** = `batchSize × maxRounds` (the round cap is what bites, since the
+  threshold barely binds on fresh news). Config in `modules/shared/config.ts`
+  (`scan.batchSize=40`, `preRankThreshold=0.5`, `maxRounds=7`, `candidatePool=800`),
+  all env-overridable. Default ≈ 280 items/busy-day.
+- **Media intake cap** (`modules/ingest/index.ts`): newest N per podcast/video feed
+  (`ingest.mediaMaxPerFeed=3`) — stops backcatalog floods (Lex Fridman alone had
+  498 episodes, 403 of them LLM-scanned).
+- **Verified live** (15 June, both profiles, a busy day): 717 candidates → top **280
+  scanned** (cap engaged) → scan_rank **€0.047–0.051** (was ~€0.119). Edition data
+  **100% same-day**, followed topics covered.
 
-### Redactie (Daily Paper) — slice 1 gebouwd
-Een klein AI-redactieteam als **persona-prompts + stappen (GEEN agent-runtime)**.
-- **`modules/redactie`**: vijf redacteuren met persona-prompts in
-  `modules/redactie/prompts/*.md` — Tech & Wetenschap, Politiek & Wereld,
-  Financieel, Algemeen (journalist) en **Voor jou** (de persoonlijke, gebruiker-
-  specifieke desk). De desk→categorie-map is config. `writeDeskSummary()` +
-  `assembleUserContext()` (cross-ref axis A: markeert gevolgde onderwerpen met ★).
-- **Pipeline**: nieuwe stap `desks` (één desk per tick, requeue, idempotent) +
-  `sol_daily_paper`. `modules/sol` kreeg `writeDailyPaper()` (Sol = hoofdredacteur).
-  `finalize` zet de beat-samenvattingen + de Daily Paper in `front_page`
-  (`FrontPage.desks` + `daily_paper`). Volgorde: … generate → desks →
-  sol_daily_paper → sol_intro → finalize.
-- **UI**: de Daily Paper (Sol's hoofdartikel + de 5 beat-samenvattingen) rendert
-  bovenaan de "Lees de krant"-pagina (`EditieWeergave`).
-- **Geverifieerd** op preview-editie `2099-01-02`: 5 desks + Daily Paper, €0,156,
-  geen console-fouten, alle poorten groen.
-- **Volgende slices** (zie `project-scale-pipeline-goal` + plan): entity-extractie +
-  story-clustering (de rijke cross-ref-sleutel), per-desk deep-research-briefs,
-  cross-ref axis B (eerder nieuws → "verwijzing") en C (portefeuille-hook),
-  Sol-geheugen schrijven/compacteren, en een eigen depth-2 Daily-Paper-route.
+### Lever B — editorial layer without personas
+Per Siem: remove the personalities; what matters is cross-referencing + deep research.
+- **Removed** the 5 desk-editor personas and Sol's character voice. Deleted all six
+  prompt files (`modules/redactie/prompts/*`, `modules/sol/prompts/karakter.md`).
+  `modules/sol` is now just `loadMemory` (kept for the future cross-ref axis B).
+- **Replaced** the `desks` + `sol_daily_paper` + `sol_intro` steps (7 persona calls)
+  with **one `daily_paper` step**. `writeDailyDigest` (`modules/redactie/index.ts`)
+  produces a neutral, plain-prose synthesis that covers **only the topics with news
+  that day**, **leads with the reader's followed topics**, and draws explicit
+  cross-references. `orderDigestTopics` is pure + unit-tested.
+- **Kept** deep research (`generate` deep-dives) untouched — that is the substance.
+- `FrontPage.desks` dropped; `front_page.intro` (the calendar-cover lead) is now
+  **derived from the digest's first sentence** — no separate intro call. `finalize`
+  hardened to read the latest done `daily_paper` step.
+- **UI** (`EditieWeergave.tsx`): the Sol-branded "Daily Paper" block + desk grid is
+  now a neutral "De rode draad" section (no avatar, no persona).
+- **Verified live**: real topic-driven synthesis with explicit cross-references,
+  flags topics with no real news, **€0.002/edition**, renders cleanly, no console
+  errors.
+- New pipeline order: `… generate → daily_paper → finalize`.
 
-### Onveranderd, nog steeds geldig
-- **AI-provider = Grok (xAI)** via `modules/shared/ai.ts` (`askAI()`): `grok-4.20…` (scan)
-  + `grok-4.3` (deep/Sol). Anthropic omschakelbaar (`AI_PROVIDER=anthropic`).
-- **Supabase live + RLS**: project "Morning Report." (`iqhyndhrlhjfdrwjvmjv`, eu-west-1),
-  alleen service-role. Migratie 0007 is **al toegepast** op de live DB.
-- **Vercel**: auto-deploy op elke push naar `main`. Vaste URL:
-  `morning-report-siemjaapvanecks-projects.vercel.app`. Deployment Protection uit.
-- Accountvoorkeuren/onboarding, developer-modus + thema's, weer + markten-kaart: ongewijzigd.
+### Unchanged, still valid
+- **AI provider = Grok (xAI)** via `modules/shared/ai.ts` (`askAI()`): `grok-4.20…`
+  (scan) + `grok-4.3` (deep). Anthropic switchable (`AI_PROVIDER=anthropic`).
+- **Supabase live + RLS**: project "Morning Report." (`iqhyndhrlhjfdrwjvmjv`,
+  eu-west-1), service-role only.
+- **Vercel**: auto-deploy on every push to `main`.
+- Account prefs/onboarding, developer mode + themes, weather + markets map: unchanged.
 
-## Wat nu nog openstaat
-1. **Designrichting afstemmen met de collega.** Atlas is nu geforceerd (zie
-   "Designsysteem = Atlas"); Dispatch (`f0ed210`) staat in de history. Beslis samen wat
-   de vaste richting wordt voordat er meer UI-werk gebeurt.
-2. **Redactie afmaken** (volgende slices, zie boven): entity-extractie + clustering,
-   per-desk deep-research-briefs, cross-ref B/C, Sol-geheugen, depth-2 Daily-Paper-route.
-3. **Restant masterplan** (zie `project-scale-pipeline-goal`): story-clustering, deep-research
-   6–12 topics, Sol per-categorie/per-continent, select-caps → ~160 zichtbare items, budget→€0,50.
-4. **Eerder openstaand:** retro-vertaling NL → Engels van bestaande code; bevestigen dat de
-   cron-job.org-job daadwerkelijk loopt (`docs/setup.md` §4).
+## What's open
+1. **Near-duplicate cross-source stories** cluster in sections (today's Tech had ~6
+   versions of the UK under-16 social-media ban). `content_hash` is exact-title only,
+   so cross-source near-dups slip through `dedupeForEdition`. A background task chip
+   was spawned for this (cheap normalized-title/token-overlap clustering in `select`).
+2. **2099 test fixtures** still in the DB (`2099-01-01/02`) — isolated from real
+   editions, safe to delete.
+3. **Rest of the master plan**: cross-ref axis B (earlier news → "reference") and C
+   (portfolio hook), deep-research 6–12 topics, select-caps → ~160 visible items,
+   budget tuning.
+4. **Design direction with the colleague** (Atlas vs. the in-history Dispatch
+   `f0ed210`) — still to coordinate; unchanged this session.
+5. **Retro-translation** of the remaining Dutch code comments + docs to English
+   (do it opportunistically when touching a file).
+6. Confirm the cron-job.org job actually runs (`docs/setup.md` §4).
 
-## Bekende aandachtspunten
-- **Preview-edities `2099-01-01` en `2099-01-02`** staan nog in de DB (testfixtures;
-  `2099-01-02` draagt de redactie/Daily Paper; mogen weg).
-- **`.claude/`-tooling untracked**: de `push-main`/`start`-skills, de `guard-push-main`-hook
-  en `settings.json` staan lokaal (niet in git, net als `launch.json`). Bewust gelaten;
-  commit ze als je ze tussen accounts wilt delen.
-- **Media-backcatalog is groot** (~725 items): podcast-feeds leveren honderden oude afleveringen
-  doordat media de versheidsgrens overslaat. Prima voor de latere catch-up-bibliotheek; eventueel
-  later per media-feed cappen.
-- **403-feeds** (Reddit-subreddits, BleepingComputer): blokkeren datacenter-requests, geven ⚠ in
-  Instellingen, niet-blokkerend.
-- **Open-Meteo** (weer) wisselvallig: 4 retries, niet-blokkerend.
-- **Postgres `current_date` is UTC**; editie-datums via `todayLocal()` (Europe/Amsterdam).
-- **Git-auth**: OAuth-token (SiemJaapvanEck) in de macOS-keychain; `git push/pull` werkt.
-  `gh auth status` zegt "niet ingelogd" (token mist read:org) — dat klopt, git zelf werkt.
+## Known issues / things to keep in mind
+- **`CLAUDE.md` removal will hit the colleague on pull.** It is now gitignored and
+  deleted from the repo; when this push lands, their next pull removes their tracked
+  copy. Coordinate (each contributor keeps a local `CLAUDE.md`).
+- **`.claude/` tooling untracked** (`push-main`/`start` skills, `guard-push-main`
+  hook, `settings.json`) — deliberately local, like `launch.json`. Commit them only
+  if you want to share between accounts.
+- **Editions planned before this push** keep their old step list (no `daily_paper`
+  step). New editions get the new plan. Today's two editions were re-finalised
+  manually to carry the new digest.
+- **403 feeds** (Reddit subreddits, BleepingComputer), **Open-Meteo** flaky (4
+  retries), **Postgres `current_date` is UTC** (edition dates via `todayLocal()`,
+  Europe/Amsterdam) — all unchanged, non-blocking.
+- **Git auth**: OAuth token (SiemJaapvanEck) in the macOS keychain; `git push/pull`
+  works. `gh auth status` says "not logged in" (token lacks read:org) — expected.

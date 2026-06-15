@@ -119,7 +119,7 @@ export async function listEditions(profileId: string, limit = 30): Promise<Editi
 export interface EditionSummary {
   date: string;
   status: EditionStatus;
-  /** korte kop voor de kalendercel: beste top-item, anders Sol's intro */
+  /** korte kop voor de kalendercel: beste top-item, anders de korte lead van de dag */
   headline: string | null;
 }
 

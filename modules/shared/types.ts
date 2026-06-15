@@ -118,10 +118,8 @@ export interface FrontPage {
   regios?: Record<string, number>;
   /** beurssnapshot per regio voor de markten-kaart */
   markten?: MarktSnapshot;
-  /** Sol's hoofdartikel (depth-2 leeslaag) samengesteld uit de beat-samenvattingen */
+  /** neutral, topic-driven cross-reference synthesis of the day (depth-2 layer) */
   daily_paper?: string;
-  /** beat-samenvattingen van de redactie (per desk) */
-  desks?: { desk: string; naam: string; summary: string }[];
 }
 
 /** Eén beursindex met dagrendement, voor de markten-per-regio-kaart. */

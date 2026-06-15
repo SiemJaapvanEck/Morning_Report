@@ -1,63 +1,33 @@
-// De redactie: vakredacteuren per beat als persona-prompts + bounded askAI-calls.
+// The editorial layer: a single neutral, topic-driven cross-reference synthesis.
 //
-// Geen agent-runtime — elke redacteur is config (modules/redactie/prompts/*.md) +
-// één gegenereerde beat-samenvatting per editie. Sol (modules/sol) is
-// hoofdredacteur en stelt de Daily Paper samen uit deze samenvattingen. De
-// desk→categorie-map is config zodat hij makkelijk te herzien is.
+// No personas, no character — what matters is cross-referencing and depth. One
+// bounded askAI call turns the day's relevant topics into a coherent "rode
+// draad" (through-line): it covers only the topics that actually have news
+// today, leads with the ones the reader follows, and draws connections between
+// them. The deep research itself stays in the generate step.
 
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { askAI } from "../shared/ai";
 import { budgetPolicy } from "../shared/budget";
 import { db, unwrap } from "../shared/db";
 import type { BudgetMode } from "../shared/types";
 
-export interface Desk {
-  /** stabiele sleutel (komt in het stap-result en front_page.desks) */
-  id: string;
-  naam: string;
-  /** categorie-slugs die deze desk dekt; leeg = persoonlijke (cross-categorie) desk */
-  categories: string[];
-  promptFile: string;
-  /** de persoonlijke redacteur: items komen van de voorkeuren, niet van een categorie */
-  personal?: boolean;
-}
-
-/** De vaste redactie. Volgorde = volgorde in de Daily Paper. Map is tunebaar. */
-export const DESKS: Desk[] = [
-  { id: "tech", naam: "Tech & Wetenschap", categories: ["tech", "wetenschap", "frontier"], promptFile: "tech-wetenschap.md" },
-  { id: "wereld", naam: "Politiek & Wereld", categories: ["wereld"], promptFile: "politiek-wereld.md" },
-  { id: "financieel", naam: "Financieel", categories: ["financieel"], promptFile: "financieel.md" },
-  { id: "journalist", naam: "Algemeen", categories: ["games", "lokaal", "goed-nieuws"], promptFile: "journalist.md" },
-  { id: "persoonlijk", naam: "Voor jou", categories: [], promptFile: "persoonlijk.md", personal: true },
-];
-
-/** Welke desk dekt deze categorie-slug? (null = geen vaste desk) */
-export function deskForCategory(slug: string): Desk | null {
-  return DESKS.find((d) => !d.personal && d.categories.includes(slug)) ?? null;
-}
-
-async function loadPersona(file: string): Promise<string> {
-  return readFile(join(process.cwd(), "modules", "redactie", "prompts", file), "utf-8");
-}
-
 // ============================================================
-// Cross-referentie-context (axis A: voorkeuren) — wordt in fase 2 uitgebreid
-// met eerder nieuws (B) en portefeuille (C).
+// Cross-reference context (axis A: what the reader follows) — extended in a
+// later phase with earlier news (B) and portfolio (C).
 // ============================================================
 
 export interface UserContext {
-  /** namen van onderwerpen/categorieën die de lezer actief volgt (follow_marks) */
+  /** names of topics/categories the reader actively follows (follow_marks) */
   follows: string[];
-  /** topic_id's die de lezer volgt — om items te markeren */
+  /** topic_ids the reader follows — to mark items */
   followedTopicIds: Set<string>;
-  /** category_id's die de lezer volgt */
+  /** category_ids the reader follows */
   followedCategoryIds: Set<string>;
 }
 
 /**
- * Verzamelt de cross-ref-context voor een profiel: wat volgt de lezer actief.
- * Leeg als er niets gevolgd wordt (no-op, geen fout).
+ * Collects the cross-reference context for a profile: what the reader actively
+ * follows. Empty when nothing is followed (no-op, not an error).
  */
 export async function assembleUserContext(profileId: string): Promise<UserContext> {
   const marks = unwrap(
@@ -88,55 +58,68 @@ export async function assembleUserContext(profileId: string): Promise<UserContex
 }
 
 // ============================================================
-// Beat-samenvatting
+// Daily digest — one neutral cross-reference synthesis
 // ============================================================
 
-export interface DeskItem {
-  title: string;
-  summary: string | null;
-  categorie: string;
-  bron: string | null;
-  /** volgt de lezer dit item-onderwerp? (cross-ref axis A) */
-  gevolgd?: boolean;
+export interface DigestTopic {
+  /** topic/category name as it appears in the edition */
+  name: string;
+  /** does the reader actively follow this topic/category? (cross-ref axis A) */
+  followed: boolean;
+  /** a few item headlines from today, best first */
+  headlines: string[];
 }
 
 /**
- * Eén beat-samenvatting in de stem van de redacteur. Eén deep-call per desk.
- * Budget-bewust (modus 'stop' → geen call). Gevolgde items krijgen een ★ mee
- * zodat de redacteur ze expliciet kan benoemen.
+ * Pure-ish: orders the day's topics with followed ones first, then by how much
+ * news they carry. Topics without headlines are dropped — only what has real
+ * news today is covered.
  */
-export async function writeDeskSummary(
-  desk: Desk,
-  items: DeskItem[],
-  context: UserContext,
+export function orderDigestTopics(topics: DigestTopic[]): DigestTopic[] {
+  return topics
+    .filter((t) => t.headlines.length > 0)
+    .sort((a, b) => Number(b.followed) - Number(a.followed) || b.headlines.length - a.headlines.length);
+}
+
+/**
+ * One neutral cross-reference synthesis of the day. Budget-aware ('stop' → no
+ * call). Covers only the topics passed in (the ones with news today), leads
+ * with followed topics, and connects threads. Plain editorial prose, no persona.
+ */
+export async function writeDailyDigest(
+  topics: DigestTopic[],
   mode: BudgetMode,
   editionId: string,
   stepId?: string,
 ): Promise<string | null> {
   const policy = budgetPolicy[mode];
-  if (items.length === 0 || policy.solMaxTokens === 0) return null;
+  const ordered = orderDigestTopics(topics);
+  if (ordered.length === 0 || policy.solMaxTokens === 0) return null;
 
-  const persona = await loadPersona(desk.promptFile);
-  const lijst = items
-    .slice(0, 14)
-    .map((it, i) => `${i + 1}. ${it.gevolgd ? "★ " : ""}[${it.categorie}] ${it.title}${it.summary ? ` — ${it.summary.slice(0, 200)}` : ""}`)
-    .join("\n");
+  const blok = ordered
+    .map((t) => `## ${t.followed ? "★ " : ""}${t.name}\n${t.headlines.map((h) => `- ${h}`).join("\n")}`)
+    .join("\n\n");
 
-  const volgBlok =
-    context.follows.length > 0
-      ? `\n\nDe lezer volgt actief: ${context.follows.join(", ")}. Items met ★ raken een gevolgd onderwerp — benoem die kort expliciet.`
-      : "";
+  const followed = ordered.filter((t) => t.followed).map((t) => t.name);
+  const focusBlok = followed.length
+    ? `\n\nDe lezer volgt actief: ${followed.join(", ")} — geef die onderwerpen voorrang en ` +
+      `begin daarbij. De ★ markeert ze in de lijst hierboven; gebruik dat teken zelf niet in je tekst.`
+    : "";
 
   const result = await askAI({
     tier: "deep",
     editionId,
     stepId,
-    maxTokens: Math.min(500, policy.solMaxTokens),
-    system: persona + volgBlok,
+    maxTokens: Math.min(900, policy.solMaxTokens + 300),
+    system:
+      "Je bent de eindredacteur van een persoonlijk ochtendrapport. Schrijf zakelijk, " +
+      "helder en neutraal — geen personage, geen naam, geen 'ik'. Lopende tekst, geen kopjes.",
     prompt:
-      `De items van jouw beat vandaag:\n\n${lijst}\n\n` +
-      `Schrijf je beat-samenvatting (3-5 zinnen): wat speelde er, wat is het ` +
-      `belangrijkst, en waarom. Geen opsomming, lopende tekst in jouw stem.`,
+      `Dit zijn de onderwerpen mét nieuws van vandaag (behandel alléén deze, niet meer):\n\n${blok}` +
+      focusBlok +
+      `\n\nSchrijf de rode draad van vandaag in 2-3 alinea's: verbind de belangrijkste ` +
+      `ontwikkelingen, leg dwarsverbanden tussen onderwerpen, en begin bij wat de lezer volgt. ` +
+      `Sla onderwerpen zonder echt nieuws over.`,
   });
   return result.text.trim();
 }

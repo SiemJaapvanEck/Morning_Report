@@ -8,8 +8,8 @@
 
 - [x] **Phase 0** — Budget cap €0.10 + scan reclaim *(done, in `main` after this push)*
 - [x] **Phase 1** — `threads`/`thread_items` schema + pure `modules/threads` + 22 tests *(done)*
-- [ ] **Phase 2** — Entity extraction piggybacked on the scan call ← **next sprint**
-- [ ] **Phase 3** — `threads` pipeline step (match + link, no AI)
+- [x] **Phase 2** — Entity extraction piggybacked on the scan call *(done; display-form entities + `dedupeEntities`, 78 tests, verified live €0.057/edition)*
+- [ ] **Phase 3** — `threads` pipeline step (match + link, no AI) ← **next sprint**
 - [ ] **Phase 4** — Thread-aware generation + DESTEP research
 - [ ] **Phase 5** — Daily Paper assembly (Summary/Introduction/body) + UI *(first localhost-visible change)*
 - [ ] **Phase 6** — Optional: og:image fallback + embeddings upgrade

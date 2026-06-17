@@ -11,6 +11,7 @@
 import { db, unwrap } from "../shared/db";
 import { askAIJson } from "../shared/ai";
 import { budgetPolicy } from "../shared/budget";
+import { dedupeEntities } from "../threads";
 import { REGIO_CODES, REGIO_GEEN, REGIO_NAAM, isRegioCode } from "../shared/regios";
 import type { BudgetMode, Item, Topic, TopicScore, Band } from "../shared/types";
 
@@ -26,6 +27,8 @@ interface ScanVerdict {
   topic_index: number;
   /** wereldregio waar het nieuws over gaat, of "geen" */
   regio: string;
+  /** 2–5 kernentiteiten (eigennamen) uit het item, in normale schrijfwijze */
+  entities: string[];
 }
 
 const SCAN_SCHEMA = {
@@ -41,8 +44,9 @@ const SCAN_SCHEMA = {
           is_reclame: { type: "boolean" },
           topic_index: { type: "integer" },
           regio: { type: "string", enum: [...REGIO_CODES, REGIO_GEEN] },
+          entities: { type: "array", items: { type: "string" } },
         },
-        required: ["index", "belang", "is_reclame", "topic_index", "regio"],
+        required: ["index", "belang", "is_reclame", "topic_index", "regio", "entities"],
         additionalProperties: false,
       },
     },
@@ -61,6 +65,8 @@ export interface ScanUitslag {
   topicId: string | null;
   /** wereldregio waar het nieuws over gaat, of null als geen duidelijke plek */
   regio: string | null;
+  /** kernentiteiten (eigennamen) uit het item, ontdubbeld in displayvorm */
+  entities: string[];
 }
 
 /**
@@ -100,7 +106,10 @@ export async function scanBatch(
       "Bepaal tot slot de wereldregio waar het nieuws over gáát (niet de bron): " +
       `${REGIO_CODES.map((c) => `${c}=${REGIO_NAAM[c]}`).join(", ")}. ` +
       `Nederland valt onder eu. Gebruik "${REGIO_GEEN}" als er geen duidelijke geografische plek is ` +
-      "(bv. algemeen tech-, wetenschap- of marktnieuws).",
+      "(bv. algemeen tech-, wetenschap- of marktnieuws). " +
+      "Geef tot slot per item 2 tot 5 kernentiteiten (entities): de belangrijkste eigennamen " +
+      "— personen, organisaties, bedrijven, plaatsen of producten — die in het item centraal staan, " +
+      "in hun normale schrijfwijze (bv. \"SpaceX\", \"Europese Centrale Bank\", \"Tibet\").",
     prompt: `Onderwerpen:\n${topicLijst || "(geen)"}\n\nBeoordeel deze items:\n\n${lijst}`,
   });
 
@@ -113,6 +122,7 @@ export async function scanBatch(
         isReclame: verdict.is_reclame,
         topicId: topics[verdict.topic_index]?.id ?? null,
         regio: isRegioCode(verdict.regio) ? verdict.regio : null,
+        entities: dedupeEntities(verdict.entities ?? []),
       });
     }
   }

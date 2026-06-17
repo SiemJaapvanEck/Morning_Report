@@ -4,6 +4,7 @@ import {
   entityOverlap,
   matchThread,
   computeDelta,
+  dedupeEntities,
   mergeEntities,
   selectLenses,
   orderThreads,
@@ -119,6 +120,26 @@ describe("computeDelta", () => {
       new Set(),
     );
     expect(d.newEntities).toEqual(["nasdaq"]);
+  });
+});
+
+describe("dedupeEntities", () => {
+  it("keeps the human-readable display form", () => {
+    expect(dedupeEntities(["SpaceX", "São Paulo"])).toEqual(["SpaceX", "São Paulo"]);
+  });
+
+  it("dedupes case/diacritic-insensitively, first display form wins", () => {
+    expect(dedupeEntities(["SpaceX", "spacex", "SPACEX"])).toEqual(["SpaceX"]);
+    expect(dedupeEntities(["Café", "cafe"])).toEqual(["Café"]);
+  });
+
+  it("trims and drops empty/blank entries", () => {
+    expect(dedupeEntities(["  Tesla  ", "", "   "])).toEqual(["Tesla"]);
+  });
+
+  it("caps the count", () => {
+    const many = Array.from({ length: 20 }, (_, i) => `Entity${i}`);
+    expect(dedupeEntities(many, 8)).toHaveLength(8);
   });
 });
 

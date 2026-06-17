@@ -113,3 +113,14 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   with 22 tests. Also added `docs/pipeline.md` (step catalog). Gate green (74 tests);
   pipeline behaviour unchanged until Phase 3. Next: Phase 2 (entity extraction on the
   scan call).
+- **17 June 2026 (continued) — News Threads Phase 2: entity extraction.** Piggybacked
+  2–5 key entities per item onto the existing `scanBatch` LLM call (no new call):
+  `entities` added to `SCAN_SCHEMA` + scan prompt + `ScanVerdict`/`ScanUitslag`, merged
+  into `items.scan_meta.entities` next to `regio`. Entities stored in **display form**
+  (for the future archive UI) via a new pure `dedupeEntities()` helper in
+  `modules/threads` (+4 tests, 78 total). Seeded 4 followed niche topics for Siem
+  (Tuinieren/Plantenindustrie/Landbouw/Tibet, `query_mode=true`) to prove specific-topic
+  tracking. Verified live on a full local edition (both profiles): 640 scanned, 613 with
+  entities, display form preserved, €0.057/edition (under the €0.10 cap); Landbouw caught
+  3 items, Tuinieren 1. Gate green; pushed. Next: Phase 3 (the threads match/link step).
+  Note: morning cron produced empty edition shells — worth a look later.

@@ -190,9 +190,10 @@ const scanRankStep: StepHandler = async ({ edition, step }) => {
           is_ad: verdict.isReclame,
           // een bron-gekoppeld topic (gezet bij ingestie) wint van de AI-gok
           topic_id: vastTopic.get(itemId) ?? verdict.topicId,
-          // wereldregio voor de "waar komt het nieuws vandaan"-kaart; merge zodat
-          // eerder gezette velden (bv. media) niet verloren gaan
-          scan_meta: { ...existingMeta.get(itemId), regio: verdict.regio },
+          // wereldregio voor de "waar komt het nieuws vandaan"-kaart + de
+          // kernentiteiten voor thread-matching (fase 3); merge zodat eerder
+          // gezette velden (bv. media) niet verloren gaan
+          scan_meta: { ...existingMeta.get(itemId), regio: verdict.regio, entities: verdict.entities },
         })
         .eq("id", itemId);
       scanned++;

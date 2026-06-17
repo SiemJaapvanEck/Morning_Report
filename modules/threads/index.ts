@@ -114,6 +114,28 @@ export function computeDelta(
   };
 }
 
+/**
+ * Dedupe raw scan entities for storage on an item, keeping the human-readable
+ * display form (we show these in the archive UI) — "SpaceX", not "spacex".
+ * Comparison is case/diacritic-insensitive via normalizeEntity, but the first
+ * display form wins; empties are dropped and the count is capped. Matching and
+ * thread state still normalize at use-time, so storing display form is safe.
+ */
+export function dedupeEntities(raw: string[], cap = 8): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const r of raw) {
+    const display = r.trim();
+    if (!display) continue;
+    const key = normalizeEntity(display);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(display);
+    if (out.length >= cap) break;
+  }
+  return out;
+}
+
 /** Union an existing entity set with new entities (normalized, deduped, capped). */
 export function mergeEntities(existing: string[], incoming: string[], cap = 40): string[] {
   const out: string[] = [];

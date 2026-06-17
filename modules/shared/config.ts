@@ -38,8 +38,13 @@ export const config = {
   },
 
   budget: {
-    /** Plafond per editie in EUR */
-    editionCeilingEur: Number(process.env.BUDGET_EDITION_EUR ?? "0.30"),
+    /**
+     * Hard cap per editie in EUR. The pipeline degrades (zuinig → minimaal →
+     * stop) well before this; the cap is the line it must never cross. We aim
+     * for noticeably lower than the cap — the threads layer funds richer
+     * research by reclaiming broad-scan cost (see scan.maxRounds below).
+     */
+    editionCeilingEur: Number(process.env.BUDGET_EDITION_EUR ?? "0.10"),
     /** Vanaf dit aandeel van het plafond schakelt de pipeline terug */
     zuinigVanaf: 0.6,
     minimaalVanaf: 0.85,
@@ -63,8 +68,13 @@ export const config = {
     batchSize: Number(process.env.SCAN_BATCH ?? "40"),
     /** floor: items scoring below this skip the LLM (unless user-selected) */
     preRankThreshold: Number(process.env.SCAN_PRERANK_THRESHOLD ?? "0.5"),
-    /** cost dial: batchSize × maxRounds = max items scanned (≈280 → ~€0.05/edition) */
-    maxRounds: Number(process.env.SCAN_MAX_ROUNDS ?? "7"),
+    /**
+     * cost dial: batchSize × maxRounds = max items scanned. Tightened to 4
+     * rounds (40 × 4 = 160 items ≈ €0.03) to reclaim budget for thread-aware
+     * deep research — the threads layer guarantees followed topics regardless,
+     * so the broad firehose scan no longer has to catch everything.
+     */
+    maxRounds: Number(process.env.SCAN_MAX_ROUNDS ?? "4"),
     /** how many fresh, unscanned candidates to load and rank per tick */
     candidatePool: Number(process.env.SCAN_CANDIDATE_POOL ?? "800"),
   },

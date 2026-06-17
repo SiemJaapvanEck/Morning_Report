@@ -1,109 +1,89 @@
 # HANDOFF — current state
 
-> Last updated: 15 June 2026, session on Siem's account.
+> Last updated: 17 June 2026, session on Siem's account.
 > Read this first when picking up the project; working agreements live in CLAUDE.md.
 
 ## Where we stand
 
-The pipeline is **cost-optimised** and the **editorial layer is now persona-free**.
-A full edition dropped from **~€0.156 to ~€0.077** (measured live on today's edition),
-while keeping deep research and *adding* real cross-referencing. The "Daily Paper"
-+ five editor personas + Sol's character are gone, replaced by **one neutral,
-topic-driven cross-reference synthesis ("De rode draad")**. All gates green
-(lint/tsc/52 tests/build) and pushed to `main`.
+We started the **News Threads** feature — the biggest design shift since the
+persona removal. The goal: make the morning report **build forth on itself**.
+Instead of a fresh, independent edition each day, the report becomes a set of
+**persistent storylines (threads)** per profile that accumulate state across
+editions; each morning the pipeline finds what's genuinely new, attaches it to
+the right thread, and writes an **update that builds on yesterday's stored state**
+rather than a from-scratch article. This is the concrete realization of the
+design doc's cross-reference axis B.
 
-This session had three threads: the working-language flip, the scan-cost lever
-(A), and the persona removal (B).
+The full design + the **sprint board** live in **`docs/threads-plan.md`** (in the
+repo, so any session/account can resume). We work it **one phase per sprint:
+implement a phase, pass the gate, then PAUSE for Siem's review before the next**
+(scrum cadence — Siem's explicit request). A new session should run `/start`, open
+`docs/threads-plan.md`, find the first unchecked box, and do exactly that phase.
 
-### Working language → English (dev-facing)
-- All code, comments, commits, docs, the `.claude/` skills, `HANDOFF.md`/`TIJDLIJN.md`
-  and conversation are now **English**. Rewrote `CLAUDE.md` and the `/start` +
-  `/push-main` skills accordingly. `AGENTS.md` was already English.
-- **The product stays Dutch for now** (separate decision, not yet made): the app's
-  user-facing UI copy and the synthesis prompt (in `modules/redactie/index.ts`,
-  which generates Dutch output).
-- **`CLAUDE.md` is now gitignored** and removed from the repo — it is a personal,
-  per-contributor workflow file (Siem keeps his, a colleague keeps theirs). See
-  Known issues for the pull-side consequence.
+**Phases 0 and 1 are done and green** (lint/tsc/74 tests/build). Not yet committed
+when this session began; this push lands them. The running pipeline is **unchanged**
+— threads exist in the DB and the matching logic is tested, but nothing reads or
+writes them until Phase 3.
 
-### Lever A — scan cost (the real driver, not the redaction)
-`scan_rank` was ~76% of an edition's cost: pure volume from the 71-source scale-up
-+ the 6→12 round cap (~600 items LLM-classified/day), and ~78% of scanned items
-never reach an edition. On Grok the scan and deep models cost the same, so the
-tier split saves nothing — only volume matters.
-- **Pre-scan gate** (`modules/rank/index.ts`): `preRankScore` ranks candidates by
-  `source_weight × recency × interest` with **no LLM**; `selectForScan` keeps the
-  ones clearing a threshold, **always including the reader's followed topics**.
-  `scanRankStep` LLM-scans only the top batch per round; skipped items keep
-  `importance = null` and age out. Pure functions, unit-tested.
-- **Cost dial** = `batchSize × maxRounds` (the round cap is what bites, since the
-  threshold barely binds on fresh news). Config in `modules/shared/config.ts`
-  (`scan.batchSize=40`, `preRankThreshold=0.5`, `maxRounds=7`, `candidatePool=800`),
-  all env-overridable. Default ≈ 280 items/busy-day.
-- **Media intake cap** (`modules/ingest/index.ts`): newest N per podcast/video feed
-  (`ingest.mediaMaxPerFeed=3`) — stops backcatalog floods (Lex Fridman alone had
-  498 episodes, 403 of them LLM-scanned).
-- **Verified live** (15 June, both profiles, a busy day): 717 candidates → top **280
-  scanned** (cap engaged) → scan_rank **€0.047–0.051** (was ~€0.119). Edition data
-  **100% same-day**, followed topics covered.
+### Phase 0 — Budget cap + scan reclaim (done)
+- `modules/shared/config.ts`: `budget.editionCeilingEur` **0.30 → 0.10** (hard cap,
+  aim lower; env `BUDGET_EDITION_EUR`). `scan.maxRounds` **7 → 4** (40×4 = 160 items
+  ≈ €0.03 vs ~€0.05) to reclaim budget for thread-aware deep research. `batchSize`/
+  `candidatePool` stay env-overridable.
+- `budget.test.ts` already passes explicit ceilings → untouched, still green.
 
-### Lever B — editorial layer without personas
-Per Siem: remove the personalities; what matters is cross-referencing + deep research.
-- **Removed** the 5 desk-editor personas and Sol's character voice. Deleted all six
-  prompt files (`modules/redactie/prompts/*`, `modules/sol/prompts/karakter.md`).
-  `modules/sol` is now just `loadMemory` (kept for the future cross-ref axis B).
-- **Replaced** the `desks` + `sol_daily_paper` + `sol_intro` steps (7 persona calls)
-  with **one `daily_paper` step**. `writeDailyDigest` (`modules/redactie/index.ts`)
-  produces a neutral, plain-prose synthesis that covers **only the topics with news
-  that day**, **leads with the reader's followed topics**, and draws explicit
-  cross-references. `orderDigestTopics` is pure + unit-tested.
-- **Kept** deep research (`generate` deep-dives) untouched — that is the substance.
-- `FrontPage.desks` dropped; `front_page.intro` (the calendar-cover lead) is now
-  **derived from the digest's first sentence** — no separate intro call. `finalize`
-  hardened to read the latest done `daily_paper` step.
-- **UI** (`EditieWeergave.tsx`): the Sol-branded "Daily Paper" block + desk grid is
-  now a neutral "De rode draad" section (no avatar, no persona).
-- **Verified live**: real topic-driven synthesis with explicit cross-references,
-  flags topics with no real news, **€0.002/edition**, renders cleanly, no console
-  errors.
-- New pipeline order: `… generate → daily_paper → finalize`.
+### Phase 1 — Schema + pure `modules/threads` (done)
+- **Migration `0008_threads.sql` applied to the live Supabase** (`iqhyndhrlhjfdrwjvmjv`):
+  tables `threads` (profile_id, topic_id, category_id, title, **state**, **entities[]**,
+  status active|dormant|closed, last_edition_id, last_seen_at) and `thread_items`
+  (thread_id, item_id, edition_id, **unique(thread_id,item_id)** — the idempotency
+  backbone). RLS enabled, no policies (matches 0003). The local SQL file matches.
+- `modules/shared/types.ts`: added `Thread`, `ThreadItem`, `ThreadStatus`, `DestepLens`,
+  `DailyPaperArticle`; `FrontPage` gained `dp_summary?`, `dp_intro?`, `dp_articles?`.
+- **New pure `modules/threads/index.ts`**: `normalizeEntity`, `entityOverlap`,
+  `matchThread` (free entity-overlap, same-topic tiebreak), `computeDelta`,
+  `mergeEntities`, `selectLenses` (relevant DESTEP lenses only), `orderThreads`.
+- **`modules/threads/threads.test.ts`**: 22 tests, all green.
 
-### Unchanged, still valid
-- **AI provider = Grok (xAI)** via `modules/shared/ai.ts` (`askAI()`): `grok-4.20…`
-  (scan) + `grok-4.3` (deep). Anthropic switchable (`AI_PROVIDER=anthropic`).
-- **Supabase live + RLS**: project "Morning Report." (`iqhyndhrlhjfdrwjvmjv`,
-  eu-west-1), service-role only.
-- **Vercel**: auto-deploy on every push to `main`.
-- Account prefs/onboarding, developer mode + themes, weather + markets map: unchanged.
+### Also this session
+- `docs/pipeline.md` — new step-catalog doc (purpose/trigger/storage tags per step,
+  plus the planned threads/forced-search/onboarding additions).
+- `docs/threads-plan.md` — the phased plan + sprint board (source of truth for the build).
+
+## Decisions made this session
+- **News must build on itself → threads**, not per-day articles (Siem's framing).
+- **Forced context = user-preference-driven daily search** (active, guaranteed into
+  the edition), not just passive reweighting — distinct from the broad firehose scan.
+- **Daily Paper** = Summary (also front-page block) + Introduction + body (a deep
+  article per *followed* topic = a thread update, **relevant DESTEP lenses only**,
+  archive-primed, stock-impact-tied) + **one broad-but-shallow general article**.
+- **Images** reused from source articles (og:image / feed thumbnail — already captured
+  by `extractImage`/`ingestSource`; only an og:image fallback remains, Phase 6).
+- **Hard budget cap €0.10/edition** (aim lower), funded by tightening the broad scan.
+- **Sprint cadence**: one phase per session, pause after each for review.
 
 ## What's open
-1. **Near-duplicate cross-source stories** cluster in sections (today's Tech had ~6
-   versions of the UK under-16 social-media ban). `content_hash` is exact-title only,
-   so cross-source near-dups slip through `dedupeForEdition`. A background task chip
-   was spawned for this (cheap normalized-title/token-overlap clustering in `select`).
-2. **2099 test fixtures** still in the DB (`2099-01-01/02`) — isolated from real
-   editions, safe to delete.
-3. **Rest of the master plan**: cross-ref axis B (earlier news → "reference") and C
-   (portfolio hook), deep-research 6–12 topics, select-caps → ~160 visible items,
-   budget tuning.
-4. **Design direction with the colleague** (Atlas vs. the in-history Dispatch
-   `f0ed210`) — still to coordinate; unchanged this session.
-5. **Retro-translation** of the remaining Dutch code comments + docs to English
-   (do it opportunistically when touching a file).
-6. Confirm the cron-job.org job actually runs (`docs/setup.md` §4).
+1. **Phase 2 (next sprint)** — entity extraction piggybacked on the existing
+   `scanBatch` LLM call → `items.scan_meta.entities` (no new call). See plan.
+2. **Phases 3–6** — threads step (match+link, no AI) → thread-aware generation +
+   DESTEP → Daily Paper assembly + UI (first localhost-visible change) → optional
+   og:image fallback + embeddings. All detailed in `docs/threads-plan.md`.
+3. **Carried over, still valid**: near-duplicate cross-source clustering in `select`
+   (Phase 3's delta + matching largely subsumes this); 2099 test fixtures in the DB
+   (safe to delete); design coordination with the colleague (Atlas vs. Dispatch);
+   retro-translation of remaining Dutch comments; confirm the cron-job.org job runs.
 
 ## Known issues / things to keep in mind
-- **`CLAUDE.md` removal will hit the colleague on pull.** It is now gitignored and
-  deleted from the repo; when this push lands, their next pull removes their tracked
-  copy. Coordinate (each contributor keeps a local `CLAUDE.md`).
-- **`.claude/` tooling untracked** (`push-main`/`start` skills, `guard-push-main`
-  hook, `settings.json`) — deliberately local, like `launch.json`. Commit them only
-  if you want to share between accounts.
-- **Editions planned before this push** keep their old step list (no `daily_paper`
-  step). New editions get the new plan. Today's two editions were re-finalised
-  manually to carry the new digest.
-- **403 feeds** (Reddit subreddits, BleepingComputer), **Open-Meteo** flaky (4
-  retries), **Postgres `current_date` is UTC** (edition dates via `todayLocal()`,
-  Europe/Amsterdam) — all unchanged, non-blocking.
+- **`.claude/` tooling + `Morning Report design/` stay untracked** (deliberately
+  local, per-account, like `launch.json`). This session did NOT commit them.
+- **`CLAUDE.md` is gitignored** (per-contributor workflow file) — each contributor
+  keeps their own local copy.
+- **Existing editions** keep their old step list; the threads step only appears in
+  plans created after Phase 3 lands.
+- **403 feeds** (Reddit, BleepingComputer), **Open-Meteo** flaky (4 retries),
+  **Postgres `current_date` is UTC** (edition dates via `todayLocal()`,
+  Europe/Amsterdam) — unchanged, non-blocking.
 - **Git auth**: OAuth token (SiemJaapvanEck) in the macOS keychain; `git push/pull`
   works. `gh auth status` says "not logged in" (token lacks read:org) — expected.
+- **AI provider = Grok (xAI)** via `askAI()`; Anthropic switchable. Supabase live + RLS
+  (service-role only). Vercel auto-deploys on push to `main`.

@@ -100,3 +100,16 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   5 editor personas + Sol's character, replaced `desks`/`sol_daily_paper`/`sol_intro`
   with one neutral, topic-driven cross-reference synthesis ("De rode draad"); deep
   research kept. Edition ~€0,156 → ~€0,077. Gates green (52 tests); verified live + pushed.
+- **17 June 2026 — News Threads kicked off (Phases 0–1).** Designed a major shift:
+  the report should *build forth on itself* — persistent storylines (threads) per
+  profile that accumulate state across editions, where each day finds what's new,
+  matches it to a thread, and writes an UPDATE on top of yesterday's state. Full
+  plan + sprint board in `docs/threads-plan.md`; run one phase per sprint, pause
+  after each (Siem's cadence). **Phase 0:** budget cap €0,30 → €0,10 (aim lower),
+  `scan.maxRounds` 7 → 4 to fund deeper research. **Phase 1:** migration
+  `0008_threads` applied live (`threads` + `thread_items`, unique(thread_id,item_id));
+  added `Thread`/`ThreadItem`/`DestepLens`/`DailyPaperArticle` types + `FrontPage.dp_*`;
+  new pure `modules/threads` (entity-overlap matching, delta, DESTEP lens selection)
+  with 22 tests. Also added `docs/pipeline.md` (step catalog). Gate green (74 tests);
+  pipeline behaviour unchanged until Phase 3. Next: Phase 2 (entity extraction on the
+  scan call).

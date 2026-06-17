@@ -120,6 +120,29 @@ export interface FrontPage {
   markten?: MarktSnapshot;
   /** neutral, topic-driven cross-reference synthesis of the day (depth-2 layer) */
   daily_paper?: string;
+  /** short summary of the day — also rendered as the front-page Daily Paper block */
+  dp_summary?: string;
+  /** intro explaining the day's topics + the paper's layout */
+  dp_intro?: string;
+  /** the Daily Paper body: one article per followed thread + one broad general article */
+  dp_articles?: DailyPaperArticle[];
+}
+
+/** One Daily Paper article — a thread update (followed topic) or the broad general roundup. */
+export interface DailyPaperArticle {
+  /** thread this article updates; null = the broad general roundup article */
+  thread_id: string | null;
+  /** news-specific custom headline */
+  headline: string;
+  body: string;
+  /** does the reader actively follow this thread's topic/category? */
+  followed: boolean;
+  /** reused from a source item (og:image / feed thumbnail) */
+  image_url: string | null;
+  /** which DESTEP lenses the research used (only the relevant ones) */
+  destep_lenses: string[];
+  /** true when this builds on stored thread state (a real "update") */
+  is_update: boolean;
 }
 
 /** Eén beursindex met dagrendement, voor de markten-per-regio-kaart. */
@@ -204,6 +227,47 @@ export interface SolMemory {
   content: string;
   weight: number;
   compacted: boolean;
+  created_at: string;
+}
+
+export type ThreadStatus = "active" | "dormant" | "closed";
+
+/** DESTEP research lenses (Dutch labels — only the relevant ones per story). */
+export type DestepLens =
+  | "demografisch"
+  | "economisch"
+  | "sociaal"
+  | "technologisch"
+  | "ecologisch"
+  | "politiek";
+
+/**
+ * A persistent storyline per profile that accumulates state across editions.
+ * Each edition appends what's new and rewrites `state` so the next one builds
+ * on it. The realization of cross-reference axis B.
+ */
+export interface Thread {
+  id: string;
+  profile_id: string;
+  topic_id: string | null;
+  category_id: string | null;
+  title: string;
+  /** accumulated storyline prose the next edition builds on */
+  state: string | null;
+  /** normalized entity set, for free overlap matching */
+  entities: string[];
+  status: ThreadStatus;
+  last_edition_id: string | null;
+  last_seen_at: string | null;
+  created_at: string;
+}
+
+/** Which item fed which thread in which edition (audit + delta dedupe). */
+export interface ThreadItem {
+  id: string;
+  thread_id: string;
+  item_id: string;
+  edition_id: string | null;
   created_at: string;
 }
 

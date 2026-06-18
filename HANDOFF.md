@@ -14,6 +14,12 @@ panel at Daily Paper width underneath. **Phases 0–5c-3 are complete and green*
 Pipeline: scan → select → **threads (match/link + mega-thread anchoring)** →
 **generate (thread-aware)** → **daily_paper (assembly)** → finalize.
 
+**This session was planning only — no code changed.** Siem approved a new
+roadmap, **"Investment & Foresight"** (Phases A–D), which is recorded under
+"What's open" below and replaces the old Phase 6. Next session starts at
+Phase A; first action there is proposing the free finance RSS feed list for
+Siem's approval before seeding.
+
 ### Done & in `main`
 - **0–4**: budget cap; threads schema + pure module; entity extraction;
   `threads` step (match/link, gate = followed+`deep` OR big cluster ≥5);
@@ -51,10 +57,79 @@ Pipeline: scan → select → **threads (match/link + mega-thread anchoring)** �
 
 ## What's open
 
-### Phase 6 (next)
-- **og:image fallback + embeddings** — optional, lower priority.
+### NEXT BUILD — "Investment & Foresight" (approved 18 June 2026)
+
+Siem's new roadmap, replacing the old Phase 6. One coherent loop:
+**finance sources → threads → a source-grounded, confidence-tagged prediction
+with a target date → that date becomes an agenda event → a dotted line on that
+thread's graph reaches toward it.**
+
+Cadence: **one phase per sprint, pause for review after each.** Start with A.
+
+Decisions already locked with Siem:
+- Investment section = a **block inside the Daily Paper** (krant page), not a
+  separate page.
+- The new **standard Daily Paper layout gives each topic/thread its own graph**
+  inline with its article (single 52-week line + dotted projection) — not one
+  shared multi-line chart. The existing `/archive` multi-line chart still
+  rebins to 52 weeks (shared component).
+- Finance sources = **free RSS only**, curated (propose the feed list for
+  Siem's approval before seeding).
+- Predictions = **labeled + confidence-tagged**, and **grounded in actual
+  sources** — no free-floating AI guesses; strict schema (no source basis ⇒ no
+  prediction).
+
+**Phase A — Investment section in the Daily Paper.** A real finance block, fed
+by in-depth free RSS.
+- Migration (seed): a `Beleggen` category + curated free finance RSS feeds
+  (M&A, CEO changes, mergers/new BVs, IPOs, markets) into `sources`. They flow
+  through the existing scan → select → threads pipeline untouched.
+- `composeDailyPaper` (`modules/redactie`) groups finance-category threads into
+  a dedicated investment block (`dp_investment` on `front_page`).
+- New investment block on the krant page (`EditieWeergave.tsx`), Atlas styling
+  (amber/emerald markets accents).
+- Touches: migration, `modules/redactie`, `modules/shared/types.ts`, krant UI.
+
+**Phase B — Auto-scheduled agenda, grounded in sources.** Populate the empty
+`calendar_events` table from real article text.
+- Piggyback the existing scan call (already extracts entities) to also pull
+  *explicitly-dated* forward events — "IPO on July 1", "election Nov 5", "game
+  drops Q3" — each with `kind`, `certainty`, and the source item it came from.
+- Migration: add provenance + linkage to `calendar_events` — `profile_id`,
+  `thread_id`, source `item_id`/`url` (today it's global, unlinked). A pipeline
+  step persists them idempotently.
+- Touches: `modules/rank` (extraction), `modules/calendar`, a pipeline step,
+  migration, types.
+
+**Phase C — Per-thread prediction piece, source-grounded.** Every threaded
+topic gets a short, confidence-tagged prediction.
+- Extend `generateThreadUpdate` output schema with `prediction`
+  { text, target_date, confidence, source_basis }. The prompt already gets the
+  thread's new items (titles/summaries/URLs); instruct it to predict **only**
+  from those + scheduled events, and to name its basis. No basis ⇒ no
+  prediction.
+- One prediction → one linked `calendar_event` (certainty = confidence). Stored
+  on the `DailyPaperArticle`.
+- Touches: `modules/generate`, `modules/threads`, types.
+
+**Phase D — 52-week graphs + dotted prediction line.** The new standard layout:
+a per-topic graph under each Daily Paper article.
+- Rebin `StorylineChart` to **weekly / fixed 52-week X-axis**; add a
+  **single-line per-thread mode** for the Daily Paper.
+- Dotted projection from the last real week to the prediction's target week;
+  dash density encodes confidence (`bevestigd`→tight, `verwacht`→dashed,
+  `gerucht`→sparse + faded).
+- Rebin the existing `/archive` multi-line chart to 52 weeks too (shared
+  component). New per-thread weekly query alongside `getThreadArchive`.
+- Touches: `StorylineChart.tsx`, `app/lib/queries.ts`, krant UI,
+  `modules/threads`.
+
+Risks to keep in mind: free-RSS depth for M&A/CEO detail varies (propose feeds
+first); prediction discipline is a prompt-engineering job (keep schema strict);
+a young 52-week line looks sparse until history accrues (acceptable).
 
 ### Later / carried over
+- **og:image fallback + embeddings** — deferred from the old Phase 6, optional.
 - **Broaden the mega net (deferred):** anchor matching is exact-entity (`iran`);
   war elements tagged only "Netanyahu/Hezbollah" aren't pulled in. Looser
   association (co-occurrence/semantic) is a future enhancement.

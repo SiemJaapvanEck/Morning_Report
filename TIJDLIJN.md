@@ -176,3 +176,14 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   5c-2 together. **Next: 5c-3** — rework `/archive` into ONE big full-width chart
   with every mega-thread as a sector-colored line (one line per storyline, primary
   DESTEP lens = colour), click a line → that storyline. Full spec in HANDOFF.
+
+- **18 June 2026 (vervolg 4) — Planning: "Investment & Foresight" roadmap.**
+  No code. Siem proposed a new direction; gathered context across the threads,
+  redactie, calendar, and StorylineChart modules, asked four scoping questions,
+  and agreed a four-phase plan recorded in HANDOFF.md (replacing old Phase 6).
+  The loop: curated free finance RSS → threads → source-grounded,
+  confidence-tagged predictions with a target date → auto-scheduled
+  `calendar_events` → a dotted projection line on each topic's own 52-week graph
+  in the new standard Daily Paper layout. Phase A = investment block + finance
+  source seed; B = agenda extraction; C = per-thread prediction; D = 52-week
+  graphs + dotted line. One phase per sprint. Next session starts at Phase A.

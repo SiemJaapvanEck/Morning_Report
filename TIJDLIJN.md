@@ -124,3 +124,18 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   entities, display form preserved, €0.057/edition (under the €0.10 cap); Landbouw caught
   3 items, Tuinieren 1. Gate green; pushed. Next: Phase 3 (the threads match/link step).
   Note: morning cron produced empty edition shells — worth a look later.
+- **18 June 2026 — News Threads Phases 3 + 4.** **Phase 3:** the `threads`
+  pipeline step (match/link/state-merge, no AI), inserted after `select`.
+  Thread-creation gate refined with Siem to **followed + `deep` band**, or a
+  **big cross-source cluster** (≥5 items) — the first cut ("every followed item")
+  exploded to 52 threads since Siem follows ~all 25 topics. `planThreadActions`
+  is a pure fixed-point (idempotent: 54 items → 9 threads, stable on re-run);
+  `clusterByEntities` does connected-component coverage clustering. **Phase 4:**
+  `generateThreadUpdate` (deep tier) writes an UPDATE that builds on the thread's
+  stored `state`, using only the relevant DESTEP lenses + an `archivePrimer`
+  (reader's ≥4-rated titles); `generateStep` rewritten to one work-unit/tick,
+  thread updates first (one per thread). Dropped `computeDelta` (no-op under
+  `unique(thread_id,item_id)`). Verified live: 9 updates, coherent state +
+  headlines, idempotent, €0.013. 89 tests green. Phase 5 split into 5a (assembly,
+  backend) + 5b (UI) at Siem's request. Pushed Phases 3 + 4 as one commit (shared
+  files can't be split without interactive staging).

@@ -4,9 +4,9 @@
 // bepaalt lengte en aantal deep-dives. In modus 'stop' valt alles terug op
 // koppen — er gaat dan geen Claude-call meer uit.
 
-import { askAI } from "../shared/ai";
+import { askAI, askAIJson } from "../shared/ai";
 import { budgetPolicy } from "../shared/budget";
-import type { BudgetMode, Item } from "../shared/types";
+import type { BudgetMode, Item, DestepLens, ThreadUpdate } from "../shared/types";
 
 export interface GeneratedSummary {
   itemId: string;
@@ -52,6 +52,91 @@ export async function summarizeSection(
     if (item) summaries.push({ itemId: item.id, text: blokken[i + 1].trim() });
   }
   return summaries;
+}
+
+// ============================================================
+// Thread-aware generation — an UPDATE that builds on stored state
+// ============================================================
+
+const LENS_VALUES: DestepLens[] = [
+  "economisch", "technologisch", "politiek", "sociaal", "ecologisch", "demografisch",
+];
+
+const THREAD_UPDATE_SCHEMA = {
+  type: "object",
+  properties: {
+    headline: { type: "string" },
+    body: { type: "string" },
+    newState: { type: "string" },
+    lenses: { type: "array", items: { type: "string", enum: LENS_VALUES } },
+  },
+  required: ["headline", "body", "newState", "lenses"],
+  additionalProperties: false,
+} as const;
+
+export interface ThreadUpdateInput {
+  thread: { title: string; state: string | null };
+  /** today's items on this thread — always genuinely new (unique(thread_id,item_id)) */
+  newItems: { title: string; summary: string | null; url: string | null }[];
+  /** the relevant DESTEP lenses to use (from selectLenses) */
+  lenses: DestepLens[];
+  /** titles the reader rated highly in this area — reader perspective */
+  archivePrimer: string[];
+}
+
+/**
+ * Writes the next instalment of a persistent storyline: an UPDATE that builds on
+ * the thread's stored state instead of a from-scratch article, and returns the
+ * rewritten state for the next edition. `deep` tier, budget-gated exactly like
+ * deepDive (null in 'stop'). Because the delta builds on stored state, prompts
+ * stay short as a thread ages — that is what holds the per-edition budget.
+ */
+export async function generateThreadUpdate(
+  input: ThreadUpdateInput,
+  mode: BudgetMode,
+  editionId: string,
+  stepId?: string,
+): Promise<ThreadUpdate | null> {
+  if (budgetPolicy[mode].deepDivesPerSectie === 0) return null;
+
+  const lensList = input.lenses.join(", ") || "sociaal";
+  const newsBlock =
+    input.newItems
+      .map((it, i) => `${i + 1}. ${it.title}${it.summary ? ` — ${it.summary.slice(0, 200)}` : ""}`)
+      .join("\n") || "(geen losse nieuwe items — duid de algemene ontwikkeling)";
+  const primer = input.archivePrimer.length
+    ? `De lezer waardeerde eerder in dit onderwerp: ${input.archivePrimer.join("; ")}.`
+    : "";
+
+  const { data } = await askAIJson<ThreadUpdate>({
+    tier: "deep",
+    editionId,
+    stepId,
+    maxTokens: 900,
+    jsonSchema: THREAD_UPDATE_SCHEMA as unknown as Record<string, unknown>,
+    system:
+      "Je houdt een doorlopende verhaallijn bij voor een persoonlijk ochtendrapport, in het Nederlands. " +
+      "Je krijgt de stand van het verhaal tot nu toe en wat er vandaag bij komt. " +
+      "Schrijf een UPDATE die hierop VOORTBOUWT — niet opnieuw vanaf nul: verwijs kort naar wat er eerder speelde en benoem expliciet wat echt nieuw is. " +
+      "Gebruik alleen de aangeboden DESTEP-lenzen als invalshoek, en koppel aan beurs-/marktimpact waar dat relevant is. " +
+      "'body': 1-2 strakke alinea's (4-8 zinnen), feitelijk, geen kop in de tekst zelf. " +
+      "'headline': een nieuws-specifieke kop voor deze update. " +
+      "'newState': een bondige, bijgewerkte samenvatting van de héle verhaallijn tot nu toe (3-5 zinnen) die de volgende editie als startpunt gebruikt. " +
+      "'lenses': de lenzen die je daadwerkelijk gebruikte (subset van de aangeboden).",
+    prompt:
+      `Verhaallijn: ${input.thread.title}\n` +
+      `Stand tot nu toe: ${input.thread.state ?? "(nieuw verhaal — nog geen eerdere stand)"}\n` +
+      `Aangeboden lenzen: ${lensList}\n` +
+      (primer ? `${primer}\n` : "") +
+      `\nWat er vandaag bij komt:\n${newsBlock}`,
+  });
+
+  return {
+    headline: data.headline.trim(),
+    body: data.body.trim(),
+    newState: data.newState.trim(),
+    lenses: data.lenses?.length ? data.lenses : input.lenses,
+  };
 }
 
 /** Deep-dive voor één topband-item: langere duiding via het sterke model. */

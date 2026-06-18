@@ -1,13 +1,15 @@
-// News threads — pure logic for matching items to persistent storylines and
-// computing what's genuinely new each edition. No DB, no framework imports:
-// the pipeline step (modules/pipeline/steps.ts) and the DB helpers that arrive
-// in a later phase are the only callers.
+// News threads — matching items to persistent storylines and computing what's
+// genuinely new each edition. The top of this file is pure (no framework, no
+// DB) and fully unit-tested; the DB helpers at the bottom (Supabase via the
+// shared client, the same pure/DB split as modules/rank) are only called by the
+// pipeline step in modules/pipeline/steps.ts.
 //
-// Matching is free (entity set-overlap, no LLM). Entities are extracted by the
-// existing scan call and stored on items.scan_meta.entities; a thread's
-// entities are the denormalized union of the entities it has absorbed.
+// Matching and clustering are free (entity set-overlap, no LLM). Entities are
+// extracted by the existing scan call and stored on items.scan_meta.entities; a
+// thread's entities are the denormalized union of the entities it has absorbed.
 
-import type { DestepLens, Thread } from "../shared/types";
+import { db, unwrap } from "../shared/db";
+import type { DestepLens, Thread, ThreadStatus } from "../shared/types";
 
 /**
  * Normalize an entity string for set comparison: strip diacritics, lowercase,
@@ -212,4 +214,486 @@ export function orderThreads<T extends { followed: boolean; deltaSize: number }>
   return [...threads].sort(
     (a, b) => Number(b.followed) - Number(a.followed) || b.deltaSize - a.deltaSize,
   );
+}
+
+// ============================================================
+// Big-topic detection — cross-source coverage clustering
+// ============================================================
+
+/**
+ * Connected-component clustering of items by entity overlap. Two items are
+ * joined when their normalized entity sets overlap ≥ `minOverlap`; a cluster is
+ * a connected component (so coverage links transitively — A~B, B~C ⇒ {A,B,C}
+ * even when A and C barely overlap). Returns only components of at least
+ * `minSize` members, each a list of item ids in input order. Items with no
+ * entities never join and drop out as singletons.
+ */
+export function clusterByEntities(
+  items: { id: string; entities: string[] }[],
+  minOverlap: number,
+  minSize: number,
+): string[][] {
+  const n = items.length;
+  const norm = items.map((it) => it.entities.map(normalizeEntity).filter(Boolean));
+
+  // union-find with path compression
+  const parent = Array.from({ length: n }, (_, i) => i);
+  const find = (x: number): number => {
+    let r = x;
+    while (parent[r] !== r) r = parent[r];
+    while (parent[x] !== r) [x, parent[x]] = [parent[x], r];
+    return r;
+  };
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      if (entityOverlap(norm[i], norm[j]) >= minOverlap) parent[find(i)] = find(j);
+    }
+  }
+
+  const groups = new Map<number, string[]>();
+  for (let i = 0; i < n; i++) {
+    const root = find(i);
+    const arr = groups.get(root) ?? [];
+    arr.push(items[i].id);
+    groups.set(root, arr);
+  }
+  return [...groups.values()].filter((g) => g.length >= minSize);
+}
+
+// ============================================================
+// Thread action planner — pure decision over today's edition items
+// ============================================================
+
+/** One edition item as the thread planner sees it. */
+export interface ThreadCandidate {
+  itemId: string;
+  title: string;
+  topicId: string | null;
+  categoryId: string | null;
+  entities: string[];
+  importance: number | null;
+  /** is this a top ("deep") item this edition — the significance bar for a followed thread */
+  deep: boolean;
+}
+
+/** A storyline to create this edition, with the items that seed it. */
+export interface NewThreadPlan {
+  seedTitle: string;
+  topicId: string | null;
+  categoryId: string | null;
+  /** display-form entities of the members (normalized on store) */
+  entities: string[];
+  memberItemIds: string[];
+  reason: "followed" | "big_topic";
+}
+
+export interface ThreadActions {
+  /** attach an existing item to an existing thread */
+  links: { itemId: string; threadId: string }[];
+  /** storylines to open this edition */
+  newThreads: NewThreadPlan[];
+}
+
+export interface ThreadPlanConfig {
+  matchMinOverlap: number;
+  bigTopicMinOverlap: number;
+  bigTopicMinCluster: number;
+}
+
+/**
+ * Decide, for today's edition items, what links into existing threads and what
+ * opens a new one.
+ *
+ * - **Linking is universal:** any item whose entities overlap an active thread
+ *   joins it, followed or not — that is how a storyline keeps absorbing news.
+ * - **A NEW thread is born only for** (a) a big cross-source cluster (a major
+ *   story), or (b) a *followed* item that is also **significant** (`deep` band)
+ *   this edition. An ordinary or non-deep followed headline stays a plain item —
+ *   that is what keeps threads to real storylines instead of one per headline.
+ *
+ * Idempotency: items already linked this edition are skipped, and matching runs
+ * to a **fixed point** — because attaching an item grows a thread's entity set,
+ * a straggler that only matches *after* that growth is pulled in within this
+ * same run. So a re-run (which sees the persisted, grown threads) links nothing
+ * further: the result is a pure, re-run-safe function of (items, threads, links).
+ */
+export function planThreadActions(
+  candidates: ThreadCandidate[],
+  threads: Pick<Thread, "id" | "entities" | "topic_id">[],
+  alreadyLinked: Set<string>,
+  followedTopicIds: Set<string>,
+  followedCategoryIds: Set<string>,
+  cfg: ThreadPlanConfig,
+): ThreadActions {
+  const fresh = candidates.filter((c) => !alreadyLinked.has(c.itemId));
+  const candById = new Map(fresh.map((c) => [c.itemId, c]));
+
+  // Working threads: existing ones (key "e:<id>") plus any we open ("n:<index>").
+  // Entities are kept normalized + capped exactly as they will be persisted, so
+  // the matching landscape here equals what a re-run would see on disk.
+  type Work = { key: string; entities: string[]; topicId: string | null };
+  const work: Work[] = threads.map((t) => ({
+    key: `e:${t.id}`,
+    entities: mergeEntities(t.entities, []),
+    topicId: t.topic_id,
+  }));
+  const workByKey = new Map(work.map((w) => [w.key, w]));
+  const newThreads: NewThreadPlan[] = [];
+  const assign = new Map<string, string>(); // itemId -> work key
+
+  const attach = (itemId: string, key: string) => {
+    assign.set(itemId, key);
+    const w = workByKey.get(key)!;
+    w.entities = mergeEntities(w.entities, candById.get(itemId)?.entities ?? []);
+  };
+  const matchOpen = (c: ThreadCandidate): string | null =>
+    matchThread(
+      c.entities,
+      c.topicId,
+      work.map((w) => ({ id: w.key, entities: w.entities, topic_id: w.topicId })),
+      cfg.matchMinOverlap,
+    )?.threadId ?? null;
+  const unassigned = () => fresh.filter((c) => !assign.has(c.itemId));
+
+  const sweep = () => {
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const c of unassigned()) {
+        const key = matchOpen(c);
+        if (key) {
+          attach(c.itemId, key);
+          changed = true;
+        }
+      }
+    }
+  };
+
+  const openThread = (seed: ThreadCandidate, reason: NewThreadPlan["reason"]): string => {
+    const idx = newThreads.length;
+    const key = `n:${idx}`;
+    newThreads.push({
+      seedTitle: seed.title,
+      topicId: seed.topicId,
+      categoryId: seed.categoryId,
+      entities: [],
+      memberItemIds: [],
+      reason,
+    });
+    const w: Work = { key, entities: [], topicId: seed.topicId };
+    work.push(w);
+    workByKey.set(key, w);
+    return key;
+  };
+
+  // 1. Link to existing threads (fixed point — attaching grows entities).
+  sweep();
+
+  // 2. Big topic: cross-source clusters among the still-unassigned items.
+  const clusters = clusterByEntities(
+    unassigned().map((c) => ({ id: c.itemId, entities: c.entities })),
+    cfg.bigTopicMinOverlap,
+    cfg.bigTopicMinCluster,
+  );
+  for (const cluster of clusters) {
+    const members = cluster.map((id) => candById.get(id)!);
+    const seed = members.reduce(
+      (best, c) => ((c.importance ?? 0) > (best.importance ?? 0) ? c : best),
+      members[0],
+    );
+    const key = openThread(seed, "big_topic");
+    for (const id of cluster) attach(id, key);
+  }
+
+  // 3. Followed + significant (deep band): open a thread for each.
+  for (const c of unassigned()) {
+    if (!c.deep) continue;
+    const followed =
+      (c.topicId != null && followedTopicIds.has(c.topicId)) ||
+      (c.categoryId != null && followedCategoryIds.has(c.categoryId));
+    if (!followed) continue;
+    attach(c.itemId, openThread(c, "followed"));
+  }
+
+  // 4. Final fixed point: pull stragglers into any thread we touched or opened.
+  sweep();
+
+  // Build the action plan from the assignments.
+  const links: { itemId: string; threadId: string }[] = [];
+  for (const [itemId, key] of assign) {
+    if (key.startsWith("e:")) links.push({ itemId, threadId: key.slice(2) });
+    else newThreads[Number(key.slice(2))].memberItemIds.push(itemId);
+  }
+  for (const nt of newThreads) {
+    nt.entities = nt.memberItemIds.flatMap((id) => candById.get(id)?.entities ?? []);
+  }
+  return { links, newThreads };
+}
+
+// ============================================================
+// DB helpers (Supabase) — only the pipeline step calls these
+// ============================================================
+
+/** Active (non-closed) threads of a profile, with what matching needs. */
+export async function loadActiveThreads(
+  profileId: string,
+): Promise<Pick<Thread, "id" | "entities" | "topic_id" | "category_id">[]> {
+  return unwrap(
+    await db()
+      .from("threads")
+      .select("id, entities, topic_id, category_id")
+      .eq("profile_id", profileId)
+      .neq("status", "closed"),
+  );
+}
+
+/** Item ids already linked to a thread in this edition — the idempotency skip set. */
+export async function loadLinkedItemIds(editionId: string): Promise<Set<string>> {
+  const rows = unwrap(
+    await db().from("thread_items").select("item_id").eq("edition_id", editionId),
+  ) as { item_id: string }[];
+  return new Set(rows.map((r) => r.item_id));
+}
+
+/** Today's edition items as thread candidates (entities from scan_meta). */
+export async function loadEditionCandidates(editionId: string): Promise<ThreadCandidate[]> {
+  const rows = unwrap(
+    await db()
+      .from("edition_items")
+      .select("item_id, band, items(title, topic_id, category_id, importance, scan_meta)")
+      .eq("edition_id", editionId),
+  ) as unknown as {
+    item_id: string;
+    band: string | null;
+    items: {
+      title: string;
+      topic_id: string | null;
+      category_id: string | null;
+      importance: number | null;
+      scan_meta: { entities?: string[] } | null;
+    } | null;
+  }[];
+
+  const candidates: ThreadCandidate[] = [];
+  for (const row of rows) {
+    if (!row.items) continue;
+    candidates.push({
+      itemId: row.item_id,
+      title: row.items.title,
+      topicId: row.items.topic_id,
+      categoryId: row.items.category_id,
+      entities: row.items.scan_meta?.entities ?? [],
+      importance: row.items.importance,
+      deep: row.band === "deep",
+    });
+  }
+  return candidates;
+}
+
+/** Insert a new thread; returns its id. */
+export async function insertThread(input: {
+  profileId: string;
+  topicId: string | null;
+  categoryId: string | null;
+  title: string;
+  entities: string[];
+  status: ThreadStatus;
+  lastEditionId: string;
+  lastSeenAt: string;
+}): Promise<string> {
+  const row = unwrap(
+    await db()
+      .from("threads")
+      .insert({
+        profile_id: input.profileId,
+        topic_id: input.topicId,
+        category_id: input.categoryId,
+        title: input.title,
+        entities: input.entities,
+        status: input.status,
+        last_edition_id: input.lastEditionId,
+        last_seen_at: input.lastSeenAt,
+      })
+      .select("id")
+      .single(),
+  ) as { id: string };
+  return row.id;
+}
+
+/** Upsert thread↔item links; unique(thread_id,item_id) + ignore makes it re-run safe. */
+export async function linkThreadItems(
+  links: { threadId: string; itemId: string; editionId: string }[],
+): Promise<void> {
+  if (links.length === 0) return;
+  const { error } = await db()
+    .from("thread_items")
+    .upsert(
+      links.map((l) => ({ thread_id: l.threadId, item_id: l.itemId, edition_id: l.editionId })),
+      { onConflict: "thread_id,item_id", ignoreDuplicates: true },
+    );
+  if (error) throw new Error(`linkThreadItems: ${error.message}`);
+}
+
+/** Merge new entities into a thread and mark it active/seen this edition. */
+export async function touchThread(
+  threadId: string,
+  entities: string[],
+  lastEditionId: string,
+  lastSeenAt: string,
+): Promise<void> {
+  const { error } = await db()
+    .from("threads")
+    .update({
+      entities,
+      status: "active",
+      last_edition_id: lastEditionId,
+      last_seen_at: lastSeenAt,
+    })
+    .eq("id", threadId);
+  if (error) throw new Error(`touchThread: ${error.message}`);
+}
+
+// ============================================================
+// Phase 4 — thread-aware generation helpers
+// ============================================================
+
+/** Everything the generate step needs to write one thread's update this edition. */
+export interface ThreadUpdateJob {
+  threadId: string;
+  title: string;
+  state: string | null;
+  topicId: string | null;
+  categoryId: string | null;
+  categorySlug: string | null;
+  topicName: string | null;
+  threadEntities: string[];
+  /** this edition's deep edition_item ids of this thread — where the update body lands */
+  deepEditionItemIds: string[];
+  /** today's items linked to this thread — all genuinely new (unique(thread_id,item_id)) */
+  newItems: { id: string; title: string; summary: string | null; url: string | null; entities: string[] }[];
+}
+
+/**
+ * The next thread still needing an update this edition: one with a `deep`
+ * edition_item linked this edition whose summary_text is empty. Null when every
+ * such thread is done — that empty-summary gate is the per-edition idempotency
+ * guard (state advances ≤ once). One job per call fits the requeue model.
+ */
+export async function nextThreadUpdateJob(editionId: string): Promise<ThreadUpdateJob | null> {
+  const deepRows = unwrap(
+    await db()
+      .from("edition_items")
+      .select("id, item_id, summary_text")
+      .eq("edition_id", editionId)
+      .eq("band", "deep"),
+  ) as { id: string; item_id: string; summary_text: string | null }[];
+  if (deepRows.length === 0) return null;
+
+  const links = unwrap(
+    await db().from("thread_items").select("thread_id, item_id").eq("edition_id", editionId),
+  ) as { thread_id: string; item_id: string }[];
+  const threadByItem = new Map(links.map((l) => [l.item_id, l.thread_id]));
+
+  // group this edition's deep items by thread; pending = any deep item still blank
+  const deepByThread = new Map<string, { ids: string[]; pending: boolean }>();
+  for (const d of deepRows) {
+    const threadId = threadByItem.get(d.item_id);
+    if (!threadId) continue;
+    const g = deepByThread.get(threadId) ?? { ids: [], pending: false };
+    g.ids.push(d.id);
+    if (!d.summary_text) g.pending = true;
+    deepByThread.set(threadId, g);
+  }
+
+  let chosen: string | null = null;
+  for (const [threadId, g] of deepByThread) {
+    if (g.pending) {
+      chosen = threadId;
+      break;
+    }
+  }
+  if (!chosen) return null;
+  const deepEditionItemIds = deepByThread.get(chosen)!.ids;
+
+  const thread = unwrap(
+    await db()
+      .from("threads")
+      .select("id, title, state, topic_id, category_id, entities")
+      .eq("id", chosen)
+      .single(),
+  ) as {
+    title: string;
+    state: string | null;
+    topic_id: string | null;
+    category_id: string | null;
+    entities: string[];
+  };
+
+  let categorySlug: string | null = null;
+  let topicName: string | null = null;
+  if (thread.category_id) {
+    const c = unwrap(
+      await db().from("categories").select("slug").eq("id", thread.category_id).maybeSingle(),
+    ) as { slug: string } | null;
+    categorySlug = c?.slug ?? null;
+  }
+  if (thread.topic_id) {
+    const t = unwrap(
+      await db().from("topics").select("name").eq("id", thread.topic_id).maybeSingle(),
+    ) as { name: string } | null;
+    topicName = t?.name ?? null;
+  }
+
+  const todayItemIds = links.filter((l) => l.thread_id === chosen).map((l) => l.item_id);
+  const items = todayItemIds.length
+    ? (unwrap(
+        await db().from("items").select("id, title, raw_summary, url, scan_meta").in("id", todayItemIds),
+      ) as {
+        id: string;
+        title: string;
+        raw_summary: string | null;
+        url: string | null;
+        scan_meta: { entities?: string[] } | null;
+      }[])
+    : [];
+  const newItems = items.map((i) => ({
+    id: i.id,
+    title: i.title,
+    summary: i.raw_summary,
+    url: i.url,
+    entities: i.scan_meta?.entities ?? [],
+  }));
+
+  return {
+    threadId: chosen,
+    title: thread.title,
+    state: thread.state,
+    topicId: thread.topic_id,
+    categoryId: thread.category_id,
+    categorySlug,
+    topicName,
+    threadEntities: thread.entities,
+    deepEditionItemIds,
+    newItems,
+  };
+}
+
+/** Persist a thread update: body onto its deep edition_items, state+title onto the thread. */
+export async function applyThreadUpdate(
+  deepEditionItemIds: string[],
+  threadId: string,
+  update: { headline: string; body: string; newState: string },
+): Promise<void> {
+  for (const id of deepEditionItemIds) {
+    const { error } = await db()
+      .from("edition_items")
+      .update({ summary_text: update.body })
+      .eq("id", id);
+    if (error) throw new Error(`applyThreadUpdate item: ${error.message}`);
+  }
+  const { error } = await db()
+    .from("threads")
+    .update({ state: update.newState, title: update.headline })
+    .eq("id", threadId);
+  if (error) throw new Error(`applyThreadUpdate thread: ${error.message}`);
 }

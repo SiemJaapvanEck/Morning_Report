@@ -41,3 +41,51 @@ export async function dedupeForEdition(
   }
   return result;
 }
+
+/**
+ * Reader perspective for thread-aware generation: titles of items the reader
+ * rated highly (≥4) within this thread's topic/category, newest first. One
+ * cheap query pair, no AI. feedback_events.target_id is polymorphic (no FK to
+ * items), so we resolve it in two steps. Empty when the thread has no
+ * topic/category or the reader has rated nothing there.
+ */
+export async function archivePrimer(
+  profileId: string,
+  topicId: string | null,
+  categoryId: string | null,
+  limit = 5,
+): Promise<string[]> {
+  if (!topicId && !categoryId) return [];
+
+  const rated = unwrap(
+    await db()
+      .from("feedback_events")
+      .select("target_id, created_at")
+      .eq("profile_id", profileId)
+      .eq("target_type", "item")
+      .gte("rating", 4)
+      .order("created_at", { ascending: false })
+      .limit(50),
+  ) as { target_id: string; created_at: string }[];
+  if (rated.length === 0) return [];
+
+  const items = unwrap(
+    await db()
+      .from("items")
+      .select("id, title, topic_id, category_id")
+      .in("id", rated.map((r) => r.target_id)),
+  ) as { id: string; title: string; topic_id: string | null; category_id: string | null }[];
+  const byId = new Map(items.map((i) => [i.id, i]));
+
+  const titles: string[] = [];
+  for (const r of rated) {
+    // preserve recency order from the feedback query
+    const item = byId.get(r.target_id);
+    if (!item) continue;
+    if ((topicId && item.topic_id === topicId) || (categoryId && item.category_id === categoryId)) {
+      titles.push(item.title);
+      if (titles.length >= limit) break;
+    }
+  }
+  return titles;
+}

@@ -87,6 +87,24 @@ export const config = {
     mediaMaxPerFeed: Number(process.env.INGEST_MEDIA_MAX ?? "3"),
   },
 
+  threads: {
+    // News threads (axis B): how items attach to persistent storylines and when
+    // a new storyline is born. Matching/clustering is free (entity-set overlap,
+    // no LLM). New threads only open for what the reader follows or for a
+    // genuinely big story — never for every headline.
+    /** Jaccard entity-overlap to attach an item to an existing thread */
+    matchMinOverlap: Number(process.env.THREADS_MATCH_OVERLAP ?? "0.34"),
+    /** Looser overlap used to cluster same-day items into one "big topic" */
+    bigTopicMinOverlap: Number(process.env.THREADS_CLUSTER_OVERLAP ?? "0.3"),
+    /**
+     * Cross-source coverage gate: a same-day entity cluster of at least this
+     * many items counts as a major story and gets its own thread even when the
+     * reader follows neither its topic nor category. Deliberately high so only
+     * genuinely broad coverage (an Iran war, a tariffs story) trips it.
+     */
+    bigTopicMinCluster: Number(process.env.THREADS_BIG_TOPIC_MIN ?? "5"),
+  },
+
   weather: {
     // Default: Arnhem
     lat: Number(process.env.WEATHER_LAT ?? "51.98"),

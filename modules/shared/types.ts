@@ -145,6 +145,21 @@ export interface DailyPaperArticle {
   is_update: boolean;
 }
 
+/**
+ * The AI output of a thread-aware generation: an update that builds on the
+ * thread's stored state, plus the rewritten state for the next edition.
+ */
+export interface ThreadUpdate {
+  /** news-specific headline for this update */
+  headline: string;
+  /** the update prose (Dutch), building on the prior state — not from scratch */
+  body: string;
+  /** the rewritten storyline state the next edition builds on */
+  newState: string;
+  /** which DESTEP lenses the update actually used (subset of the offered ones) */
+  lenses: DestepLens[];
+}
+
 /** Eén beursindex met dagrendement, voor de markten-per-regio-kaart. */
 export interface MarktIndex {
   /** RegioCode (na, eu, …) */

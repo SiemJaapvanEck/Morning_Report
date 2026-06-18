@@ -6,15 +6,28 @@
 // geen stappen toevoegen (strakke volgorde = voorspelbaar herstel).
 
 import { db, unwrap } from "../shared/db";
-import { currentBudgetMode } from "../shared/budget";
+import { currentBudgetMode, budgetPolicy } from "../shared/budget";
 import { config } from "../shared/config";
 import { fetchWeather } from "../weather";
 import { fetchMarkten } from "../markten";
 import { activeSources, ingestSource } from "../ingest";
 import { scanBatch, loadScoreContext, priority, assignBands, selectForScan } from "../rank";
-import { summarizeSection, deepDive } from "../generate";
+import { summarizeSection, deepDive, generateThreadUpdate } from "../generate";
 import { assembleUserContext, writeDailyDigest, type DigestTopic } from "../redactie";
-import { dedupeForEdition } from "../archive";
+import { dedupeForEdition, archivePrimer } from "../archive";
+import {
+  loadActiveThreads,
+  loadLinkedItemIds,
+  loadEditionCandidates,
+  insertThread,
+  linkThreadItems,
+  touchThread,
+  planThreadActions,
+  mergeEntities,
+  selectLenses,
+  nextThreadUpdateJob,
+  applyThreadUpdate,
+} from "../threads";
 import type { Edition, Item, PipelineStep, Band, MarktSnapshot } from "../shared/types";
 
 export interface StepContext {
@@ -66,6 +79,7 @@ const planStep: StepHandler = async ({ edition }) => {
     ...ingestSteps,
     { kind: "scan_rank", payload: {} },
     { kind: "select", payload: {} },
+    { kind: "threads", payload: {} },
     { kind: "generate", payload: {} },
     { kind: "daily_paper", payload: {} },
     { kind: "finalize", payload: {} },
@@ -301,78 +315,186 @@ const selectStep: StepHandler = async ({ edition }) => {
 };
 
 // ============================================================
+// threads — koppel editie-items aan blijvende verhaallijnen (geen AI)
+// ============================================================
+//
+// Plaatst tussen select en generate. Matcht elk editie-item op bestaande
+// threads (gratis entity-overlap), opent een nieuwe thread alleen voor wat de
+// lezer volgt of voor een groot cross-bron-verhaal, en mergt entities terug op
+// geraakte threads. Geen AI → ruim binnen 7s, één doorloop (geen vervolgstap).
+// Idempotent: items die deze editie al gekoppeld zijn worden overgeslagen, en
+// thread_items heeft unique(thread_id,item_id) — opnieuw draaien verandert niets.
+
+const threadsStep: StepHandler = async ({ edition }) => {
+  const [candidates, threads, linked, userCtx] = await Promise.all([
+    loadEditionCandidates(edition.id),
+    loadActiveThreads(edition.profile_id),
+    loadLinkedItemIds(edition.id),
+    assembleUserContext(edition.profile_id),
+  ]);
+
+  const actions = planThreadActions(
+    candidates,
+    threads,
+    linked,
+    userCtx.followedTopicIds,
+    userCtx.followedCategoryIds,
+    {
+      matchMinOverlap: config.threads.matchMinOverlap,
+      bigTopicMinOverlap: config.threads.bigTopicMinOverlap,
+      bigTopicMinCluster: config.threads.bigTopicMinCluster,
+    },
+  );
+
+  const now = new Date().toISOString();
+
+  // Open the new storylines and link their seed items.
+  let created = 0;
+  for (const nt of actions.newThreads) {
+    const threadId = await insertThread({
+      profileId: edition.profile_id,
+      topicId: nt.topicId,
+      categoryId: nt.categoryId,
+      title: nt.seedTitle,
+      entities: mergeEntities(nt.entities, []), // normalize + dedupe + cap
+      status: "active",
+      lastEditionId: edition.id,
+      lastSeenAt: now,
+    });
+    await linkThreadItems(
+      nt.memberItemIds.map((itemId) => ({ threadId, itemId, editionId: edition.id })),
+    );
+    created++;
+  }
+
+  // Link items into their existing threads, then merge entities + touch each one.
+  await linkThreadItems(
+    actions.links.map((l) => ({ threadId: l.threadId, itemId: l.itemId, editionId: edition.id })),
+  );
+
+  const candidateById = new Map(candidates.map((c) => [c.itemId, c]));
+  const threadById = new Map(threads.map((t) => [t.id, t]));
+  const addedByThread = new Map<string, string[]>();
+  for (const l of actions.links) {
+    const ents = candidateById.get(l.itemId)?.entities ?? [];
+    addedByThread.set(l.threadId, [...(addedByThread.get(l.threadId) ?? []), ...ents]);
+  }
+  for (const [threadId, addEnts] of addedByThread) {
+    const existing = threadById.get(threadId)?.entities ?? [];
+    await touchThread(threadId, mergeEntities(existing, addEnts), edition.id, now);
+  }
+
+  return {
+    kandidaten: candidates.length,
+    gekoppeld: actions.links.length,
+    nieuwe_threads: created,
+    overgeslagen: linked.size,
+  };
+};
+
+// ============================================================
 // generate — samenvattingen + deep-dives per sectie
 // ============================================================
 
 const generateStep: StepHandler = async ({ edition, step }) => {
   const mode = await currentBudgetMode(edition.id);
+  const allowDeep = budgetPolicy[mode].deepDivesPerSectie > 0;
 
-  const sections = unwrap(
-    await db()
-      .from("edition_sections")
-      .select("*")
-      .eq("edition_id", edition.id)
-      .eq("kind", "category")
-      .order("position"),
-  );
+  // Items linked to a thread this edition: their deep band is written by the
+  // thread-update path below, so the per-section deep-dive branch skips them.
+  const threadLinkedItems = await loadLinkedItemIds(edition.id);
 
-  // één werkeenheid per aanroep — de samenvattingsbatch van één sectie, óf
-  // één deep-dive — zodat elke aanroep ~5-8s blijft; de rest via vervolgstappen
+  // One work unit per call (~5-8s); the rest via requeue. Priority: a thread
+  // update first (it builds on stored state), otherwise one section unit.
   let generated = 0;
   let didWork = false;
-  let workRemains = false;
 
-  for (const section of sections) {
-    const editionItems = unwrap(
-      await db()
-        .from("edition_items")
-        .select("*, items(*)")
-        .eq("section_id", section.id)
-        .order("position"),
-    ) as unknown as ({ id: string; band: Band; summary_text: string | null; items: Item })[];
-
-    // idempotent: items met al een summary_text overslaan
-    const summaryItems = editionItems
-      .filter((entry) => entry.band === "summary" && !entry.summary_text)
-      .map((entry) => entry.items);
-    const deepItems = editionItems.filter((entry) => entry.band === "deep" && !entry.summary_text);
-
-    if (summaryItems.length === 0 && deepItems.length === 0) continue;
-
-    if (didWork) {
-      workRemains = true;
-      break;
+  if (allowDeep) {
+    const job = await nextThreadUpdateJob(edition.id);
+    if (job) {
+      const lenses = selectLenses(job.categorySlug, job.topicName, job.threadEntities);
+      const primer = await archivePrimer(edition.profile_id, job.topicId, job.categoryId);
+      const update = await generateThreadUpdate(
+        {
+          thread: { title: job.title, state: job.state },
+          newItems: job.newItems.map((n) => ({ title: n.title, summary: n.summary, url: n.url })),
+          lenses,
+          archivePrimer: primer,
+        },
+        mode,
+        edition.id,
+        step.id,
+      );
+      if (update) {
+        await applyThreadUpdate(job.deepEditionItemIds, job.threadId, update);
+      } else {
+        // defensive (unreachable while allowDeep): never loop on a blank gate
+        const fallback = job.newItems[0]?.summary || job.title;
+        for (const id of job.deepEditionItemIds) {
+          await db().from("edition_items").update({ summary_text: fallback }).eq("id", id);
+        }
+      }
+      generated++;
+      didWork = true;
     }
+  }
 
-    if (summaryItems.length > 0) {
-      // werkeenheid: de samenvattingsbatch van deze sectie
-      const summaries = await summarizeSection(section.title, summaryItems, mode, edition.id, step.id);
-      for (const summary of summaries) {
+  if (!didWork) {
+    const sections = unwrap(
+      await db()
+        .from("edition_sections")
+        .select("*")
+        .eq("edition_id", edition.id)
+        .eq("kind", "category")
+        .order("position"),
+    );
+
+    for (const section of sections) {
+      const editionItems = unwrap(
         await db()
           .from("edition_items")
-          .update({ summary_text: summary.text })
-          .eq("edition_id", edition.id)
-          .eq("item_id", summary.itemId);
-        generated++;
+          .select("*, items(*)")
+          .eq("section_id", section.id)
+          .order("position"),
+      ) as unknown as ({ id: string; band: Band; summary_text: string | null; items: Item })[];
+
+      // idempotent: items met al een summary_text overslaan; thread-items vallen
+      // onder de thread-update-tak hierboven, niet onder de losse deep-dive
+      const summaryItems = editionItems
+        .filter((entry) => entry.band === "summary" && !entry.summary_text)
+        .map((entry) => entry.items);
+      const deepItems = editionItems.filter(
+        (entry) =>
+          entry.band === "deep" && !entry.summary_text && !threadLinkedItems.has(entry.items.id),
+      );
+
+      if (summaryItems.length === 0 && deepItems.length === 0) continue;
+
+      if (summaryItems.length > 0) {
+        const summaries = await summarizeSection(section.title, summaryItems, mode, edition.id, step.id);
+        for (const summary of summaries) {
+          await db()
+            .from("edition_items")
+            .update({ summary_text: summary.text })
+            .eq("edition_id", edition.id)
+            .eq("item_id", summary.itemId);
+          generated++;
+        }
+      } else {
+        const entry = deepItems[0];
+        const text = await deepDive(entry.items, mode, edition.id, step.id);
+        if (text) {
+          await db().from("edition_items").update({ summary_text: text }).eq("id", entry.id);
+          generated++;
+        }
       }
-      if (deepItems.length > 0) workRemains = true;
-    } else {
-      // werkeenheid: één deep-dive
-      const entry = deepItems[0];
-      const text = await deepDive(entry.items, mode, edition.id, step.id);
-      if (text) {
-        await db().from("edition_items").update({ summary_text: text }).eq("id", entry.id);
-        generated++;
-      }
-      if (deepItems.length > 1) workRemains = true;
+      didWork = true;
+      break; // one section unit per call
     }
-    didWork = true;
   }
 
-  let vervolg = false;
-  if (workRemains) {
-    vervolg = await requeue(step, 40); // ruim boven het max aantal werkeenheden
-  }
+  // Requeue while this tick did work; the first tick that finds nothing stops.
+  const vervolg = didWork ? await requeue(step, 60) : false;
   return { gegenereerd: generated, budget_modus: mode, vervolg };
 };
 
@@ -513,6 +635,7 @@ export const stepRegistry: Record<string, StepHandler> = {
   ingest: ingestStep,
   scan_rank: scanRankStep,
   select: selectStep,
+  threads: threadsStep,
   generate: generateStep,
   daily_paper: dailyPaperStep,
   finalize: finalizeStep,

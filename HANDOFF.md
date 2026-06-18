@@ -1,113 +1,104 @@
 # HANDOFF — current state
 
-> Last updated: 17 June 2026, session on Siem's account.
+> Last updated: 18 June 2026, session on Siem's account.
 > Read this first when picking up the project; working agreements live in CLAUDE.md.
 
 ## Where we stand
 
-We are building **News Threads** — the biggest design shift since the persona
-removal. The goal: make the morning report **build forth on itself**. Instead of
-a fresh, independent edition each day, the report becomes a set of **persistent
-storylines (threads)** per profile that accumulate state across editions; each
-morning the pipeline finds what's genuinely new, attaches it to the right thread,
-and writes an **update that builds on yesterday's stored state** rather than a
-from-scratch article. This is the concrete realization of the design doc's
-cross-reference axis B.
+We are building **News Threads** — making the morning report **build forth on
+itself**: persistent storylines (threads) per profile that accumulate state
+across editions. Each morning the pipeline finds what's new, attaches it to the
+right thread, and writes an **update that builds on yesterday's stored state**.
 
-The full design + the **sprint board** live in **`docs/threads-plan.md`** (in the
-repo, so any session/account can resume). We work it **one phase per sprint:
-implement a phase, pass the gate, then PAUSE for Siem's review before the next**
-(scrum cadence — Siem's explicit request). A new session should run `/start`, open
-`docs/threads-plan.md`, find the first unchecked box, and do exactly that phase.
+Plan + sprint board: **`docs/threads-plan.md`**. We work **one phase per sprint,
+pausing for Siem's review after each**. **Phases 0–4 are done and green**
+(lint/tsc/89 tests/build). **Phase 5 is next, and Siem split it into 5a + 5b.**
 
-**Phases 0, 1 and 2 are done and green** (lint/tsc/78 tests/build). Phase 0+1
-landed in commit `4eb92be`; Phase 2 is this session's push. The running pipeline
-still behaves as before for the **reader-facing output** — entities are now
-extracted and stored on items, but nothing reads them until Phase 3.
+The pipeline now: scan → select → **threads (match/link)** → **generate
+(thread-aware)** → daily_paper (still the old "rode draad") → finalize. Threads
+are populated and thread updates are written to deep items, but **nothing is
+reader-visible yet** — that's Phase 5b.
 
-### Phase 0 — Budget cap + scan reclaim (done, in `4eb92be`)
-- `modules/shared/config.ts`: `budget.editionCeilingEur` **0.30 → 0.10**;
-  `scan.maxRounds` **7 → 4** to reclaim budget for thread-aware deep research.
+### Phases 0–2 (in `main`)
+- **0** budget cap €0.10 + scan reclaim. **1** `threads`/`thread_items` schema +
+  pure `modules/threads`. **2** entity extraction on the scan call
+  (`scan_meta.entities`, display form, `dedupeEntities`).
 
-### Phase 1 — Schema + pure `modules/threads` (done, in `4eb92be`)
-- Migration `0008_threads.sql` applied live (`threads` + `thread_items`,
-  `unique(thread_id,item_id)`). Types `Thread`/`ThreadItem`/`DestepLens`/
-  `DailyPaperArticle` + `FrontPage.dp_*`. Pure `modules/threads` (entity-overlap
-  matching, delta, DESTEP lens selection).
+### Phase 3 — `threads` pipeline step (this session)
+- New `threads` step in `planStep` **after `select`, before `generate`**;
+  registered in `stepRegistry`. **No AI.**
+- `modules/threads/index.ts`: `clusterByEntities` (connected-component
+  cross-source clustering) + **`planThreadActions`** (the pure decision) + DB
+  helpers (`loadActiveThreads`, `loadLinkedItemIds`, `loadEditionCandidates`,
+  `insertThread`, `linkThreadItems`, `touchThread`).
+- **Thread-creation gate (Siem's decision):** linking is universal (any item
+  overlapping an active thread joins it); a NEW thread is born only for **(a) a
+  followed item that is ALSO `deep` band** ("followed + significant"), or **(b) a
+  big cross-source cluster** (≥ `bigTopicMinCluster=5` items). This replaced the
+  first cut ("every followed item"), which exploded to 52 threads because Siem
+  follows ~all 25 topics. Manual selection (trigger 3) is deferred to the UI;
+  note `follow_marks` already supports `target_type='item'`.
+- **Idempotency:** `planThreadActions` runs to a **fixed point** — attaching an
+  item grows a thread's entity set, so a straggler that only matches after that
+  growth is pulled in *this* run; a re-run then links nothing. Verified: 54
+  items → 9 threads, re-run identical (was non-idempotent before the fix).
+- Config: `threads.matchMinOverlap=0.34`, `bigTopicMinOverlap=0.3`,
+  `bigTopicMinCluster=5` (all env-overridable).
 
-### Phase 2 — Entity extraction on the scan call (done, this session)
-- **No new AI call.** The existing `scanBatch` (`modules/rank/index.ts`) now also
-  returns 2–5 **key entities** per item: added `entities` to `SCAN_SCHEMA`
-  (per-item + required), one Dutch sentence to the scan prompt, and `entities` to
-  `ScanVerdict`/`ScanUitslag`.
-- **Entities are stored in DISPLAY form** (not normalized) — "SpaceX", "Israël",
-  "TerraMow" — because the planned **archive UI** (per-sector graph, a later
-  phase) will show them. Matching/state still normalize at use-time, so Phase 3 is
-  unaffected. New pure helper `dedupeEntities()` in `modules/threads/index.ts`
-  dedupes case/diacritic-insensitively but keeps the first display form; 4 new
-  tests (78 total).
-- `modules/pipeline/steps.ts` (`scanRankStep`): `entities` merged into
-  `scan_meta` alongside `regio` — the merge preserves prior keys (idempotency
-  invariant #1 holds).
-- **Verified live** (full local pipeline run, both profiles): 640 items scanned,
-  **613 with non-empty entities** (avg 2.1, max 8; the ~27 empties are genuinely
-  entity-less headlines), display form preserved, `regio` still present.
-  **Cost €0.057/edition — under the €0.10 cap.**
-
-### Also this session — 4 followed niche topics seeded (verification data)
-To prove the pipeline can **track specific user-selected topics**, created 4
-topics for Siem's profile (`ec194dfb…786`), all `query_mode=true`, all followed
-via `follow_marks`:
-- `gardening` / **Tuinieren** → Wetenschap
-- `plant-industry` / **Plantenindustrie** → Financieel
-- `agriculture` / **Landbouw** → Wereldtoneel
-- `tibet` / **Tibet** → Wereldtoneel
-
-Result on today's run: **Landbouw caught 3 items, Tuinieren 1** (sensible matches
-+ entities, e.g. robot-mowers → `TerraMow`/`Mammotion`). **Tibet/Plantenindustrie
-0** — no such news in today's feeds, as expected: actively *fetching* niche-topic
-news is the **forced-search phase that isn't built yet** (`query_mode` is read by
-nothing today; it only enriches the scan's topic-matching list). The entity layer
-is the prerequisite for that.
-
-## Decisions made this session
-- **Store entities in display form, not normalized** — the future archive UI shows
-  them; matching normalizes at use-time anyway.
-- Verified Phase 2 by running a **full local edition** (the scan step can't run in
-  isolation — the plan step schedules the whole edition). Bonus: today's real
-  editions for Siem + Jesse were generated by that run (see flag below).
+### Phase 4 — thread-aware generation (this session)
+- `modules/generate/index.ts`: **`generateThreadUpdate`** — `deep`-tier
+  `askAIJson`, budget-gated like `deepDive`, returns `{headline, body, newState,
+  lenses}`. Dutch prompt: builds an UPDATE on the stored `state`, uses only the
+  given DESTEP lenses, ties to market impact.
+- `modules/archive/index.ts`: **`archivePrimer`** — titles the reader rated ≥4
+  in the thread's topic/category (reader perspective). One query pair, no AI.
+- `modules/threads/index.ts`: `nextThreadUpdateJob` (one pending thread per call)
+  + `applyThreadUpdate` (body → deep items, `state`/`title` → thread).
+- `generateStep` rewritten: **one work-unit per tick** — a pending thread update
+  first (one per thread; its deep items excluded from the normal deep-dive
+  branch), else one section summary/deep-dive. Requeue while work remains.
+- **Per-thread, not per-item:** a thread = one article. Non-thread deep items
+  keep `deepDive`.
+- **Deviation from the written plan:** dropped `computeDelta`/`delta` — because
+  `thread_items` is `unique(thread_id,item_id)`, today's links are always
+  genuinely new, so the delta was a no-op. "Build on state" comes from the stored
+  `state` + today's items.
+- Verified live (June 17, 9 threads): 9 updates, all 9 threads got coherent
+  `state` + rewritten headline + body with the right lens, **idempotent**,
+  **€0.013** for all 9.
 
 ## What's open
-1. **Phase 3 (next sprint)** — the `threads` pipeline step (match + link +
-   state-merge, **no AI**), inserted after `select`, before `generate`. DB helpers
-   (`loadActiveThreads`/`linkThreadItems`/`upsertThread`) join the pure
-   `modules/threads`. Idempotent via `thread_items unique` + `ignoreDuplicates`.
-   See `docs/threads-plan.md`.
-2. **Phases 4–6** — thread-aware generation + DESTEP → Daily Paper assembly + UI
-   (first reader-facing change) → optional og:image fallback + embeddings.
-3. **Carried over, still valid**: near-duplicate cross-source clustering in
-   `select` (largely subsumed by Phase 3's delta + matching); 2099 test fixtures
-   in the DB (safe to delete); design coordination with the colleague (Atlas vs.
-   Dispatch); retro-translation of remaining Dutch comments.
+1. **Phase 5a (next sprint)** — Daily Paper assembly, **backend only**: extend
+   `writeDailyDigest` (`modules/redactie`) to return structured `{summary, intro,
+   generalArticle}`; `dailyPaperStep` consumes the thread updates (deep items ⋈
+   threads); `finalizeStep` writes `dp_summary/dp_intro/dp_articles` into
+   `front_page`. Verifiable via the DB. No UI.
+2. **Phase 5b** — the UI: `EditieWeergave` renders Summary → Introduction →
+   per-thread articles (lens tags, followed first); `EditionView` front-page DP
+   block. Fallback to old `daily_paper`. **First localhost-visible change.**
+3. **Phase 6** — optional og:image fallback + embeddings.
+4. **Carried over:** 2099 test fixtures in the DB (safe to delete); design
+   coordination with the colleague; retro-translation of remaining Dutch comments.
 
 ## Known issues / things to keep in mind
-- **Morning cron made EMPTY editions today.** The cron-job.org run at 03:02 UTC
-  created today's edition shells for both profiles but logged **0 AI calls** — my
-  local run is what actually generated today's editions. Likely the cron fires
-  before ingest has populated the feeds. Pre-existing, unrelated to Phase 2 —
-  worth checking when we revisit the "confirm cron runs" item.
-- **Niche topics won't surface news until forced-search lands.** The 4 new topics
-  + follow_marks are live in the DB now; they enrich scan matching but no step
-  actively searches for their news yet.
-- **`.claude/` tooling + `Morning Report design/` stay untracked** (deliberately
-  local, per-account, like `launch.json`). NOT committed.
-- **`CLAUDE.md` is gitignored** (per-contributor workflow file).
-- **Existing editions** keep their old step list; the threads step only appears in
-  plans created after Phase 3 lands.
-- **403 feeds** (Reddit, BleepingComputer), **Open-Meteo** flaky (4 retries),
-  **Postgres `current_date` is UTC** (edition dates via `todayLocal()`,
-  Europe/Amsterdam) — unchanged, non-blocking.
-- **Git auth**: OAuth token (SiemJaapvanEck) in the macOS keychain; `git push/pull`
-  works. `gh auth status` says "not logged in" (token lacks read:org) — expected.
-- **AI provider = Grok (xAI)** via `askAI()`; Anthropic switchable. Supabase live +
-  RLS (service-role only). Vercel auto-deploys on push to `main`.
+- **Throwaway verify scripts** `scripts/verify-threads.ts` + `verify-phase4.ts`
+  are **untracked dev tools** (hardcoded Siem profile + edition date). NOT
+  committed; keep locally or delete.
+- **Verification mutated June 17 data:** Siem's profile has 9 real threads with
+  `state`/`title`/bodies, and June 17's thread-linked deep items now show the
+  thread-update prose. Correct demonstration data; it's what the next edition
+  builds on.
+- **Morning cron makes EMPTY editions:** the 03:02 UTC cron creates today's
+  edition shell with 0 AI calls (fires before ingest populates feeds). Today's
+  June 18 edition is empty — pre-existing, worth a look when revisiting cron.
+- **Niche topics won't surface news until forced-search lands** (`query_mode`
+  read by nothing yet). The 4 followed niche topics (Tuinieren/Plantenindustrie/
+  Landbouw/Tibet) are live in the DB.
+- **Existing editions** keep their old step list; the `threads` step only appears
+  in plans created after Phase 3 landed.
+- **`.claude/` + `Morning Report design/` stay untracked**; **`CLAUDE.md` is
+  gitignored** (per-contributor).
+- **403 feeds** (Reddit, BleepingComputer), **Open-Meteo** flaky, **Postgres
+  `current_date` is UTC** (use `todayLocal()`) — unchanged, non-blocking.
+- **AI provider = Grok (xAI)** via `askAI()`; Anthropic switchable. Supabase live
+  + RLS (service-role only). Vercel auto-deploys on push to `main`.

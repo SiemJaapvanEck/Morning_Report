@@ -425,7 +425,7 @@ export function EditionView({
   // beurssnapshot voor de markten-kaart (leeg → tegel wordt niet getoond)
   const markten = view?.edition.front_page?.markten?.indices ?? [];
 
-  const intro = view?.edition.front_page?.intro ?? null;
+  const intro = view?.edition.front_page?.dp_summary ?? view?.edition.front_page?.intro ?? null;
   const headline = ranked[0]?.title ?? "Je editie staat klaar";
   const bullets = ranked.slice(1, 6); // kop is al de #1 — niet herhalen
 

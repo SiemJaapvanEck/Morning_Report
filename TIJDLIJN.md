@@ -139,3 +139,18 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   headlines, idempotent, €0.013. 89 tests green. Phase 5 split into 5a (assembly,
   backend) + 5b (UI) at Siem's request. Pushed Phases 3 + 4 as one commit (shared
   files can't be split without interactive staging).
+- **18 June 2026 (vervolg) — News Threads Phase 5a + 5b: Daily Paper.** **5a
+  (backend):** new `composeDailyPaper` in `modules/redactie` → structured
+  `{summary, intro, generalHeadline, generalBody}` (one deep call; `writeDailyDigest`
+  kept intact). `dailyPaperStep` assembles `dp_articles` = the edition's thread
+  updates (reused from Phase 4, ordered, lens-tagged, imaged) + a general roundup;
+  `finalizeStep` writes `dp_summary/dp_intro/dp_articles` into `front_page`.
+  Verified: 10 articles, €0.0028. **5b (UI):** the "Lees de krant" page
+  (`EditieWeergave`) now renders Summary → Introduction → thread article cards
+  (GEVOLGD / VERHAALLIJN / DESTEP-lens chips, Archivo headlines, images), falling
+  back to the old rode draad for pre-thread editions; the front-page block shows
+  `dp_summary`. Verified on localhost (no console errors). 89 tests green. Pushed
+  5a + 5b as one commit. Phase 5 split into 5a/5b/5c at Siem's request; next is
+  **5c — Archive with threads** (front-page Archive button + split weather; a
+  news-volume line with thread/saved-article dots per category, plus a graph per
+  thread).

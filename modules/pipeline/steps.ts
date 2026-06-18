@@ -13,7 +13,7 @@ import { fetchMarkten } from "../markten";
 import { activeSources, ingestSource } from "../ingest";
 import { scanBatch, loadScoreContext, priority, assignBands, selectForScan } from "../rank";
 import { summarizeSection, deepDive, generateThreadUpdate } from "../generate";
-import { assembleUserContext, writeDailyDigest, type DigestTopic } from "../redactie";
+import { assembleUserContext, composeDailyPaper, type DigestTopic } from "../redactie";
 import { dedupeForEdition, archivePrimer } from "../archive";
 import {
   loadActiveThreads,
@@ -25,10 +25,11 @@ import {
   planThreadActions,
   mergeEntities,
   selectLenses,
+  orderThreads,
   nextThreadUpdateJob,
   applyThreadUpdate,
 } from "../threads";
-import type { Edition, Item, PipelineStep, Band, MarktSnapshot } from "../shared/types";
+import type { Edition, Item, PipelineStep, Band, MarktSnapshot, DailyPaperArticle } from "../shared/types";
 
 export interface StepContext {
   edition: Edition;
@@ -535,12 +536,94 @@ const dailyPaperStep: StepHandler = async ({ edition, step }) => {
   }
 
   const topics: DigestTopic[] = [...byCategory.values()];
-  const daily = await writeDailyDigest(topics, mode, edition.id, step.id);
-  // The calendar covers reuse a short lead — derive it from the digest's first
-  // sentence so there is no separate (persona) intro call.
-  const intro = daily ? daily.split(/(?<=[.!?])\s/)[0].trim() : null;
 
-  return { daily_paper: daily, intro, topics: topics.length };
+  // This edition's thread updates become the Daily Paper's lead articles
+  // (reused from generate — not rewritten). Deep items linked to a thread carry
+  // the update body; the thread carries the headline/state.
+  const links = unwrap(
+    await db().from("thread_items").select("thread_id, item_id").eq("edition_id", edition.id),
+  ) as { thread_id: string; item_id: string }[];
+  const threadByItem = new Map(links.map((l) => [l.item_id, l.thread_id]));
+  const deltaByThread = new Map<string, number>();
+  for (const l of links) deltaByThread.set(l.thread_id, (deltaByThread.get(l.thread_id) ?? 0) + 1);
+
+  const deepRows = unwrap(
+    await db()
+      .from("edition_items")
+      .select("item_id, summary_text, items(image_url)")
+      .eq("edition_id", edition.id)
+      .eq("band", "deep"),
+  ) as unknown as { item_id: string; summary_text: string | null; items: { image_url: string | null } | null }[];
+
+  const threadIds = [...new Set(deepRows.map((d) => threadByItem.get(d.item_id)).filter(Boolean))] as string[];
+  const threads = threadIds.length
+    ? (unwrap(
+        await db().from("threads").select("id, title, topic_id, category_id, entities").in("id", threadIds),
+      ) as { id: string; title: string; topic_id: string | null; category_id: string | null; entities: string[] }[])
+    : [];
+  const cats = unwrap(await db().from("categories").select("id, slug")) as { id: string; slug: string }[];
+  const catSlug = new Map(cats.map((c) => [c.id, c.slug]));
+  const topicNames = threads.some((t) => t.topic_id)
+    ? (unwrap(
+        await db().from("topics").select("id, name").in("id", threads.map((t) => t.topic_id).filter(Boolean) as string[]),
+      ) as { id: string; name: string }[])
+    : [];
+  const topicName = new Map(topicNames.map((t) => [t.id, t.name]));
+
+  const ranked = orderThreads(
+    threads
+      .map((thread) => {
+        const deep = deepRows.find((d) => threadByItem.get(d.item_id) === thread.id && d.summary_text);
+        if (!deep) return null;
+        const followed = Boolean(
+          (thread.topic_id && ctx.followedTopicIds.has(thread.topic_id)) ||
+            (thread.category_id && ctx.followedCategoryIds.has(thread.category_id)),
+        );
+        const lenses = selectLenses(
+          thread.category_id ? catSlug.get(thread.category_id) ?? null : null,
+          thread.topic_id ? topicName.get(thread.topic_id) ?? null : null,
+          thread.entities,
+        );
+        const article: DailyPaperArticle = {
+          thread_id: thread.id,
+          headline: thread.title,
+          body: deep.summary_text as string,
+          followed,
+          image_url: deep.items?.image_url ?? null,
+          destep_lenses: lenses,
+          is_update: true,
+        };
+        return { followed, deltaSize: deltaByThread.get(thread.id) ?? 1, article };
+      })
+      .filter((x): x is { followed: boolean; deltaSize: number; article: DailyPaperArticle } => x !== null),
+  );
+
+  const dp_articles: DailyPaperArticle[] = ranked.map((r) => r.article);
+
+  // The editorial wrapper: summary + intro + one broad general roundup.
+  const parts = await composeDailyPaper(dp_articles.map((a) => a.headline), topics, mode, edition.id, step.id);
+  if (parts) {
+    dp_articles.push({
+      thread_id: null,
+      headline: parts.generalHeadline,
+      body: parts.generalBody,
+      followed: false,
+      image_url: null,
+      destep_lenses: [],
+      is_update: false,
+    });
+  }
+
+  return {
+    dp_summary: parts?.summary ?? null,
+    dp_intro: parts?.intro ?? null,
+    dp_articles,
+    // back-compat for finalize/BriefingHero until Phase 5b renders dp_*
+    daily_paper: parts?.generalBody ?? null,
+    intro: parts?.summary ?? null,
+    topics: topics.length,
+    threads: ranked.length,
+  };
 };
 
 // ============================================================
@@ -561,6 +644,9 @@ const finalizeStep: StepHandler = async ({ edition }) => {
     .maybeSingle();
   const daily_paper = (dpRow.data?.result?.daily_paper as string | undefined) ?? null;
   const intro = (dpRow.data?.result?.intro as string | undefined) ?? null;
+  const dp_summary = (dpRow.data?.result?.dp_summary as string | undefined) ?? null;
+  const dp_intro = (dpRow.data?.result?.dp_intro as string | undefined) ?? null;
+  const dp_articles = (dpRow.data?.result?.dp_articles as DailyPaperArticle[] | undefined) ?? null;
 
   const weather = await db()
     .from("edition_sections")
@@ -606,6 +692,9 @@ const finalizeStep: StepHandler = async ({ edition }) => {
   const frontPage = {
     intro,
     daily_paper,
+    dp_summary,
+    dp_intro,
+    dp_articles,
     weather: weather.data?.payload ?? null,
     markten,
     regios,

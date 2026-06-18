@@ -11,8 +11,9 @@
 - [x] **Phase 2** — Entity extraction piggybacked on the scan call *(done; display-form entities + `dedupeEntities`, 78 tests, verified live €0.057/edition)*
 - [x] **Phase 3** — `threads` pipeline step (match + link + state-merge, no AI) *(done; followed+deep / big-topic gate, fixed-point idempotency, verified live)*
 - [x] **Phase 4** — Thread-aware generation *(done; `generateThreadUpdate` builds on stored state, DESTEP lenses + archive primer, 9 updates €0.013, idempotent)*
-- [ ] **Phase 5a** — Daily Paper assembly (backend: structured `writeDailyDigest` → `dp_summary/dp_intro/dp_articles` in `front_page`, no UI) ← **next sprint**
-- [ ] **Phase 5b** — Daily Paper UI (render Summary → Introduction → per-thread articles; front-page DP block) *(first localhost-visible change)*
+- [x] **Phase 5a** — Daily Paper assembly *(done; `composeDailyPaper` → `dp_summary/dp_intro/dp_articles` in `front_page`, €0.0028, verified)*
+- [x] **Phase 5b** — Daily Paper UI *(done; krant page renders Summary → Introduction → thread article cards with lens chips; front-page block shows `dp_summary`; verified on localhost)*
+- [ ] **Phase 5c** — Archive with threads (front-page Archive button + split weather; news-volume line with thread/saved-article dots, per category; graph per thread) ← **next sprint**
 - [ ] **Phase 6** — Optional: og:image fallback + embeddings upgrade
 
 Gate after every phase: `npm run lint && npx tsc --noEmit && npm test && npm run build`.

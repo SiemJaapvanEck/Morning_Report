@@ -6,7 +6,7 @@
 // today, leads with the ones the reader follows, and draws connections between
 // them. The deep research itself stays in the generate step.
 
-import { askAI } from "../shared/ai";
+import { askAI, askAIJson } from "../shared/ai";
 import { budgetPolicy } from "../shared/budget";
 import { db, unwrap } from "../shared/db";
 import type { BudgetMode } from "../shared/types";
@@ -122,4 +122,82 @@ export async function writeDailyDigest(
       `Sla onderwerpen zonder echt nieuws over.`,
   });
   return result.text.trim();
+}
+
+// ============================================================
+// Daily Paper assembly (Phase 5a) — structured summary / intro / general
+// ============================================================
+
+/** The editorial parts the Daily Paper needs around the (reused) thread articles. */
+export interface DailyPaperParts {
+  /** short summary of the day — the front-page Daily Paper block */
+  summary: string;
+  /** introduction to the paper: the day + how it is laid out */
+  intro: string;
+  /** one broad-but-shallow roundup of the news NOT in the lead storylines */
+  generalHeadline: string;
+  generalBody: string;
+}
+
+const DAILY_PAPER_SCHEMA = {
+  type: "object",
+  properties: {
+    summary: { type: "string" },
+    intro: { type: "string" },
+    generalHeadline: { type: "string" },
+    generalBody: { type: "string" },
+  },
+  required: ["summary", "intro", "generalHeadline", "generalBody"],
+  additionalProperties: false,
+} as const;
+
+/**
+ * Writes the editorial wrapper around the day's (already-generated) thread
+ * updates: the front-page summary, the paper's intro, and one broad general
+ * roundup of everything not covered by a lead storyline. One `deep` call,
+ * budget-aware ('stop' → null). The per-thread articles are reused, not rewritten.
+ */
+export async function composeDailyPaper(
+  leadStories: string[],
+  topics: DigestTopic[],
+  mode: BudgetMode,
+  editionId: string,
+  stepId?: string,
+): Promise<DailyPaperParts | null> {
+  const policy = budgetPolicy[mode];
+  if (policy.solMaxTokens === 0) return null;
+
+  const ordered = orderDigestTopics(topics);
+  const leadBlok = leadStories.length
+    ? leadStories.map((h) => `- ${h}`).join("\n")
+    : "(geen uitgelichte verhaallijnen vandaag)";
+  const topicBlok = ordered
+    .map((t) => `## ${t.followed ? "★ " : ""}${t.name}\n${t.headlines.map((h) => `- ${h}`).join("\n")}`)
+    .join("\n\n");
+  const followed = ordered.filter((t) => t.followed).map((t) => t.name);
+
+  const { data } = await askAIJson<DailyPaperParts>({
+    tier: "deep",
+    editionId,
+    stepId,
+    maxTokens: Math.min(1200, policy.solMaxTokens + 600),
+    jsonSchema: DAILY_PAPER_SCHEMA as unknown as Record<string, unknown>,
+    system:
+      "Je bent de eindredacteur van een persoonlijk ochtendrapport, in het Nederlands, zakelijk en neutraal — geen personage, geen 'ik'. " +
+      "De krant is opgebouwd als: een korte samenvatting (voorpagina), een introductie, dan de uitgelichte verhaallijnen (die zijn al geschreven), en tot slot één breed-maar-ondiep overzichtsartikel van de rest. Geef terug: " +
+      "'summary' — 3-4 zinnen, de dag in het kort voor de voorpagina; " +
+      "'intro' — 2-3 zinnen die de dag en de opbouw van de krant inleiden" +
+      (followed.length ? `, begin bij wat de lezer volgt (${followed.join(", ")})` : "") +
+      "; 'generalHeadline' + 'generalBody' — één overzichtsartikel (2-3 alinea's) van het nieuws dat NIET in de uitgelichte verhaallijnen zit. Verwijs naar de verhaallijnen, herhaal ze niet.",
+    prompt:
+      `Uitgelichte verhaallijnen van vandaag (al uitgeschreven):\n${leadBlok}\n\n` +
+      `Alle onderwerpen met nieuws vandaag:\n${topicBlok || "(geen)"}`,
+  });
+
+  return {
+    summary: data.summary.trim(),
+    intro: data.intro.trim(),
+    generalHeadline: data.generalHeadline.trim(),
+    generalBody: data.generalBody.trim(),
+  };
 }

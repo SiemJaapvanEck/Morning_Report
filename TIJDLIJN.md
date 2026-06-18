@@ -154,6 +154,14 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   **5c — Archive with threads** (front-page Archive button + split weather; a
   news-volume line with thread/saved-article dots per category, plus a graph per
   thread).
+- **18 June 2026 (vervolg 3) — News Threads Phase 5c-3: archive multi-line chart.**
+  Replaced the per-mega `ThreadTimeline` cards on `/archive` with a single full-width
+  `StorylineChart`: every mega-thread as one sector-colored line (DESTEP palette),
+  shared X/Y axes, dots on all lines (sector color; hollow = selected), article panel
+  at Daily Paper width underneath (col-span-7). Added `dominantLens()` pure helper +
+  3 tests (96 total). Lens accuracy fixed: `getThreadArchive` now joins
+  topics/categories so `selectLenses` gets real context. Gate green; pushed.
+
 - **18 June 2026 (vervolg 2) — News Threads Phase 5c-1 + 5c-2: mega-threads +
   archive.** **5c-1:** migration `0009` (`threads.parent_thread_id` +
   `anchor_entity`); `threadsStep` now anchors big recurring stories into

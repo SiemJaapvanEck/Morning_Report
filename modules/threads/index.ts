@@ -207,6 +207,29 @@ export function selectLenses(
   return matched.slice(0, max);
 }
 
+/**
+ * The single dominant DESTEP lens across a set of stories — the mode of each
+ * story's primary lens, tie-broken by LENS_ORDER. Colors a mega-thread by its
+ * main sector. Empty input → "sociaal" (matches selectLenses' fallback).
+ */
+export function dominantLens(perStoryLenses: DestepLens[][]): DestepLens {
+  const votes = new Map<DestepLens, number>();
+  for (const lenses of perStoryLenses) {
+    const primary = lenses[0];
+    if (primary) votes.set(primary, (votes.get(primary) ?? 0) + 1);
+  }
+  let best: DestepLens = "sociaal";
+  let bestCount = 0;
+  for (const lens of LENS_ORDER) {
+    const count = votes.get(lens) ?? 0;
+    if (count > bestCount) {
+      bestCount = count;
+      best = lens;
+    }
+  }
+  return best;
+}
+
 /** Order threads for the Daily Paper body: followed first, then bigger deltas. */
 export function orderThreads<T extends { followed: boolean; deltaSize: number }>(
   threads: T[],

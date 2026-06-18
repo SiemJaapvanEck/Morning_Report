@@ -2,8 +2,9 @@
 // modules/ en de API-routes.
 
 import { db, unwrap } from "@/modules/shared/db";
-import { selectLenses } from "@/modules/threads";
+import { dominantLens, selectLenses } from "@/modules/threads";
 import type {
+  DestepLens,
   Edition,
   EditionSection,
   EditionStatus,
@@ -175,6 +176,8 @@ export interface ArchiveMega {
   /** the topic's own daily item count — the volume line the dots sit on */
   volume: { date: string; count: number }[];
   dots: ArchiveDot[];
+  /** the mega's main DESTEP sector — drives its line color in the chart */
+  primarySector: DestepLens;
 }
 
 /**
@@ -196,12 +199,38 @@ export async function getThreadArchive(profileId: string): Promise<ArchiveMega[]
   const children = unwrap(
     await db()
       .from("threads")
-      .select("id, parent_thread_id, title, entities")
+      .select("id, parent_thread_id, title, entities, topic_id, category_id")
       .in("parent_thread_id", megas.map((m) => m.id)),
-  ) as { id: string; parent_thread_id: string; title: string; entities: string[] }[];
+  ) as {
+    id: string;
+    parent_thread_id: string;
+    title: string;
+    entities: string[];
+    topic_id: string | null;
+    category_id: string | null;
+  }[];
   if (children.length === 0) {
-    return megas.map((m) => ({ id: m.id, title: m.title, volume: [], dots: [] }));
+    return megas.map((m) => ({ id: m.id, title: m.title, volume: [], dots: [], primarySector: "sociaal" as DestepLens }));
   }
+
+  // Topic/category context so selectLenses gets more than bare entities — this
+  // is what fixes the "SOCIAAL instead of ECONOMISCH" mislabeling.
+  const topicIds = [...new Set(children.map((c) => c.topic_id).filter(Boolean))] as string[];
+  const categoryIds = [...new Set(children.map((c) => c.category_id).filter(Boolean))] as string[];
+  const topics = topicIds.length
+    ? (unwrap(await db().from("topics").select("id, name").in("id", topicIds)) as { id: string; name: string }[])
+    : [];
+  const categories = categoryIds.length
+    ? (unwrap(await db().from("categories").select("id, slug").in("id", categoryIds)) as { id: string; slug: string }[])
+    : [];
+  const topicName = new Map(topics.map((t) => [t.id, t.name]));
+  const categorySlug = new Map(categories.map((c) => [c.id, c.slug]));
+  const lensesOf = (c: (typeof children)[number]) =>
+    selectLenses(
+      c.category_id ? categorySlug.get(c.category_id) ?? null : null,
+      c.topic_id ? topicName.get(c.topic_id) ?? null : null,
+      c.entities,
+    );
 
   const childIds = children.map((c) => c.id);
   const links = unwrap(
@@ -238,12 +267,15 @@ export async function getThreadArchive(profileId: string): Promise<ArchiveMega[]
     const kids = children.filter((c) => c.parent_thread_id === m.id);
     const dots: ArchiveDot[] = [];
     const volume = new Map<string, number>();
+    const kidLenses: DestepLens[][] = [];
     for (const kid of kids) {
       const kl = linksByChild.get(kid.id) ?? [];
       const dates = kl
         .map((l) => (l.edition_id ? dateByEdition.get(l.edition_id) : undefined))
         .filter((d): d is string => Boolean(d));
       for (const d of dates) volume.set(d, (volume.get(d) ?? 0) + 1);
+      const lenses = lensesOf(kid);
+      kidLenses.push(lenses);
       const latest = [...dates].sort().at(-1);
       if (!latest) continue;
       const body = kl.map((l) => bodyByItem.get(l.item_id)).find(Boolean) ?? null;
@@ -251,7 +283,7 @@ export async function getThreadArchive(profileId: string): Promise<ArchiveMega[]
         date: latest,
         headline: kid.title,
         body,
-        lenses: selectLenses(null, null, kid.entities),
+        lenses,
         childId: kid.id,
       });
     }
@@ -260,6 +292,7 @@ export async function getThreadArchive(profileId: string): Promise<ArchiveMega[]
       title: m.title,
       volume: [...volume.entries()].map(([date, count]) => ({ date, count })).sort((a, b) => a.date.localeCompare(b.date)),
       dots: dots.sort((a, b) => a.date.localeCompare(b.date)),
+      primarySector: dominantLens(kidLenses),
     };
   });
 }

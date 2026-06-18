@@ -7,6 +7,7 @@ import {
   dedupeEntities,
   mergeEntities,
   selectLenses,
+  dominantLens,
   orderThreads,
   clusterByEntities,
   planThreadActions,
@@ -175,6 +176,23 @@ describe("selectLenses", () => {
 
   it("falls back to a single neutral lens when nothing matches", () => {
     expect(selectLenses(null, "xyzzy", [])).toEqual(["sociaal"]);
+  });
+});
+
+describe("dominantLens", () => {
+  it("picks the mode of the stories' primary lenses", () => {
+    expect(
+      dominantLens([["politiek"], ["politiek", "economisch"], ["economisch"]]),
+    ).toBe("politiek");
+  });
+
+  it("tie-breaks by LENS_ORDER (economisch before politiek)", () => {
+    expect(dominantLens([["politiek"], ["economisch"]])).toBe("economisch");
+  });
+
+  it("ignores empty story lens lists and falls back to sociaal", () => {
+    expect(dominantLens([[], []])).toBe("sociaal");
+    expect(dominantLens([])).toBe("sociaal");
   });
 });
 

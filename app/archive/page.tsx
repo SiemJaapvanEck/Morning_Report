@@ -6,7 +6,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { hasDbConfig } from "@/modules/shared/db";
 import { getThreadArchive } from "@/app/lib/queries";
-import { ThreadTimeline } from "@/app/components/ThreadTimeline";
+import { StorylineChart } from "@/app/components/StorylineChart";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +28,7 @@ export default async function ArchivePagina() {
   const megas = await getThreadArchive(profileId);
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div>
       <Link
         href="/"
         className="inline-flex items-center gap-1.5 text-sm font-semibold text-stone-500 hover:text-stone-900 dark:hover:text-stone-100"
@@ -39,8 +39,8 @@ export default async function ArchivePagina() {
       <header className="mt-5">
         <h1 className="text-2xl font-extrabold tracking-tight">Archive — Storylines</h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-stone-500">
-          De grote verhaallijnen die over meerdere dagen terugkomen. Elke lijn toont hoeveel nieuws
-          er per dag was; elke stip is een onderliggend verhaal — klik erop om het te lezen.
+          De grote verhaallijnen door de tijd. Elke lijn is één verhaallijn — de hoogte toont hoeveel
+          nieuws er die dag was, de kleur de sector. Kies een lijn om hem open te klappen.
         </p>
       </header>
 
@@ -49,10 +49,8 @@ export default async function ArchivePagina() {
           Nog geen grote verhaallijnen. Zodra een onderwerp meerdere dagen terugkomt, verschijnt het hier.
         </p>
       ) : (
-        <div className="mt-6 flex flex-col gap-5">
-          {megas.map((mega) => (
-            <ThreadTimeline key={mega.id} title={mega.title} volume={mega.volume} dots={mega.dots} />
-          ))}
+        <div className="mt-6">
+          <StorylineChart megas={megas} />
         </div>
       )}
     </div>

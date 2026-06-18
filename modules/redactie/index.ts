@@ -23,6 +23,8 @@ export interface UserContext {
   followedTopicIds: Set<string>;
   /** category_ids the reader follows */
   followedCategoryIds: Set<string>;
+  /** topic_ids the reader explicitly tracks as a thread (thread_tracking) */
+  trackedTopicIds: Set<string>;
 }
 
 /**
@@ -41,6 +43,11 @@ export async function assembleUserContext(profileId: string): Promise<UserContex
   const followedTopicIds = new Set(marks.filter((m) => m.target_type === "topic").map((m) => m.target_id));
   const followedCategoryIds = new Set(marks.filter((m) => m.target_type === "category").map((m) => m.target_id));
 
+  const tracking = unwrap(
+    await db().from("thread_tracking").select("topic_id").eq("profile_id", profileId),
+  ) as { topic_id: string }[];
+  const trackedTopicIds = new Set(tracking.map((t) => t.topic_id));
+
   const follows: string[] = [];
   if (followedTopicIds.size > 0) {
     const topics = unwrap(
@@ -54,7 +61,7 @@ export async function assembleUserContext(profileId: string): Promise<UserContex
     ) as { name: string }[];
     follows.push(...cats.map((c) => c.name));
   }
-  return { follows, followedTopicIds, followedCategoryIds };
+  return { follows, followedTopicIds, followedCategoryIds, trackedTopicIds };
 }
 
 // ============================================================

@@ -187,3 +187,15 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   in the new standard Daily Paper layout. Phase A = investment block + finance
   source seed; B = agenda extraction; C = per-thread prediction; D = 52-week
   graphs + dotted line. One phase per sprint. Next session starts at Phase A.
+
+- **18 June 2026 (vervolg 5) — Track-as-thread + custom RSS source: landed.**
+  Picked up a complete, green, uncommitted feature the planning handoff didn't
+  mention (its migration was already live in the DB) — verified and committed it.
+  (1) Per-profile "track as thread" selection: migration `0010_thread_tracking`,
+  `applyThreadTracking()`, `trackedTopicIds` threaded through `assembleUserContext`
+  → `threadsStep` → `planThreadActions` (new `"tracked"` thread-birth reason — any
+  item on a tracked topic opens/joins a thread, no deep/follow needed), and a
+  "✦ Verhaallijn" toggle in `VoorkeurenKiezer`. (2) Add-your-own RSS feed:
+  `createUserSource()` + `validateFeedUrl()` (parses the feed before insert),
+  `POST /api/bronnen`, and a validate-&-add form in the preferences UI. +4 tests
+  (96 → 100). Gate green; verified on localhost; pushed. Next: Phase A.

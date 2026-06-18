@@ -11,33 +11,37 @@ export interface VoorkeurenData {
   topics: Topic[];
   /** actieve bronnen, voor de optionele topic ↔ bron-koppeling */
   sources: Source[];
-  initieel: Record<string, { volgen: boolean; relevantie: number }>;
+  initieel: Record<string, { volgen: boolean; relevantie: number; track: boolean }>;
 }
 
 export async function getVoorkeurenData(profileId: string): Promise<VoorkeurenData> {
-  const [categoriesRes, topicsRes, sourcesRes, scoresRes, marksRes] = await Promise.all([
-    db().from("categories").select("*").order("position"),
-    db().from("topics").select("*").order("name"),
-    db().from("sources").select("*").eq("active", true).order("name"),
-    db()
-      .from("topic_scores")
-      .select("target_id, score")
-      .eq("profile_id", profileId)
-      .eq("target_type", "topic"),
-    db()
-      .from("follow_marks")
-      .select("target_id, active")
-      .eq("profile_id", profileId)
-      .eq("target_type", "topic"),
-  ]);
+  const [categoriesRes, topicsRes, sourcesRes, scoresRes, marksRes, trackingRes] =
+    await Promise.all([
+      db().from("categories").select("*").order("position"),
+      db().from("topics").select("*").order("name"),
+      db().from("sources").select("*").eq("active", true).order("name"),
+      db()
+        .from("topic_scores")
+        .select("target_id, score")
+        .eq("profile_id", profileId)
+        .eq("target_type", "topic"),
+      db()
+        .from("follow_marks")
+        .select("target_id, active")
+        .eq("profile_id", profileId)
+        .eq("target_type", "topic"),
+      db().from("thread_tracking").select("topic_id").eq("profile_id", profileId),
+    ]);
   const categories = unwrap(categoriesRes) as Category[];
   const topics = unwrap(topicsRes) as Topic[];
   const sources = unwrap(sourcesRes) as Source[];
   const scores = unwrap(scoresRes) as { target_id: string; score: number }[];
   const marks = unwrap(marksRes) as { target_id: string; active: boolean }[];
+  const tracking = unwrap(trackingRes) as { topic_id: string }[];
 
   const scoreVoor = new Map(scores.map((s) => [s.target_id, s.score]));
   const markVoor = new Map(marks.map((m) => [m.target_id, m.active]));
+  const trackVoor = new Set(tracking.map((t) => t.topic_id));
   const defaultCategoryIds = new Set(
     categories
       .filter((c) => (DEFAULT_CATEGORY_SLUGS as readonly string[]).includes(c.slug))
@@ -53,12 +57,14 @@ export async function getVoorkeurenData(profileId: string): Promise<VoorkeurenDa
       initieel[topic.id] = {
         volgen: mark,
         relevantie: Math.max(-2, Math.min(2, Math.round(score / 0.3))),
+        track: trackVoor.has(topic.id),
       };
     } else {
       // nog geen voorkeur: standaard-voorselectie
       initieel[topic.id] = {
         volgen: defaultCategoryIds.has(topic.category_id),
         relevantie: 1,
+        track: trackVoor.has(topic.id),
       };
     }
   }

@@ -307,7 +307,7 @@ export interface NewThreadPlan {
   /** display-form entities of the members (normalized on store) */
   entities: string[];
   memberItemIds: string[];
-  reason: "followed" | "big_topic";
+  reason: "followed" | "big_topic" | "tracked";
 }
 
 export interface ThreadActions {
@@ -330,9 +330,12 @@ export interface ThreadPlanConfig {
  * - **Linking is universal:** any item whose entities overlap an active thread
  *   joins it, followed or not — that is how a storyline keeps absorbing news.
  * - **A NEW thread is born only for** (a) a big cross-source cluster (a major
- *   story), or (b) a *followed* item that is also **significant** (`deep` band)
- *   this edition. An ordinary or non-deep followed headline stays a plain item —
- *   that is what keeps threads to real storylines instead of one per headline.
+ *   story), (b) a *followed* item that is also **significant** (`deep` band)
+ *   this edition, or (c) any item whose topic the reader **explicitly tracks**
+ *   as a thread (`trackedTopicIds`) — that selection lowers the bar so even an
+ *   ordinary headline keeps the storyline going. Otherwise an ordinary or
+ *   non-deep followed headline stays a plain item — that is what keeps threads
+ *   to real storylines instead of one per headline.
  *
  * Idempotency: items already linked this edition are skipped, and matching runs
  * to a **fixed point** — because attaching an item grows a thread's entity set,
@@ -346,6 +349,7 @@ export function planThreadActions(
   alreadyLinked: Set<string>,
   followedTopicIds: Set<string>,
   followedCategoryIds: Set<string>,
+  trackedTopicIds: Set<string>,
   cfg: ThreadPlanConfig,
 ): ThreadActions {
   const fresh = candidates.filter((c) => !alreadyLinked.has(c.itemId));
@@ -428,8 +432,16 @@ export function planThreadActions(
     for (const id of cluster) attach(id, key);
   }
 
-  // 3. Followed + significant (deep band): open a thread for each.
+  // 3. Open a thread for each remaining item that either (a) is on a topic the
+  //    reader explicitly tracks (any significance), or (b) is followed AND
+  //    significant (deep band). Tracking is the stronger, explicit signal, so it
+  //    needs neither deep nor a separate follow.
   for (const c of unassigned()) {
+    const tracked = c.topicId != null && trackedTopicIds.has(c.topicId);
+    if (tracked) {
+      attach(c.itemId, openThread(c, "tracked"));
+      continue;
+    }
     if (!c.deep) continue;
     const followed =
       (c.topicId != null && followedTopicIds.has(c.topicId)) ||

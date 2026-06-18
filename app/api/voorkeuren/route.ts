@@ -7,6 +7,7 @@ import { cookies } from "next/headers";
 import { db, unwrap } from "@/modules/shared/db";
 import {
   applyPreferences,
+  applyThreadTracking,
   createUserTopic,
   type NieuwTopic,
   type VoorkeurKeuze,
@@ -54,6 +55,8 @@ export async function POST(request: NextRequest) {
   const body = (await request.json()) as {
     keuzes?: VoorkeurKeuze[];
     nieuwe_topics?: NieuwTopic[];
+    /** volledige set topic_ids die als verhaallijn gevolgd moeten worden */
+    tracked_topic_ids?: string[];
     onboarding_afgerond?: boolean;
   };
 
@@ -63,6 +66,9 @@ export async function POST(request: NextRequest) {
     }
     for (const nieuw of body.nieuwe_topics ?? []) {
       await createUserTopic(profileId, nieuw);
+    }
+    if (body.tracked_topic_ids !== undefined) {
+      await applyThreadTracking(profileId, body.tracked_topic_ids);
     }
 
     if (body.onboarding_afgerond) {

@@ -270,6 +270,7 @@ describe("planThreadActions", () => {
 
   const cfg = { matchMinOverlap: 0.34, bigTopicMinOverlap: 0.3, bigTopicMinCluster: 3 };
   const noFollow = new Set<string>();
+  const noTrack = new Set<string>();
 
   it("links an overlapping item to an existing thread, opens nothing", () => {
     const threads = [{ id: "t1", entities: ["spacex", "ipo"], topic_id: "tech" }];
@@ -279,6 +280,7 @@ describe("planThreadActions", () => {
       new Set(),
       noFollow,
       noFollow,
+      noTrack,
       cfg,
     );
     expect(out.links).toEqual([{ itemId: "i1", threadId: "t1" }]);
@@ -292,6 +294,7 @@ describe("planThreadActions", () => {
       new Set(),
       new Set(["tibet"]),
       noFollow,
+      noTrack,
       cfg,
     );
     expect(out.links).toEqual([]);
@@ -306,10 +309,40 @@ describe("planThreadActions", () => {
       new Set(),
       new Set(["tibet"]),
       noFollow,
+      noTrack,
       cfg,
     );
     expect(out.links).toEqual([]);
     expect(out.newThreads).toEqual([]);
+  });
+
+  it("opens a thread for a tracked topic even when the item is NOT deep", () => {
+    const out = planThreadActions(
+      [cand("i1", ["Acme Corp"], { topicId: "ma-deals", deep: false })],
+      [],
+      new Set(),
+      new Set(["ma-deals"]), // followed
+      noFollow,
+      new Set(["ma-deals"]), // and explicitly tracked
+      cfg,
+    );
+    expect(out.links).toEqual([]);
+    expect(out.newThreads).toHaveLength(1);
+    expect(out.newThreads[0]).toMatchObject({ reason: "tracked", memberItemIds: ["i1"] });
+  });
+
+  it("tracking opens a thread without needing a follow or deep band", () => {
+    const out = planThreadActions(
+      [cand("i1", ["Acme Corp"], { topicId: "ma-deals", deep: false })],
+      [],
+      new Set(),
+      noFollow, // not followed
+      noFollow,
+      new Set(["ma-deals"]), // tracked alone is enough
+      cfg,
+    );
+    expect(out.newThreads).toHaveLength(1);
+    expect(out.newThreads[0].reason).toBe("tracked");
   });
 
   it("leaves an ordinary non-followed lone item as a plain item", () => {
@@ -319,6 +352,7 @@ describe("planThreadActions", () => {
       new Set(),
       noFollow,
       noFollow,
+      noTrack,
       cfg,
     );
     expect(out.links).toEqual([]);
@@ -329,7 +363,7 @@ describe("planThreadActions", () => {
     const items = ["i1", "i2", "i3"].map((id, n) =>
       cand(id, ["Iran", "Israel"], { importance: n === 1 ? 0.9 : 0.4, title: `T${id}` }),
     );
-    const out = planThreadActions(items, [], new Set(), noFollow, noFollow, cfg);
+    const out = planThreadActions(items, [], new Set(), noFollow, noFollow, noTrack, cfg);
     expect(out.newThreads).toHaveLength(1);
     expect(out.newThreads[0].reason).toBe("big_topic");
     expect(out.newThreads[0].memberItemIds.sort()).toEqual(["i1", "i2", "i3"]);
@@ -342,12 +376,12 @@ describe("planThreadActions", () => {
       cand("a", ["Tibet", "Dalai Lama"], { topicId: "tibet", deep: true }), // opens a thread
       cand("b", ["Tibet", "Dalai Lama"]), // not followed, not deep — but overlaps a's new thread
     ];
-    const out = planThreadActions(items, [], new Set(), new Set(["tibet"]), noFollow, cfg);
+    const out = planThreadActions(items, [], new Set(), new Set(["tibet"]), noFollow, noTrack, cfg);
     expect(out.newThreads).toHaveLength(1);
     expect(out.newThreads[0].memberItemIds.sort()).toEqual(["a", "b"]);
 
     // re-run with both already linked → nothing further (idempotent)
-    const rerun = planThreadActions(items, [], new Set(["a", "b"]), new Set(["tibet"]), noFollow, cfg);
+    const rerun = planThreadActions(items, [], new Set(["a", "b"]), new Set(["tibet"]), noFollow, noTrack, cfg);
     expect(rerun.links).toEqual([]);
     expect(rerun.newThreads).toEqual([]);
   });
@@ -360,6 +394,7 @@ describe("planThreadActions", () => {
       new Set(["i1"]),
       noFollow,
       noFollow,
+      noTrack,
       cfg,
     );
     expect(out.links).toEqual([]);

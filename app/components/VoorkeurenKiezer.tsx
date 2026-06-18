@@ -12,6 +12,8 @@ import type { Category, Source, Topic } from "@/modules/shared/types";
 interface Keuze {
   volgen: boolean;
   relevantie: number;
+  /** dit onderwerp als doorlopende verhaallijn (thread) bijhouden */
+  track: boolean;
 }
 
 interface PendingTopic {
@@ -55,7 +57,7 @@ function RelevantieKiezer({
 export function VoorkeurenKiezer({
   categories,
   topics,
-  sources,
+  sources: sourcesInitieel,
   initieel,
   modus,
 }: {
@@ -71,10 +73,12 @@ export function VoorkeurenKiezer({
   const [keuzes, setKeuzes] = useState<Record<string, Keuze>>(() => {
     const start: Record<string, Keuze> = {};
     for (const topic of topics) {
-      start[topic.id] = initieel[topic.id] ?? { volgen: false, relevantie: 1 };
+      start[topic.id] = initieel[topic.id] ?? { volgen: false, relevantie: 1, track: false };
     }
     return start;
   });
+  // Bronnen zijn stateful: een net toegevoegde feed verschijnt meteen in de lijst.
+  const [sources, setSources] = useState<Source[]>(sourcesInitieel);
   const [pending, setPending] = useState<PendingTopic[]>([]);
   const [nieuwNaam, setNieuwNaam] = useState("");
   const [nieuwCategorie, setNieuwCategorie] = useState<string>(categories[0]?.id ?? "");
@@ -84,6 +88,14 @@ export function VoorkeurenKiezer({
   const [nieuwRelevantie, setNieuwRelevantie] = useState(1);
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
+
+  // Eigen feed toevoegen aan de gedeelde broncatalogus.
+  const [bronNaam, setBronNaam] = useState("");
+  const [bronUrl, setBronUrl] = useState("");
+  const [bronCategorie, setBronCategorie] = useState<string>(categories[0]?.id ?? "");
+  const [bronBezig, setBronBezig] = useState(false);
+  const [bronFout, setBronFout] = useState<string | null>(null);
+  const [bronOk, setBronOk] = useState<string | null>(null);
 
   const perCategorie = useMemo(
     () =>
@@ -118,6 +130,38 @@ export function VoorkeurenKiezer({
     setNieuwRelevantie(1);
   }
 
+  async function voegBronToe() {
+    if (!bronNaam.trim() || !bronUrl.trim()) return;
+    setBronBezig(true);
+    setBronFout(null);
+    setBronOk(null);
+    const response = await fetch("/api/bronnen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        naam: bronNaam.trim(),
+        url: bronUrl.trim(),
+        category_id: bronCategorie || null,
+      }),
+    });
+    setBronBezig(false);
+    const data = (await response.json().catch(() => null)) as
+      | { source?: Source; error?: string }
+      | null;
+    if (!response.ok || !data?.source) {
+      setBronFout(data?.error ?? "Feed toevoegen mislukt — controleer de URL.");
+      return;
+    }
+    // dedupe op id: een bestaande feed (zelfde url) komt ongewijzigd terug
+    setSources((prev) =>
+      prev.some((s) => s.id === data.source!.id) ? prev : [...prev, data.source!],
+    );
+    setNieuwBron(data.source.id); // koppel 'm meteen voor een nieuw onderwerp
+    setBronOk(`'${data.source.name}' toegevoegd.`);
+    setBronNaam("");
+    setBronUrl("");
+  }
+
   async function opslaan() {
     setBezig(true);
     setFout(null);
@@ -127,6 +171,10 @@ export function VoorkeurenKiezer({
       body: JSON.stringify({
         keuzes: Object.entries(keuzes).map(([topic_id, keuze]) => ({ topic_id, ...keuze })),
         nieuwe_topics: pending,
+        // alleen gevolgde onderwerpen kunnen als verhaallijn worden bijgehouden
+        tracked_topic_ids: Object.entries(keuzes)
+          .filter(([, keuze]) => keuze.volgen && keuze.track)
+          .map(([topic_id]) => topic_id),
         onboarding_afgerond: true,
       }),
     });
@@ -176,10 +224,25 @@ export function VoorkeurenKiezer({
                       </span>
                     </label>
                     {keuze.volgen && (
-                      <RelevantieKiezer
-                        waarde={keuze.relevantie}
-                        onKies={(relevantie) => zetKeuze(topic.id, { relevantie })}
-                      />
+                      <div className="flex shrink-0 items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => zetKeuze(topic.id, { track: !keuze.track })}
+                          aria-pressed={keuze.track}
+                          title="Als doorlopende verhaallijn bijhouden — ook gewoon nieuws bouwt de lijn op"
+                          className={`rounded px-1.5 py-0.5 text-xs font-medium leading-none transition-colors ${
+                            keuze.track
+                              ? "bg-[#2f6df0]/10 text-[#2f6df0] dark:bg-[#2f6df0]/20"
+                              : "text-stone-400 hover:text-[#2f6df0]"
+                          }`}
+                        >
+                          ✦ Verhaallijn
+                        </button>
+                        <RelevantieKiezer
+                          waarde={keuze.relevantie}
+                          onKies={(relevantie) => zetKeuze(topic.id, { relevantie })}
+                        />
+                      </div>
                     )}
                   </li>
                 );
@@ -243,6 +306,50 @@ export function VoorkeurenKiezer({
               </option>
             ))}
           </select>
+
+          {/* Eigen feed toevoegen aan de gedeelde lijst */}
+          <details className="rounded-lg border border-dashed border-stone-300 px-3 py-2 dark:border-stone-700">
+            <summary className="cursor-pointer text-xs text-stone-500">
+              Feed niet in de lijst? Voeg een RSS-feed toe
+            </summary>
+            <div className="mt-2 space-y-2">
+              <input
+                value={bronNaam}
+                onChange={(event) => setBronNaam(event.target.value)}
+                placeholder="Bronnaam, bv. PR Newswire M&amp;A"
+                className="w-full rounded-lg border border-stone-300 bg-transparent px-3 py-1.5 text-sm dark:border-stone-700"
+              />
+              <input
+                value={bronUrl}
+                onChange={(event) => setBronUrl(event.target.value)}
+                placeholder="https://… (RSS/Atom-URL)"
+                className="w-full rounded-lg border border-stone-300 bg-transparent px-3 py-1.5 text-sm dark:border-stone-700"
+              />
+              <div className="flex items-center justify-between gap-2">
+                <select
+                  value={bronCategorie}
+                  onChange={(event) => setBronCategorie(event.target.value)}
+                  className="rounded-lg border border-stone-300 bg-transparent px-2 py-1.5 text-sm dark:border-stone-700 dark:bg-stone-900"
+                >
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={voegBronToe}
+                  disabled={bronBezig || !bronNaam.trim() || !bronUrl.trim()}
+                  className="rounded-lg bg-stone-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40 dark:bg-stone-100 dark:text-stone-900"
+                >
+                  {bronBezig ? "Valideren…" : "Valideer & voeg toe"}
+                </button>
+              </div>
+              {bronFout && <p className="text-xs text-red-600">{bronFout}</p>}
+              {bronOk && <p className="text-xs text-emerald-600">{bronOk}</p>}
+            </div>
+          </details>
           <div className="flex items-center justify-between">
             <span className="text-xs text-stone-500">
               Relevantie: <RelevantieKiezer waarde={nieuwRelevantie} onKies={setNieuwRelevantie} />

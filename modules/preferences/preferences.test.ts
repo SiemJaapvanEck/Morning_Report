@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { relevantieNaarScore, naamNaarSlug } from "./index";
+import { relevantieNaarScore, naamNaarSlug, isHttpUrl } from "./index";
 
 describe("relevantieNaarScore (voorkeur → beginscore)", () => {
   it("schaalt −2…+2 naar −0.6…+0.6 (ruimte voor leren tot ±1)", () => {
@@ -26,5 +26,20 @@ describe("naamNaarSlug (eigen topics/categorieën)", () => {
 
   it("zelfde naam → zelfde slug (dedupe van eigen categorieën)", () => {
     expect(naamNaarSlug("Goed Nieuws")).toBe(naamNaarSlug("goed nieuws"));
+  });
+});
+
+describe("isHttpUrl (feed-URL validatie)", () => {
+  it("accepteert http(s)-URL's", () => {
+    expect(isHttpUrl("https://www.cnbc.com/id/10000115/device/rss/rss.html")).toBe(true);
+    expect(isHttpUrl("http://feeds.marketwatch.com/marketwatch/topstories/")).toBe(true);
+    expect(isHttpUrl("  https://tech.eu/feed/  ")).toBe(true); // trimt witruimte
+  });
+
+  it("weigert niet-http(s) en onzin", () => {
+    expect(isHttpUrl("ftp://example.com/feed")).toBe(false);
+    expect(isHttpUrl("javascript:alert(1)")).toBe(false);
+    expect(isHttpUrl("geen-url")).toBe(false);
+    expect(isHttpUrl("")).toBe(false);
   });
 });

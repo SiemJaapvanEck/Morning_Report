@@ -290,6 +290,17 @@ export interface ThreadItem {
   created_at: string;
 }
 
+/**
+ * Per-profile "track as thread" selection over the shared topic catalog.
+ * Presence of a row = the profile wants this topic maintained as a storyline.
+ */
+export interface ThreadTracking {
+  id: string;
+  profile_id: string;
+  topic_id: string;
+  created_at: string;
+}
+
 export interface CalendarEvent {
   id: string;
   title: string;

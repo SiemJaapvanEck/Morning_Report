@@ -350,6 +350,7 @@ const threadsStep: StepHandler = async ({ edition }) => {
     linked,
     userCtx.followedTopicIds,
     userCtx.followedCategoryIds,
+    userCtx.trackedTopicIds,
     {
       matchMinOverlap: config.threads.matchMinOverlap,
       bigTopicMinOverlap: config.threads.bigTopicMinOverlap,

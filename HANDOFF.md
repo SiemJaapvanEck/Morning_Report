@@ -5,20 +5,45 @@
 
 ## Where we stand
 
-**News Threads Phase 5c-3 is done and in `main`.** The `/archive` page is now a
-single full-width multi-line chart (`StorylineChart`) — every mega-thread as one
-line, colored by its primary DESTEP sector, with interactive dots and an article
-panel at Daily Paper width underneath. **Phases 0–5c-3 are complete and green**
-(lint/tsc/96 tests/build).
+**"Track-as-thread + custom RSS source" is done and in `main`.** Readers can now
+mark a followed topic to be maintained as a persistent storyline, and add their
+own RSS feed to the shared source catalog from the preferences screen. This
+landed on top of News Threads Phases 0–5c-3 (all complete). **Everything is
+green** (lint/tsc/**100 tests**/build).
 
-Pipeline: scan → select → **threads (match/link + mega-thread anchoring)** →
-**generate (thread-aware)** → **daily_paper (assembly)** → finalize.
+Pipeline: scan → select → **threads (match/link + mega-thread anchoring,
+tracked-topic gate)** → **generate (thread-aware)** → **daily_paper (assembly)**
+→ finalize.
 
-**This session was planning only — no code changed.** Siem approved a new
-roadmap, **"Investment & Foresight"** (Phases A–D), which is recorded under
-"What's open" below and replaces the old Phase 6. Next session starts at
+Next up: the approved **"Investment & Foresight"** roadmap (Phases A–D, recorded
+under "What's open" below; replaces the old Phase 6). Next session starts at
 Phase A; first action there is proposing the free finance RSS feed list for
-Siem's approval before seeding.
+Siem's approval before seeding. (Note: the new custom-RSS UI is a natural feeder
+for Phase A.)
+
+### Track-as-thread + custom RSS source (this session, landed)
+
+A feature that was built but had never been committed or recorded — picked up,
+verified green, and committed this session. Two related additions:
+
+- **Per-profile "track as thread" selection.** Migration `0010_thread_tracking`
+  (already applied to the live DB) adds a `thread_tracking` table (presence of a
+  row = tracked; toggle off deletes it; RLS on, service-role only). The catalog
+  stays global — only the *selection* is per-profile, sitting alongside
+  `follow_marks`/`topic_scores`. `applyThreadTracking()` in `modules/preferences`
+  does a diff-based replace. `assembleUserContext` now loads `trackedTopicIds`,
+  threaded through `threadsStep` into `planThreadActions`, which gains a third
+  thread-birth reason **`"tracked"`**: a tracked topic opens/joins a thread for
+  *any* of its items (no `deep`, no separate follow required) — the explicit,
+  stronger signal. UI: a "✦ Verhaallijn" toggle next to a followed topic's
+  relevance picker in `VoorkeurenKiezer`; only followed topics can be tracked.
+- **Add-your-own RSS source.** `createUserSource()` + `validateFeedUrl()` in
+  `modules/preferences` actually fetch/parse the feed (same path as ingestion)
+  before inserting; idempotent on `url`. New `POST /api/bronnen` (profile-cookie
+  auth). UI: a collapsible "Feed niet in de lijst?" form in `VoorkeurenKiezer`
+  that validates and auto-selects the new feed. `isHttpUrl()` pure helper.
+- Tests: +2 `planThreadActions` (tracked opens a thread without deep/follow) and
+  +1 `isHttpUrl` (96 → 100). Verified green and smoke-tested on localhost.
 
 ### Done & in `main`
 - **0–4**: budget cap; threads schema + pure module; entity extraction;

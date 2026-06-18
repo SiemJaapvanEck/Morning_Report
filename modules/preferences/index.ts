@@ -7,7 +7,8 @@
 // maar groot nieuws breekt er altijd doorheen; harde uitsluiting bestaat niet.
 
 import { db, unwrap } from "../shared/db";
-import type { Category, Topic } from "../shared/types";
+import { fetchFeed } from "../shared/feeds";
+import type { Category, Source, Topic } from "../shared/types";
 
 /** Categorieën die voor een nieuw profiel voorgeselecteerd staan. */
 export const DEFAULT_CATEGORY_SLUGS = [
@@ -158,4 +159,120 @@ export async function createUserTopic(
   ]);
 
   return topic;
+}
+
+// ============================================================
+// Add a feed to the shared source catalog (validated by URL)
+// ============================================================
+
+export interface NieuweBron {
+  naam: string;
+  url: string;
+  /** optionele macro-categorie waaronder de bron valt */
+  category_id?: string | null;
+}
+
+export interface BronValidatie {
+  ok: boolean;
+  /** aantal items dat de feed opleverde (alleen bij ok) */
+  items?: number;
+  error?: string;
+}
+
+/** Pure: accepteert alleen http(s)-URL's. */
+export function isHttpUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw.trim());
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Valideer een feed door 'm echt te parsen (dezelfde weg als de ingestie). Geeft
+ * het aantal items terug zodat de UI "23 artikelen gevonden" kan tonen.
+ */
+export async function validateFeedUrl(url: string): Promise<BronValidatie> {
+  if (!isHttpUrl(url)) return { ok: false, error: "Geen geldige http(s)-URL." };
+  try {
+    const items = await fetchFeed(url.trim());
+    if (items.length === 0) return { ok: false, error: "Feed bevat geen items." };
+    return { ok: true, items: items.length };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
+ * Maakt een gedeelde RSS-bron aan uit een URL, na validatie dat 'ie parseert.
+ * De bron is globaal (gedeelde catalogus) — alleen de per-profiel volg-/track-
+ * keuze is persoonlijk. Idempotent op url: een bestaande bron met dezelfde url
+ * wordt ongewijzigd teruggegeven.
+ */
+export async function createUserSource(invoer: NieuweBron): Promise<Source> {
+  const naam = invoer.naam.trim();
+  const url = invoer.url.trim();
+  if (!naam) throw new Error("Bronnaam is leeg");
+
+  const validatie = await validateFeedUrl(url);
+  if (!validatie.ok) throw new Error(validatie.error ?? "Feed niet geldig");
+
+  const bestaande = unwrap(
+    await db().from("sources").select("*").eq("url", url).limit(1),
+  ) as Source[];
+  if (bestaande.length > 0) return bestaande[0];
+
+  return unwrap(
+    await db()
+      .from("sources")
+      .insert({
+        category_id: invoer.category_id ?? null,
+        name: naam,
+        kind: "rss",
+        url,
+        medium: "article",
+        active: true,
+      })
+      .select()
+      .single(),
+  ) as Source;
+}
+
+// ============================================================
+// Per-profile "track as thread" selection
+// ============================================================
+
+/**
+ * Vervangt de "track als verhaallijn"-selectie van een profiel door `topicIds`
+ * (de volledige gewenste set). Diff-gebaseerd, zodat opnieuw opslaan een no-op
+ * is en de set nooit kortstondig leeg raakt.
+ */
+export async function applyThreadTracking(
+  profileId: string,
+  topicIds: string[],
+): Promise<void> {
+  const desired = new Set(topicIds);
+  const existing = unwrap(
+    await db().from("thread_tracking").select("topic_id").eq("profile_id", profileId),
+  ) as { topic_id: string }[];
+  const have = new Set(existing.map((e) => e.topic_id));
+
+  const toAdd = [...desired].filter((id) => !have.has(id));
+  const toRemove = [...have].filter((id) => !desired.has(id));
+
+  if (toAdd.length > 0) {
+    const { error } = await db()
+      .from("thread_tracking")
+      .insert(toAdd.map((topic_id) => ({ profile_id: profileId, topic_id })));
+    if (error) throw new Error(`Thread-tracking (toevoegen): ${error.message}`);
+  }
+  if (toRemove.length > 0) {
+    const { error } = await db()
+      .from("thread_tracking")
+      .delete()
+      .eq("profile_id", profileId)
+      .in("topic_id", toRemove);
+    if (error) throw new Error(`Thread-tracking (verwijderen): ${error.message}`);
+  }
 }

@@ -2,6 +2,7 @@
 // modules/ en de API-routes.
 
 import { db, unwrap } from "@/modules/shared/db";
+import { selectLenses } from "@/modules/threads";
 import type {
   Edition,
   EditionSection,
@@ -152,4 +153,113 @@ export async function listEditionSummaries(profileId: string): Promise<EditionSu
     status: row.status,
     headline: deriveHeadline(row.front_page),
   }));
+}
+
+// ============================================================
+// Thread archive (Phase 5c-2): mega-threads as timelines of dots
+// ============================================================
+
+/** One dot on a mega-thread's timeline: a child storyline at the date it ran. */
+export interface ArchiveDot {
+  date: string;
+  headline: string;
+  body: string | null;
+  lenses: string[];
+  childId: string;
+}
+
+/** A mega-thread for the archive: its daily news volume + the child-story dots. */
+export interface ArchiveMega {
+  id: string;
+  title: string;
+  /** the topic's own daily item count — the volume line the dots sit on */
+  volume: { date: string; count: number }[];
+  dots: ArchiveDot[];
+}
+
+/**
+ * The profile's mega-threads as timelines. Each is a parent storyline (an anchor
+ * entity that recurred across days); its child threads become dots placed on the
+ * date they last ran, sitting on the topic's daily-volume line. Click a dot in
+ * the UI to read that child's latest article.
+ */
+export async function getThreadArchive(profileId: string): Promise<ArchiveMega[]> {
+  const megas = unwrap(
+    await db()
+      .from("threads")
+      .select("id, title")
+      .eq("profile_id", profileId)
+      .not("anchor_entity", "is", null),
+  ) as { id: string; title: string }[];
+  if (megas.length === 0) return [];
+
+  const children = unwrap(
+    await db()
+      .from("threads")
+      .select("id, parent_thread_id, title, entities")
+      .in("parent_thread_id", megas.map((m) => m.id)),
+  ) as { id: string; parent_thread_id: string; title: string; entities: string[] }[];
+  if (children.length === 0) {
+    return megas.map((m) => ({ id: m.id, title: m.title, volume: [], dots: [] }));
+  }
+
+  const childIds = children.map((c) => c.id);
+  const links = unwrap(
+    await db().from("thread_items").select("thread_id, item_id, edition_id").in("thread_id", childIds),
+  ) as { thread_id: string; item_id: string; edition_id: string | null }[];
+
+  const editionIds = [...new Set(links.map((l) => l.edition_id).filter(Boolean))] as string[];
+  const eds = editionIds.length
+    ? (unwrap(await db().from("editions").select("id, date").in("id", editionIds)) as { id: string; date: string }[])
+    : [];
+  const dateByEdition = new Map(eds.map((e) => [e.id, e.date]));
+
+  const itemIds = [...new Set(links.map((l) => l.item_id))];
+  const eis = itemIds.length
+    ? (unwrap(
+        await db()
+          .from("edition_items")
+          .select("item_id, summary_text")
+          .in("item_id", itemIds)
+          .not("summary_text", "is", null),
+      ) as { item_id: string; summary_text: string | null }[])
+    : [];
+  const bodyByItem = new Map<string, string>();
+  for (const ei of eis) if (ei.summary_text) bodyByItem.set(ei.item_id, ei.summary_text);
+
+  const linksByChild = new Map<string, typeof links>();
+  for (const l of links) {
+    const arr = linksByChild.get(l.thread_id) ?? [];
+    arr.push(l);
+    linksByChild.set(l.thread_id, arr);
+  }
+
+  return megas.map((m) => {
+    const kids = children.filter((c) => c.parent_thread_id === m.id);
+    const dots: ArchiveDot[] = [];
+    const volume = new Map<string, number>();
+    for (const kid of kids) {
+      const kl = linksByChild.get(kid.id) ?? [];
+      const dates = kl
+        .map((l) => (l.edition_id ? dateByEdition.get(l.edition_id) : undefined))
+        .filter((d): d is string => Boolean(d));
+      for (const d of dates) volume.set(d, (volume.get(d) ?? 0) + 1);
+      const latest = [...dates].sort().at(-1);
+      if (!latest) continue;
+      const body = kl.map((l) => bodyByItem.get(l.item_id)).find(Boolean) ?? null;
+      dots.push({
+        date: latest,
+        headline: kid.title,
+        body,
+        lenses: selectLenses(null, null, kid.entities),
+        childId: kid.id,
+      });
+    }
+    return {
+      id: m.id,
+      title: m.title,
+      volume: [...volume.entries()].map(([date, count]) => ({ date, count })).sort((a, b) => a.date.localeCompare(b.date)),
+      dots: dots.sort((a, b) => a.date.localeCompare(b.date)),
+    };
+  });
 }

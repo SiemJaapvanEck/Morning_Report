@@ -103,6 +103,17 @@ export const config = {
      * genuinely broad coverage (an Iran war, a tariffs story) trips it.
      */
     bigTopicMinCluster: Number(process.env.THREADS_BIG_TOPIC_MIN ?? "5"),
+
+    // Mega-threads: a genuinely big, recurring story becomes a PARENT thread
+    // that absorbs the smaller threads about it (its timeline dots). The signal
+    // is recurrence-across-days (not same-day breadth) plus spanning multiple
+    // angles — so a one-day blip or a single-thread topic never graduates.
+    /** an anchor entity must appear on at least this many distinct days (rolling window) */
+    anchorMinDays: Number(process.env.THREADS_ANCHOR_MIN_DAYS ?? "3"),
+    /** how far back to look for recurrence, in days */
+    anchorWindowDays: Number(process.env.THREADS_ANCHOR_WINDOW_DAYS ?? "14"),
+    /** only form a mega-thread if the anchor spans at least this many child threads */
+    anchorMinChildren: Number(process.env.THREADS_ANCHOR_MIN_CHILDREN ?? "3"),
   },
 
   weather: {

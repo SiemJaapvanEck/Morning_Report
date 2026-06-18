@@ -272,6 +272,10 @@ export interface Thread {
   /** normalized entity set, for free overlap matching */
   entities: string[];
   status: ThreadStatus;
+  /** mega-thread parent: a child storyline points to the big anchor thread that absorbed it */
+  parent_thread_id: string | null;
+  /** normalized anchor entity for a mega-thread (e.g. "iran"); null for a normal thread */
+  anchor_entity: string | null;
   last_edition_id: string | null;
   last_seen_at: string | null;
   created_at: string;

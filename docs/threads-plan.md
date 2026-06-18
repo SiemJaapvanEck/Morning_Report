@@ -13,7 +13,9 @@
 - [x] **Phase 4** — Thread-aware generation *(done; `generateThreadUpdate` builds on stored state, DESTEP lenses + archive primer, 9 updates €0.013, idempotent)*
 - [x] **Phase 5a** — Daily Paper assembly *(done; `composeDailyPaper` → `dp_summary/dp_intro/dp_articles` in `front_page`, €0.0028, verified)*
 - [x] **Phase 5b** — Daily Paper UI *(done; krant page renders Summary → Introduction → thread article cards with lens chips; front-page block shows `dp_summary`; verified on localhost)*
-- [ ] **Phase 5c** — Archive with threads (front-page Archive button + split weather; news-volume line with thread/saved-article dots, per category; graph per thread) ← **next sprint**
+- [x] **Phase 5c-1** — Mega-threads *(done; `parent_thread_id`/`anchor_entity` schema 0009, anchor-entity detection + best-anchor absorption, `minChildren=3`, orphan cleanup. Iran (5 children, 5-day timeline) + SpaceX verified)*
+- [x] **Phase 5c-2** — Archive UI v1 *(done; front-page Archive tile + split weather; `/archive` with per-mega `ThreadTimeline` cards — volume line + clickable dots + article panel. Verified on localhost)*
+- [ ] **Phase 5c-3** — Archive rework: ONE big multi-line chart ← **next sprint** (see HANDOFF "What's open")
 - [ ] **Phase 6** — Optional: og:image fallback + embeddings upgrade
 
 Gate after every phase: `npm run lint && npx tsc --noEmit && npm test && npm run build`.

@@ -28,6 +28,13 @@ import {
   orderThreads,
   nextThreadUpdateJob,
   applyThreadUpdate,
+  detectAnchors,
+  assignMegaThreads,
+  loadEntityDays,
+  findOrCreateMegaThread,
+  setThreadParent,
+  clearThreadParents,
+  deleteChildlessMegaThreads,
 } from "../threads";
 import type { Edition, Item, PipelineStep, Band, MarktSnapshot, DailyPaperArticle } from "../shared/types";
 
@@ -334,9 +341,12 @@ const threadsStep: StepHandler = async ({ edition }) => {
     assembleUserContext(edition.profile_id),
   ]);
 
+  // Items match/link to normal threads only; mega-threads (anchor_entity set)
+  // are containers, never matched directly — their children absorb the news.
+  const matchPool = threads.filter((t) => !t.anchor_entity);
   const actions = planThreadActions(
     candidates,
-    threads,
+    matchPool,
     linked,
     userCtx.followedTopicIds,
     userCtx.followedCategoryIds,
@@ -385,11 +395,47 @@ const threadsStep: StepHandler = async ({ edition }) => {
     await touchThread(threadId, mergeEntities(existing, addEnts), edition.id, now);
   }
 
+  // Mega-threads: an anchor entity that recurs across days AND spans several
+  // child threads graduates into a parent that absorbs them (its timeline dots).
+  // The whole structure is re-derived deterministically each run: assign every
+  // child to its single best anchor, detach stragglers, drop orphan parents.
+  // Reload threads so this edition's freshly-created children are included.
+  const entityDays = await loadEntityDays(edition.profile_id, config.threads.anchorWindowDays);
+  const anchors = detectAnchors(entityDays, config.threads.anchorMinDays);
+  const afterThreads = await loadActiveThreads(edition.profile_id);
+  const assignments = assignMegaThreads(anchors, afterThreads, config.threads.anchorMinChildren);
+
+  const keep = new Set<string>();
+  let absorbed = 0;
+  for (const a of assignments) {
+    const megaId = await findOrCreateMegaThread(
+      edition.profile_id,
+      a.entity,
+      a.display,
+      edition.id,
+      now,
+    );
+    const children = a.childIds.filter((id) => id !== megaId);
+    await setThreadParent(children, megaId);
+    for (const id of children) keep.add(id);
+    absorbed += children.length;
+  }
+  // Detach normal threads that are parented to a mega but no longer assigned.
+  const stale = afterThreads
+    .filter((t) => !t.anchor_entity && t.parent_thread_id && !keep.has(t.id))
+    .map((t) => t.id);
+  await clearThreadParents(stale);
+  // Remove mega-threads left without children.
+  const orphansRemoved = await deleteChildlessMegaThreads(edition.profile_id);
+
   return {
     kandidaten: candidates.length,
     gekoppeld: actions.links.length,
     nieuwe_threads: created,
     overgeslagen: linked.size,
+    mega_threads: assignments.length,
+    geabsorbeerd: absorbed,
+    wees_verwijderd: orphansRemoved,
   };
 };
 

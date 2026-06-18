@@ -154,3 +154,17 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   **5c — Archive with threads** (front-page Archive button + split weather; a
   news-volume line with thread/saved-article dots per category, plus a graph per
   thread).
+- **18 June 2026 (vervolg 2) — News Threads Phase 5c-1 + 5c-2: mega-threads +
+  archive.** **5c-1:** migration `0009` (`threads.parent_thread_id` +
+  `anchor_entity`); `threadsStep` now anchors big recurring stories into
+  mega-threads — `detectAnchors` (entity on ≥3 distinct days) +
+  `assignMegaThreads` (each child to its single biggest anchor, keep ≥3 children)
+  + orphan cleanup; mega-threads excluded from item matching. Verified: Iran
+  (5 children, 5-day dot timeline) + SpaceX. Backfilled June 13–17 (re-scanned the
+  pre-Phase-2 days for entities). **5c-2:** front-page Archive/Storylines tile
+  (weather tile split in half) + `/archive` page rendering per-mega
+  `ThreadTimeline` cards (volume line + clickable dots + swapping article panel);
+  `getThreadArchive()` query. 93 tests green; verified on localhost. Pushed 5c-1 +
+  5c-2 together. **Next: 5c-3** — rework `/archive` into ONE big full-width chart
+  with every mega-thread as a sector-colored line (one line per storyline, primary
+  DESTEP lens = colour), click a line → that storyline. Full spec in HANDOFF.

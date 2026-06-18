@@ -10,7 +10,10 @@ import {
   orderThreads,
   clusterByEntities,
   planThreadActions,
+  detectAnchors,
+  assignMegaThreads,
   type ThreadCandidate,
+  type EntityDays,
 } from "./index";
 import type { Thread } from "../shared/types";
 
@@ -343,5 +346,52 @@ describe("planThreadActions", () => {
     );
     expect(out.links).toEqual([]);
     expect(out.newThreads).toEqual([]);
+  });
+});
+
+describe("detectAnchors", () => {
+  it("flags entities recurring on >= minDays distinct days, with a display form", () => {
+    const ed: EntityDays = new Map([
+      ["iran", { days: new Set(["2026-06-15", "2026-06-16", "2026-06-17"]), display: "Iran" }],
+      ["blip", { days: new Set(["2026-06-17"]), display: "Blip" }],
+    ]);
+    const out = detectAnchors(ed, 3);
+    expect(out).toEqual([{ entity: "iran", display: "Iran" }]);
+  });
+
+  it("nothing qualifies below the recurrence bar", () => {
+    const ed: EntityDays = new Map([["x", { days: new Set(["d1", "d2"]), display: "X" }]]);
+    expect(detectAnchors(ed, 3)).toEqual([]);
+  });
+});
+
+describe("assignMegaThreads", () => {
+  const t = (id: string, entities: string[], anchor: string | null = null) => ({
+    id,
+    entities,
+    anchor_entity: anchor,
+  });
+  const anchors = [
+    { entity: "iran", display: "Iran" },
+    { entity: "us", display: "US" },
+  ];
+
+  it("assigns each child to its biggest matching anchor (not split across megas)", () => {
+    const threads = [
+      t("a", ["Iran", "US"]), // matches both → goes to the bigger (iran)
+      t("b", ["Iran"]),
+      t("c", ["Iran", "nuclear"]),
+      t("d", ["US"]),
+      t("mega", ["iran"], "iran"), // a mega itself is never absorbed
+    ];
+    const out = assignMegaThreads(anchors, threads, 3);
+    expect(out).toHaveLength(1);
+    expect(out[0].entity).toBe("iran");
+    expect(out[0].childIds.sort()).toEqual(["a", "b", "c"]);
+  });
+
+  it("drops anchors below the minChildren bar", () => {
+    const threads = [t("a", ["Iran"]), t("b", ["Iran"])];
+    expect(assignMegaThreads(anchors, threads, 3)).toEqual([]);
   });
 });

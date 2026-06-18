@@ -431,17 +431,87 @@ export function planThreadActions(
 }
 
 // ============================================================
+// Mega-threads — anchor-entity detection + absorption (Phase 5c-1)
+// ============================================================
+
+/** Per normalized entity: the distinct days it appeared + a display form. */
+export type EntityDays = Map<string, { days: Set<string>; display: string }>;
+
+/**
+ * Anchor entities = those that recur across at least `minDays` distinct days in
+ * the window. Recurrence (not same-day breadth) is what marks a story that
+ * "keeps coming back" — the seed of a mega-thread. Returns the normalized
+ * entity plus a display form for the thread title.
+ */
+export function detectAnchors(
+  entityDays: EntityDays,
+  minDays: number,
+): { entity: string; display: string }[] {
+  const out: { entity: string; display: string }[] = [];
+  for (const [norm, info] of entityDays) {
+    if (info.days.size >= minDays) out.push({ entity: norm, display: info.display });
+  }
+  return out;
+}
+
+/** A mega-thread to maintain this run, with the children it should absorb. */
+export interface MegaAssignment {
+  entity: string;
+  display: string;
+  childIds: string[];
+}
+
+/**
+ * Assign normal threads to mega-threads, one parent each. A thread whose
+ * entities include several anchors goes to its **best** anchor — the biggest
+ * story (most candidate threads), ties broken alphabetically for determinism —
+ * so children never split across megas and common entities don't steal them.
+ * Only anchors that end up with ≥ `minChildren` children survive (the rest
+ * aren't real mega-stories). Mega-threads themselves are never absorbed.
+ */
+export function assignMegaThreads(
+  anchors: { entity: string; display: string }[],
+  threads: { id: string; entities: string[]; anchor_entity: string | null }[],
+  minChildren: number,
+): MegaAssignment[] {
+  const normal = threads.filter((t) => !t.anchor_entity);
+  const candidates = new Map<string, string[]>(anchors.map((a) => [a.entity, []]));
+  const matchesByThread = new Map<string, string[]>();
+  for (const t of normal) {
+    const ents = new Set(t.entities.map(normalizeEntity));
+    const matched = anchors.filter((a) => ents.has(a.entity)).map((a) => a.entity);
+    if (matched.length === 0) continue;
+    matchesByThread.set(t.id, matched);
+    for (const e of matched) candidates.get(e)!.push(t.id);
+  }
+  const size = (e: string) => candidates.get(e)?.length ?? 0;
+
+  const assigned = new Map<string, string[]>();
+  for (const [threadId, matched] of matchesByThread) {
+    const best = [...matched].sort((a, b) => size(b) - size(a) || a.localeCompare(b))[0];
+    const arr = assigned.get(best) ?? [];
+    arr.push(threadId);
+    assigned.set(best, arr);
+  }
+
+  const display = new Map(anchors.map((a) => [a.entity, a.display]));
+  return [...assigned.entries()]
+    .filter(([, ids]) => ids.length >= minChildren)
+    .map(([entity, childIds]) => ({ entity, display: display.get(entity) as string, childIds }));
+}
+
+// ============================================================
 // DB helpers (Supabase) — only the pipeline step calls these
 // ============================================================
 
-/** Active (non-closed) threads of a profile, with what matching needs. */
+/** Active (non-closed) threads of a profile, with what matching + anchoring need. */
 export async function loadActiveThreads(
   profileId: string,
-): Promise<Pick<Thread, "id" | "entities" | "topic_id" | "category_id">[]> {
+): Promise<Pick<Thread, "id" | "entities" | "topic_id" | "category_id" | "anchor_entity" | "parent_thread_id">[]> {
   return unwrap(
     await db()
       .from("threads")
-      .select("id, entities, topic_id, category_id")
+      .select("id, entities, topic_id, category_id, anchor_entity, parent_thread_id")
       .eq("profile_id", profileId)
       .neq("status", "closed"),
   );
@@ -500,6 +570,8 @@ export async function insertThread(input: {
   status: ThreadStatus;
   lastEditionId: string;
   lastSeenAt: string;
+  /** set for a mega-thread (the normalized anchor entity); omit for a normal thread */
+  anchorEntity?: string;
 }): Promise<string> {
   const row = unwrap(
     await db()
@@ -511,6 +583,7 @@ export async function insertThread(input: {
         title: input.title,
         entities: input.entities,
         status: input.status,
+        anchor_entity: input.anchorEntity ?? null,
         last_edition_id: input.lastEditionId,
         last_seen_at: input.lastSeenAt,
       })
@@ -518,6 +591,111 @@ export async function insertThread(input: {
       .single(),
   ) as { id: string };
   return row.id;
+}
+
+/**
+ * Per-entity distinct-day map over the profile's recent edition items — the
+ * input to detectAnchors. Entities live on items.scan_meta.entities (display
+ * form); the edition date supplies the "day".
+ */
+export async function loadEntityDays(profileId: string, windowDays: number): Promise<EntityDays> {
+  const cutoff = new Date(Date.now() - windowDays * 86_400_000).toISOString().slice(0, 10);
+  const rows = unwrap(
+    await db()
+      .from("edition_items")
+      .select("items(scan_meta), editions!inner(date, profile_id)")
+      .eq("editions.profile_id", profileId)
+      .gte("editions.date", cutoff),
+  ) as unknown as {
+    items: { scan_meta: { entities?: string[] } | null } | null;
+    editions: { date: string } | null;
+  }[];
+
+  const map: EntityDays = new Map();
+  for (const r of rows) {
+    const date = r.editions?.date;
+    if (!date) continue;
+    for (const raw of r.items?.scan_meta?.entities ?? []) {
+      const norm = normalizeEntity(raw);
+      if (!norm) continue;
+      const e = map.get(norm) ?? { days: new Set<string>(), display: raw };
+      e.days.add(date);
+      map.set(norm, e);
+    }
+  }
+  return map;
+}
+
+/** Find the profile's mega-thread for an anchor entity, creating it if absent. */
+export async function findOrCreateMegaThread(
+  profileId: string,
+  anchorNorm: string,
+  displayTitle: string,
+  editionId: string,
+  now: string,
+): Promise<string> {
+  const existing = (await db()
+    .from("threads")
+    .select("id")
+    .eq("profile_id", profileId)
+    .eq("anchor_entity", anchorNorm)
+    .maybeSingle()).data as { id: string } | null;
+  if (existing) {
+    await db()
+      .from("threads")
+      .update({ status: "active", last_edition_id: editionId, last_seen_at: now })
+      .eq("id", existing.id);
+    return existing.id;
+  }
+  return insertThread({
+    profileId,
+    topicId: null,
+    categoryId: null,
+    title: displayTitle,
+    entities: [anchorNorm],
+    status: "active",
+    lastEditionId: editionId,
+    lastSeenAt: now,
+    anchorEntity: anchorNorm,
+  });
+}
+
+/** Re-parent child threads under a mega-thread (absorb them). */
+export async function setThreadParent(childIds: string[], parentId: string): Promise<void> {
+  if (childIds.length === 0) return;
+  const { error } = await db()
+    .from("threads")
+    .update({ parent_thread_id: parentId })
+    .in("id", childIds);
+  if (error) throw new Error(`setThreadParent: ${error.message}`);
+}
+
+/** Detach threads from their mega-parent (when they're no longer assigned to one). */
+export async function clearThreadParents(childIds: string[]): Promise<void> {
+  if (childIds.length === 0) return;
+  const { error } = await db()
+    .from("threads")
+    .update({ parent_thread_id: null })
+    .in("id", childIds);
+  if (error) throw new Error(`clearThreadParents: ${error.message}`);
+}
+
+/** Delete mega-threads (anchor_entity set) that ended up with no children. Returns the count. */
+export async function deleteChildlessMegaThreads(profileId: string): Promise<number> {
+  const megas = unwrap(
+    await db().from("threads").select("id").eq("profile_id", profileId).not("anchor_entity", "is", null),
+  ) as { id: string }[];
+  let deleted = 0;
+  for (const m of megas) {
+    const kids = unwrap(
+      await db().from("threads").select("id").eq("parent_thread_id", m.id).limit(1),
+    ) as { id: string }[];
+    if (kids.length === 0) {
+      await db().from("threads").delete().eq("id", m.id);
+      deleted++;
+    }
+  }
+  return deleted;
 }
 
 /** Upsert thread↔item links; unique(thread_id,item_id) + ignore makes it re-run safe. */

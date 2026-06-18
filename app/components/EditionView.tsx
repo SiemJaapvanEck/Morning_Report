@@ -223,6 +223,30 @@ function WeerStrook({ weather }: { weather: import("@/modules/shared/types").Wea
   );
 }
 
+// ── archive-tegel: ingang naar de verhaallijnen-archief ──────────────────────
+function ArchiveTegel() {
+  return (
+    <Link
+      href="/archive"
+      className={`${TILE} group flex flex-col justify-between gap-4 p-6 transition-transform hover:-translate-y-0.5`}
+    >
+      <div className="flex items-center gap-2">
+        <Icon.Trending className="h-4 w-4 text-[#2f6df0]" />
+        <span className="font-[family-name:var(--font-archivo)] text-[13px] font-extrabold tracking-tight">Archive</span>
+      </div>
+      <div>
+        <div className="font-[family-name:var(--font-archivo)] text-[24px] font-extrabold leading-tight tracking-tight">
+          Storylines
+        </div>
+        <p className="mt-1 text-[12px] text-stone-500">De grote verhaallijnen over de dagen heen</p>
+      </div>
+      <span className="inline-flex items-center gap-1.5 font-[family-name:var(--font-archivo)] text-[12px] font-extrabold text-[#2f6df0]">
+        Bekijk <Icon.Arrow className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+      </span>
+    </Link>
+  );
+}
+
 // ── "Waar het nieuws vandaan komt" — stippen-wereldkaart op échte regio-tellingen ─
 function WereldKaartTegel({
   counts,
@@ -469,7 +493,10 @@ export function EditionView({
             ) : (
               <LegeHero date={date} isToday={isToday} />
             )}
-            <WeerStrook weather={weather} />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <WeerStrook weather={weather} />
+              <ArchiveTegel />
+            </div>
           </div>
 
           {/* rechterkolom: nieuwskaart (of bronnen-balken) + marktenkaart */}

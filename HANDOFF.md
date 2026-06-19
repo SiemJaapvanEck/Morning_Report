@@ -5,15 +5,44 @@
 
 ## Where we stand
 
-**Investment & Foresight Phase B is done and in `main`, with two visible UI
-surfaces: the dashboard agenda tile AND the archive's dotted projections.** The
-`calendar_events` table is filled automatically by the pipeline (scan extracts
-dated events → `agenda` step persists them per-profile), the dashboard renders
-upcoming events, and the `/archive` storyline chart now reaches forward to those
-events with selectable, readable projection markers. **Everything is green**
-(lint/tsc/**108 tests**/build). **Next up: Phase C — per-thread predictions.**
+**Investment & Foresight Phases A–C status: A skipped (deferred), B + C done and
+in `main`. The full loop is closed end-to-end.** A thread's news now yields a
+source-grounded, confidence-tagged forecast with a target date; that becomes a
+linked `calendar_event`, which shows up in the dashboard agenda tile, as a dotted
+projection on the `/archive` storyline chart, and as a "Vooruitblik" block on the
+krant page. **Everything is green** (lint/tsc/**115 tests**/build).
+**Next up: Phase D — 52-week graphs (the per-thread weekly view under each Daily
+Paper article).**
 
-### Archive dotted projections (this session, approved on localhost)
+### Phase C — per-thread, source-grounded predictions (this session, in `main`)
+
+- **Generation** (`modules/generate`): `generateThreadUpdate` (deep tier) now also
+  returns a `prediction { text, target_date, confidence, source_basis }`, grounded
+  **only** in the thread's new items + its already-scheduled events (both fed into
+  the prompt). Discipline lives in a pure, tested `cleanPrediction()` — empty
+  text, empty `source_basis`, or no valid future date ⇒ **no prediction** (not just
+  a prompt instruction). +7 tests (108 → 115).
+- **Persistence** (`modules/threads`): migration `0012_thread_prediction` adds a
+  `prediction jsonb` column to `threads`; `applyThreadUpdate` (now also takes
+  `profileId`) writes it **and** mirrors it into a linked `calendar_event`
+  (`kind = overig`, `certainty = confidence`, `meta.prediction = true`,
+  `meta.source_basis`). Idempotent + refreshing: the thread's prior prediction
+  event is deleted before the new one is inserted, so a thread carries at most one
+  current forecast — and it flows into the agenda + archive automatically.
+- **Plumbing** (`modules/pipeline/steps.ts`): the generate step queries the
+  thread's upcoming non-prediction events and feeds them in; `daily_paper` reads
+  `threads.prediction` onto each `DailyPaperArticle`.
+- **UI** (`EditieWeergave.tsx`): a blue "Vooruitblik" block under each thread
+  article — forecast text, confidence badge, target date, and "Grond:" (source
+  basis). `DailyPaperArticle` + `ThreadUpdate` + `Thread` gained `prediction`;
+  new `ThreadPrediction` type.
+- **Verified by seeding** (Siem's choice): predictions seeded on the Fed/Iran child
+  (`98eeae56`) and SpaceX-retail child (`6f88b41c`) threads + their linked events,
+  and injected into the 17 June edition's stored `dp_articles`. Confirmed on
+  localhost across all three surfaces. **The AI generation path itself is only
+  proven on a live pipeline run** — schema/prompt/validation are unit-tested.
+
+### Archive dotted projections (earlier this session, in `main`)
 
 The `/archive` storyline chart (`StorylineChart`) now projects each storyline
 forward to its upcoming agenda events:
@@ -191,9 +220,12 @@ with a target date → that date becomes an agenda event → a dotted line on th
 thread's graph reaches toward it.**
 
 Cadence: **one phase per sprint, pause for review after each.** Progress so far:
-**Phase A skipped (deferred, not abandoned)**, **Phase B done (this session)**.
-**Next up is Phase C** (per-thread prediction) — it builds directly on the agenda
-that B now fills.
+**Phase A skipped (deferred, not abandoned)**, **Phase B done**, **Phase C done**.
+**Next up is Phase D** — the per-thread 52-week graph under each Daily Paper
+article (the dotted prediction line already exists on the `/archive` chart from
+this session; D generalises it to a fixed weekly axis + a single-line per-thread
+mode). Note: the archive's projection rendering + the prediction→event loop are
+already built, so D is mostly the weekly rebinning + the per-article embed.
 
 Decisions already locked with Siem:
 - Investment section = a **block inside the Daily Paper** (krant page), not a
@@ -226,19 +258,14 @@ explicitly-dated forward events; new `agenda` step persists them per-profile,
 linked to source item + thread; followed/threaded scope; strict validation;
 migration `0011`; +8 tests.
 
-**Phase C — Per-thread prediction piece, source-grounded. [NEXT.]** Every
-threaded topic gets a short, confidence-tagged prediction.
-- Extend `generateThreadUpdate` output schema with `prediction`
-  { text, target_date, confidence, source_basis }. The prompt already gets the
-  thread's new items (titles/summaries/URLs); instruct it to predict **only**
-  from those + scheduled events, and to name its basis. No basis ⇒ no
-  prediction.
-- One prediction → one linked `calendar_event` (certainty = confidence). Stored
-  on the `DailyPaperArticle`.
-- Touches: `modules/generate`, `modules/threads`, types.
+**Phase C — Per-thread prediction piece, source-grounded. [DONE — this session.]**
+See "Where we stand" for full landing notes. Summary: `generateThreadUpdate`
+emits a grounded `prediction` (pure, tested `cleanPrediction`); migration `0012`
+adds `threads.prediction`; `applyThreadUpdate` writes it + mirrors a linked
+`calendar_event`; krant "Vooruitblik" block. +7 tests.
 
-**Phase D — 52-week graphs + dotted prediction line.** The new standard layout:
-a per-topic graph under each Daily Paper article.
+**Phase D — 52-week graphs + dotted prediction line. [NEXT.]** The new standard
+layout: a per-topic graph under each Daily Paper article.
 - Rebin `StorylineChart` to **weekly / fixed 52-week X-axis**; add a
   **single-line per-thread mode** for the Daily Paper.
 - Dotted projection from the last real week to the prediction's target week;

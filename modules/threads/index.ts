@@ -9,7 +9,7 @@
 // thread's entities are the denormalized union of the entities it has absorbed.
 
 import { db, unwrap } from "../shared/db";
-import type { DestepLens, Thread, ThreadStatus } from "../shared/types";
+import type { DestepLens, Thread, ThreadStatus, ThreadUpdate } from "../shared/types";
 
 /**
  * Normalize an entity string for set comparison: strip diacritics, lowercase,
@@ -891,11 +891,19 @@ export async function nextThreadUpdateJob(editionId: string): Promise<ThreadUpda
   };
 }
 
-/** Persist a thread update: body onto its deep edition_items, state+title onto the thread. */
+/**
+ * Persist a thread update: body onto its deep edition_items, state+title+prediction
+ * onto the thread, and — when there is a prediction — mirror it into a linked
+ * calendar_event (so it flows into the agenda + the archive's projections). The
+ * prediction event is refreshed each edition: the thread's prior prediction event
+ * (meta.prediction = true) is deleted before the new one is inserted, so a thread
+ * carries at most one current forecast.
+ */
 export async function applyThreadUpdate(
   deepEditionItemIds: string[],
   threadId: string,
-  update: { headline: string; body: string; newState: string },
+  profileId: string,
+  update: Pick<ThreadUpdate, "headline" | "body" | "newState" | "prediction">,
 ): Promise<void> {
   for (const id of deepEditionItemIds) {
     const { error } = await db()
@@ -906,7 +914,31 @@ export async function applyThreadUpdate(
   }
   const { error } = await db()
     .from("threads")
-    .update({ state: update.newState, title: update.headline })
+    .update({ state: update.newState, title: update.headline, prediction: update.prediction })
     .eq("id", threadId);
   if (error) throw new Error(`applyThreadUpdate thread: ${error.message}`);
+
+  // Refresh the linked prediction event (idempotent: clear this thread's prior one first).
+  const { error: delErr } = await db()
+    .from("calendar_events")
+    .delete()
+    .eq("thread_id", threadId)
+    .eq("meta->>prediction", "true");
+  if (delErr) throw new Error(`applyThreadUpdate prediction-clear: ${delErr.message}`);
+
+  if (update.prediction) {
+    const p = update.prediction;
+    const { error: insErr } = await db().from("calendar_events").insert({
+      profile_id: profileId,
+      thread_id: threadId,
+      item_id: null,
+      title: p.text,
+      kind: "overig",
+      date: p.target_date,
+      certainty: p.confidence,
+      source: null,
+      meta: { prediction: true, source_basis: p.source_basis },
+    });
+    if (insErr) throw new Error(`applyThreadUpdate prediction-insert: ${insErr.message}`);
+  }
 }

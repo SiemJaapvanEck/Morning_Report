@@ -6,7 +6,9 @@
 
 import { askAI, askAIJson } from "../shared/ai";
 import { budgetPolicy } from "../shared/budget";
-import type { BudgetMode, Item, DestepLens, ThreadUpdate } from "../shared/types";
+import { todayLocal } from "../shared/config";
+import { isValidIsoDate } from "../calendar";
+import type { BudgetMode, Item, DestepLens, ThreadUpdate, ThreadPrediction } from "../shared/types";
 
 export interface GeneratedSummary {
   itemId: string;
@@ -69,10 +71,42 @@ const THREAD_UPDATE_SCHEMA = {
     body: { type: "string" },
     newState: { type: "string" },
     lenses: { type: "array", items: { type: "string", enum: LENS_VALUES } },
+    prediction: {
+      type: "object",
+      properties: {
+        text: { type: "string" },
+        target_date: { type: "string" },
+        confidence: { type: "string", enum: ["bevestigd", "verwacht", "gerucht"] },
+        source_basis: { type: "string" },
+      },
+      required: ["text", "target_date", "confidence", "source_basis"],
+      additionalProperties: false,
+    },
   },
-  required: ["headline", "body", "newState", "lenses"],
+  required: ["headline", "body", "newState", "lenses", "prediction"],
   additionalProperties: false,
 } as const;
+
+/**
+ * Pure: turn the model's raw prediction object into a stored ThreadPrediction, or
+ * null. The discipline lives here, not just in the prompt: a prediction survives
+ * only with a non-empty text AND a named source_basis AND a real future date.
+ * Anything else (the "no basis" case the prompt is told to signal with blanks) is
+ * dropped — no free-floating AI guesses reach the agenda.
+ */
+export function cleanPrediction(
+  raw: { text?: string; target_date?: string; confidence?: string; source_basis?: string } | null | undefined,
+  today: string,
+): ThreadPrediction | null {
+  if (!raw) return null;
+  const text = (raw.text ?? "").trim();
+  const basis = (raw.source_basis ?? "").trim();
+  const date = (raw.target_date ?? "").trim();
+  if (!text || !basis) return null;
+  if (!isValidIsoDate(date) || date < today) return null;
+  const confidence = (["bevestigd", "verwacht", "gerucht"] as const).find((c) => c === raw.confidence) ?? "verwacht";
+  return { text, target_date: date, confidence, source_basis: basis };
+}
 
 export interface ThreadUpdateInput {
   thread: { title: string; state: string | null };
@@ -82,6 +116,8 @@ export interface ThreadUpdateInput {
   lenses: DestepLens[];
   /** titles the reader rated highly in this area — reader perspective */
   archivePrimer: string[];
+  /** dated events already on this thread — extra grounding for the prediction */
+  scheduledEvents: { title: string; date: string; certainty: string }[];
 }
 
 /**
@@ -107,12 +143,16 @@ export async function generateThreadUpdate(
   const primer = input.archivePrimer.length
     ? `De lezer waardeerde eerder in dit onderwerp: ${input.archivePrimer.join("; ")}.`
     : "";
+  const eventsBlock = input.scheduledEvents.length
+    ? `Reeds geagendeerde gebeurtenissen op deze verhaallijn:\n` +
+      input.scheduledEvents.map((e) => `- ${e.date}: ${e.title} (${e.certainty})`).join("\n")
+    : "";
 
-  const { data } = await askAIJson<ThreadUpdate>({
+  const { data } = await askAIJson<ThreadUpdate & { prediction?: Record<string, string> }>({
     tier: "deep",
     editionId,
     stepId,
-    maxTokens: 900,
+    maxTokens: 1000,
     jsonSchema: THREAD_UPDATE_SCHEMA as unknown as Record<string, unknown>,
     system:
       "Je houdt een doorlopende verhaallijn bij voor een persoonlijk ochtendrapport, in het Nederlands. " +
@@ -122,12 +162,19 @@ export async function generateThreadUpdate(
       "'body': 1-2 strakke alinea's (4-8 zinnen), feitelijk, geen kop in de tekst zelf. " +
       "'headline': een nieuws-specifieke kop voor deze update. " +
       "'newState': een bondige, bijgewerkte samenvatting van de héle verhaallijn tot nu toe (3-5 zinnen) die de volgende editie als startpunt gebruikt. " +
-      "'lenses': de lenzen die je daadwerkelijk gebruikte (subset van de aangeboden).",
+      "'lenses': de lenzen die je daadwerkelijk gebruikte (subset van de aangeboden). " +
+      "'prediction': een korte, concrete vooruitblik (1 zin) MET een streefdatum (YYYY-MM-DD), " +
+      "een zekerheid (bevestigd/verwacht/gerucht) en een 'source_basis': benoem letterlijk wélk aangeboden " +
+      "nieuwsitem of welke geagendeerde gebeurtenis de voorspelling onderbouwt. " +
+      "STRIKT: voorspel ALLEEN op basis van de aangeboden items en geagendeerde gebeurtenissen — verzin niets. " +
+      "Heb je geen concrete grond of geen datum? Laat 'text', 'target_date' en 'source_basis' dan LEEG ('').",
     prompt:
       `Verhaallijn: ${input.thread.title}\n` +
       `Stand tot nu toe: ${input.thread.state ?? "(nieuw verhaal — nog geen eerdere stand)"}\n` +
       `Aangeboden lenzen: ${lensList}\n` +
+      `Datum vandaag: ${todayLocal()}\n` +
       (primer ? `${primer}\n` : "") +
+      (eventsBlock ? `${eventsBlock}\n` : "") +
       `\nWat er vandaag bij komt:\n${newsBlock}`,
   });
 
@@ -136,6 +183,7 @@ export async function generateThreadUpdate(
     body: data.body.trim(),
     newState: data.newState.trim(),
     lenses: data.lenses?.length ? data.lenses : input.lenses,
+    prediction: cleanPrediction(data.prediction, todayLocal()),
   };
 }
 

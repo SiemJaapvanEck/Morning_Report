@@ -129,6 +129,21 @@ export interface FrontPage {
 }
 
 /** One Daily Paper article — a thread update (followed topic) or the broad general roundup. */
+/**
+ * A short, source-grounded forecast attached to a thread (Phase C). Only ever set
+ * when the model could name a concrete basis in the thread's news/events; no basis
+ * ⇒ null. Mirrored into a linked calendar_event so it flows into agenda + archive.
+ */
+export interface ThreadPrediction {
+  /** the forecast itself (Dutch, 1-2 sentences) */
+  text: string;
+  /** when it is expected to play out (YYYY-MM-DD) */
+  target_date: string;
+  confidence: CalendarEventCertainty;
+  /** what in the provided news/events grounds it — required, no basis ⇒ no prediction */
+  source_basis: string;
+}
+
 export interface DailyPaperArticle {
   /** thread this article updates; null = the broad general roundup article */
   thread_id: string | null;
@@ -143,6 +158,8 @@ export interface DailyPaperArticle {
   destep_lenses: string[];
   /** true when this builds on stored thread state (a real "update") */
   is_update: boolean;
+  /** the thread's current source-grounded forecast, when there is one */
+  prediction: ThreadPrediction | null;
 }
 
 /**
@@ -158,6 +175,8 @@ export interface ThreadUpdate {
   newState: string;
   /** which DESTEP lenses the update actually used (subset of the offered ones) */
   lenses: DestepLens[];
+  /** a source-grounded forecast for this storyline, or null when none is warranted */
+  prediction: ThreadPrediction | null;
 }
 
 /** Eén beursindex met dagrendement, voor de markten-per-regio-kaart. */
@@ -276,6 +295,8 @@ export interface Thread {
   parent_thread_id: string | null;
   /** normalized anchor entity for a mega-thread (e.g. "iran"); null for a normal thread */
   anchor_entity: string | null;
+  /** current source-grounded forecast (Phase C); null when none */
+  prediction: ThreadPrediction | null;
   last_edition_id: string | null;
   last_seen_at: string | null;
   created_at: string;

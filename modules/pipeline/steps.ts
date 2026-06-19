@@ -470,19 +470,31 @@ const generateStep: StepHandler = async ({ edition, step }) => {
     if (job) {
       const lenses = selectLenses(job.categorySlug, job.topicName, job.threadEntities);
       const primer = await archivePrimer(edition.profile_id, job.topicId, job.categoryId);
+      // already-scheduled (non-prediction) events on this thread — extra grounding
+      const scheduledRows = unwrap(
+        await db()
+          .from("calendar_events")
+          .select("title, date, certainty, meta")
+          .eq("thread_id", job.threadId)
+          .gte("date", todayLocal()),
+      ) as { title: string; date: string; certainty: string; meta: Record<string, unknown> | null }[];
+      const scheduledEvents = scheduledRows
+        .filter((e) => e.meta?.prediction !== true)
+        .map((e) => ({ title: e.title, date: e.date, certainty: e.certainty }));
       const update = await generateThreadUpdate(
         {
           thread: { title: job.title, state: job.state },
           newItems: job.newItems.map((n) => ({ title: n.title, summary: n.summary, url: n.url })),
           lenses,
           archivePrimer: primer,
+          scheduledEvents,
         },
         mode,
         edition.id,
         step.id,
       );
       if (update) {
-        await applyThreadUpdate(job.deepEditionItemIds, job.threadId, update);
+        await applyThreadUpdate(job.deepEditionItemIds, job.threadId, edition.profile_id, update);
       } else {
         // defensive (unreachable while allowDeep): never loop on a blank gate
         const fallback = job.newItems[0]?.summary || job.title;
@@ -613,8 +625,15 @@ const dailyPaperStep: StepHandler = async ({ edition, step }) => {
   const threadIds = [...new Set(deepRows.map((d) => threadByItem.get(d.item_id)).filter(Boolean))] as string[];
   const threads = threadIds.length
     ? (unwrap(
-        await db().from("threads").select("id, title, topic_id, category_id, entities").in("id", threadIds),
-      ) as { id: string; title: string; topic_id: string | null; category_id: string | null; entities: string[] }[])
+        await db().from("threads").select("id, title, topic_id, category_id, entities, prediction").in("id", threadIds),
+      ) as {
+        id: string;
+        title: string;
+        topic_id: string | null;
+        category_id: string | null;
+        entities: string[];
+        prediction: import("../shared/types").ThreadPrediction | null;
+      }[])
     : [];
   const cats = unwrap(await db().from("categories").select("id, slug")) as { id: string; slug: string }[];
   const catSlug = new Map(cats.map((c) => [c.id, c.slug]));
@@ -647,6 +666,7 @@ const dailyPaperStep: StepHandler = async ({ edition, step }) => {
           image_url: deep.items?.image_url ?? null,
           destep_lenses: lenses,
           is_update: true,
+          prediction: thread.prediction ?? null,
         };
         return { followed, deltaSize: deltaByThread.get(thread.id) ?? 1, article };
       })
@@ -666,6 +686,7 @@ const dailyPaperStep: StepHandler = async ({ edition, step }) => {
       image_url: null,
       destep_lenses: [],
       is_update: false,
+      prediction: null,
     });
   }
 

@@ -239,3 +239,18 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   Phase C writes real predictions. Seed enriched (+4 Iran/SpaceX child events) to
   show the full certainty fan. Approved on localhost; gate green (108 tests).
   Next: Phase C — per-thread, source-grounded predictions.
+
+- **19 June 2026 (vervolg 3) — Phase C: per-thread source-grounded predictions.**
+  Closed the Investment & Foresight loop. generateThreadUpdate (deep tier) now
+  also returns a prediction { text, target_date, confidence, source_basis },
+  grounded only in the thread's new items + its scheduled events (fed into the
+  prompt); discipline enforced by a pure, tested cleanPrediction() — no text/no
+  basis/no valid future date ⇒ no prediction. Migration 0012 adds threads.prediction;
+  applyThreadUpdate (now takes profileId) writes it AND mirrors a linked
+  calendar_event (kind overig, meta.prediction=true, refreshed/idempotent) so it
+  flows into the agenda + archive projections. daily_paper reads prediction onto
+  DailyPaperArticle; krant page shows a "Vooruitblik" block (text, confidence
+  badge, target date, source basis). +7 tests (108 → 115). Verified by seeding
+  predictions on Iran/SpaceX child threads (krant + archive + agenda all green on
+  localhost); AI generation path itself proven only on a live run. Gate green.
+  Next: Phase D — 52-week per-thread graphs under each Daily Paper article.

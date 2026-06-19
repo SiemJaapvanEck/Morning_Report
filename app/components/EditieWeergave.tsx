@@ -3,11 +3,47 @@
 
 import { Archivo, Space_Mono } from "next/font/google";
 import type { EditionView } from "@/app/lib/queries";
-import type { FrontPage, WeatherSnapshot } from "@/modules/shared/types";
+import type { FrontPage, WeatherSnapshot, ThreadPrediction } from "@/modules/shared/types";
 import { ItemRating } from "./ItemRating";
 
 const archivo = Archivo({ subsets: ["latin"], weight: ["600", "700", "800"], variable: "--font-archivo" });
 const spaceMono = Space_Mono({ subsets: ["latin"], weight: ["400", "700"], variable: "--font-space-mono" });
+
+const PREDICTION_CERT: Record<ThreadPrediction["confidence"], { label: string; cls: string }> = {
+  bevestigd: { label: "Bevestigd", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
+  verwacht: { label: "Verwacht", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
+  gerucht: { label: "Gerucht", cls: "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400" },
+};
+
+function Vooruitblik({ prediction }: { prediction: ThreadPrediction }) {
+  const datum = new Date(prediction.target_date + "T00:00:00").toLocaleDateString("nl-NL", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  const cert = PREDICTION_CERT[prediction.confidence];
+  return (
+    <div className="mt-4 rounded-xl border border-[#2f6df0]/30 bg-[#2f6df0]/5 p-4 dark:bg-[#2f6df0]/10">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-[family-name:var(--font-space-mono)] text-[10.5px] font-bold uppercase tracking-[0.15em] text-[#2f6df0]">
+          Vooruitblik
+        </span>
+        <span className={`rounded-full px-2.5 py-0.5 font-[family-name:var(--font-space-mono)] text-[10px] font-bold uppercase tracking-wide ${cert.cls}`}>
+          {cert.label}
+        </span>
+        <span className="font-[family-name:var(--font-space-mono)] text-[10.5px] font-semibold text-stone-500">
+          richting {datum}
+        </span>
+      </div>
+      <p className="mt-2 text-[15px] font-semibold leading-snug text-stone-800 dark:text-stone-100">
+        {prediction.text}
+      </p>
+      <p className="mt-1.5 text-[12px] leading-relaxed text-stone-500 dark:text-stone-400">
+        <span className="font-semibold">Grond:</span> {prediction.source_basis}
+      </p>
+    </div>
+  );
+}
 
 function WeerBlok({ weather }: { weather: WeatherSnapshot }) {
   return (
@@ -106,6 +142,7 @@ export function EditieWeergave({ view }: { view: EditionView }) {
                     <p key={j}>{alinea}</p>
                   ))}
                 </div>
+                {a.prediction && <Vooruitblik prediction={a.prediction} />}
               </article>
             ))}
           </div>

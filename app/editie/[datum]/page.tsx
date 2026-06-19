@@ -8,7 +8,7 @@ import { notFound } from "next/navigation";
 import { hasDbConfig } from "@/modules/shared/db";
 import { todayLocal } from "@/modules/shared/config";
 import { isRegioCode } from "@/modules/shared/regios";
-import { getEdition, getProfiles, listEditionSummaries } from "@/app/lib/queries";
+import { getEdition, getProfiles, listEditionSummaries, getUpcomingAgenda } from "@/app/lib/queries";
 import { EditionScreen, parseView } from "@/app/components/EditionScreen";
 
 export const dynamic = "force-dynamic";
@@ -35,9 +35,10 @@ export default async function EditiePagina({
   const selectedRegio = isRegioCode(regio) ? regio : null;
 
   const today = todayLocal();
-  const [editionView, summaries] = await Promise.all([
+  const [editionView, summaries, agenda] = await Promise.all([
     getEdition(profileId, datum),
     listEditionSummaries(profileId),
+    getUpcomingAgenda(profileId),
   ]);
 
   return (
@@ -49,6 +50,7 @@ export default async function EditiePagina({
       selectedRegio={selectedRegio}
       editionView={editionView}
       summaries={summaries}
+      agenda={agenda}
     />
   );
 }

@@ -8,8 +8,8 @@
 
 import Link from "next/link";
 import { Archivo, Space_Grotesk, Space_Mono } from "next/font/google";
-import type { MarktIndex } from "@/modules/shared/types";
-import type { EditionView as EditionViewData, SectionView } from "@/app/lib/queries";
+import type { MarktIndex, CalendarEventKind, CalendarEventCertainty } from "@/modules/shared/types";
+import type { EditionView as EditionViewData, SectionView, AgendaEvent } from "@/app/lib/queries";
 import { REGIO_NAAM, type RegioCode } from "@/modules/shared/regios";
 import { ItemRating } from "./ItemRating";
 import { WereldKaart, regioStats } from "./WereldKaart";
@@ -49,6 +49,11 @@ const Icon = {
       <path d="M3 12h4l2-7 4 14 2-7h6" />
     </svg>
   ),
+  Calendar: (p: { className?: string }) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={p.className}>
+      <rect x="3" y="4.5" width="18" height="17" rx="2" /><path d="M3 9.5h18" /><path d="M8 2.5v4" /><path d="M16 2.5v4" />
+    </svg>
+  ),
 };
 
 // gestreepte foto-placeholder zoals .at-photo in het ontwerp
@@ -71,6 +76,9 @@ function BriefingHero({
   intro,
   bullets,
   stats,
+  regios,
+  selectedRegio,
+  basePath,
 }: {
   hasEdition: boolean;
   date: string;
@@ -79,39 +87,70 @@ function BriefingHero({
   intro: string | null;
   bullets: KaartItem[];
   stats: { artikelen: number; secties: number; bronnen: number };
+  regios: Record<string, number>;
+  selectedRegio?: string | null;
+  basePath: string;
 }) {
   const datumKort = fmtDatum(date, { day: "numeric", month: "short" }).toUpperCase();
+  const geo = regioStats(regios);
+  const selNaam = selectedRegio ? REGIO_NAAM[selectedRegio as RegioCode] : null;
 
   return (
     <div className="flex flex-1 flex-col rounded-2xl bg-[#2f6df0] p-7 text-white sm:p-8">
-      <div className="flex items-center gap-2.5">
-        <span className="h-2 w-2 rounded-full bg-white ring-4 ring-white/25" />
-        <span className="font-[family-name:var(--font-archivo)] text-[11px] font-bold tracking-[0.2em]">
-          DAGELIJKSE BRIEFING
-        </span>
-        <span className="flex-1" />
-        <span className="font-[family-name:var(--font-space-mono)] text-[10.5px] font-bold tracking-wide opacity-85">
-          {datumKort} · OCHTENDEDITIE
-        </span>
-      </div>
-
-      <h1 className="mt-5 text-balance font-[family-name:var(--font-archivo)] text-[28px] font-extrabold leading-[1.04] tracking-tight sm:text-[34px]">
-        {headline}
-      </h1>
-      {intro && <p className="mt-4 max-w-xl text-[15px] leading-relaxed opacity-90">{intro}</p>}
-
-      {/* statstrook */}
-      <div className="mt-6 flex gap-7 border-t border-white/20 pt-5">
-        {[
-          [String(stats.artikelen), "artikelen"],
-          [String(stats.secties), "secties"],
-          [String(stats.bronnen), "bronnen"],
-        ].map(([n, l]) => (
-          <div key={l}>
-            <div className="font-[family-name:var(--font-archivo)] text-[26px] font-extrabold leading-none tracking-tight">{n}</div>
-            <div className="mt-1 text-[11px] font-semibold opacity-80">{l}</div>
+      <div className="flex items-start gap-6">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex items-center gap-2.5">
+            <span className="h-2 w-2 rounded-full bg-white ring-4 ring-white/25" />
+            <span className="font-[family-name:var(--font-archivo)] text-[11px] font-bold tracking-[0.2em]">
+              DAGELIJKSE BRIEFING
+            </span>
+            <span className="flex-1" />
+            <span className="font-[family-name:var(--font-space-mono)] text-[10.5px] font-bold tracking-wide opacity-85">
+              {datumKort} · OCHTENDEDITIE
+            </span>
           </div>
-        ))}
+
+          <h1 className="mt-5 text-balance font-[family-name:var(--font-archivo)] text-[28px] font-extrabold leading-[1.04] tracking-tight sm:text-[34px]">
+            {headline}
+          </h1>
+          {intro && <p className="mt-4 max-w-xl text-[15px] leading-relaxed opacity-90">{intro}</p>}
+
+          {/* statstrook */}
+          <div className="mt-6 flex gap-7 border-t border-white/20 pt-5">
+            {[
+              [String(stats.artikelen), "artikelen"],
+              [String(stats.secties), "secties"],
+              [String(stats.bronnen), "bronnen"],
+            ].map(([n, l]) => (
+              <div key={l}>
+                <div className="font-[family-name:var(--font-archivo)] text-[26px] font-extrabold leading-none tracking-tight">{n}</div>
+                <div className="mt-1 text-[11px] font-semibold opacity-80">{l}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* "Waar het nieuws vandaan komt" — klein & wit, in de hero (klikbaar) */}
+        {geo.totaal > 0 && (
+          <div className="hidden w-36 shrink-0 flex-col sm:flex lg:w-44">
+            <div className="flex items-center gap-1.5">
+              <Icon.Globe className="h-3.5 w-3.5 opacity-80" />
+              <span className="font-[family-name:var(--font-space-mono)] text-[9px] font-bold tracking-[0.12em] opacity-80">
+                WAAR HET NIEUWS VANDAAN KOMT
+              </span>
+            </div>
+            <div className="mt-2 h-24 w-full lg:h-28">
+              <WereldKaart counts={regios} tint="white" selectedRegio={selectedRegio} basePath={basePath} />
+            </div>
+            <div className="mt-2 font-[family-name:var(--font-space-mono)] text-[9px] font-semibold opacity-75">
+              {selNaam
+                ? `${selNaam} ✕`
+                : geo.topAantal > 0
+                  ? `${REGIO_NAAM[geo.topCode]} heetst · klik een regio`
+                  : "klik een regio"}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* meest interessant vandaag */}
@@ -247,43 +286,75 @@ function ArchiveTegel() {
   );
 }
 
-// ── "Waar het nieuws vandaan komt" — stippen-wereldkaart op échte regio-tellingen ─
-function WereldKaartTegel({
-  counts,
-  selectedRegio,
-  basePath,
-}: {
-  counts: Record<string, number>;
-  selectedRegio?: string | null;
-  basePath: string;
-}) {
-  const { topCode, topAantal } = regioStats(counts);
-  const selNaam = selectedRegio ? REGIO_NAAM[selectedRegio as RegioCode] : null;
+// ── "Op de agenda" — aankomende gedateerde gebeurtenissen (Phase B) ──────────
+const KIND_LABEL: Record<CalendarEventKind, string> = {
+  earnings: "Cijfers",
+  release: "Release",
+  event: "Event",
+  dividend: "Dividend",
+  ipo: "IPO",
+  verkiezing: "Verkiezing",
+  overig: "Agenda",
+};
+
+const CERTAINTY_STYLE: Record<CalendarEventCertainty, { label: string; cls: string }> = {
+  bevestigd: { label: "Bevestigd", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
+  verwacht: { label: "Verwacht", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
+  gerucht: { label: "Gerucht", cls: "bg-stone-100 text-stone-400 dark:bg-stone-800 dark:text-stone-500" },
+};
+
+const MAAND_KORT = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
+
+function AgendaTegel({ events }: { events: AgendaEvent[] }) {
   return (
     <div className={`${TILE} flex flex-1 flex-col p-6`}>
       <div className="mb-3 flex items-center gap-2">
-        <Icon.Globe className="h-4 w-4 text-stone-700 dark:text-stone-200" />
-        <span className="font-[family-name:var(--font-archivo)] text-[13px] font-extrabold tracking-tight">Waar het nieuws vandaan komt</span>
+        <Icon.Calendar className="h-4 w-4 text-stone-700 dark:text-stone-200" />
+        <span className="font-[family-name:var(--font-archivo)] text-[13px] font-extrabold tracking-tight">Op de agenda</span>
         <span className="flex-1" />
-        <span className="font-[family-name:var(--font-space-mono)] text-[9.5px] font-bold tracking-widest text-stone-400">KLIK EEN REGIO</span>
+        <span className="font-[family-name:var(--font-space-mono)] text-[9.5px] font-bold tracking-widest text-stone-400">GEPLAND NIEUWS</span>
       </div>
-      <div className="relative min-h-0 flex-1">
-        <WereldKaart counts={counts} selectedRegio={selectedRegio} basePath={basePath} />
-      </div>
-      <div className="mt-3 flex items-center gap-3">
-        <span className="text-[10.5px] font-semibold text-stone-400">Minder</span>
-        <span className="h-[7px] flex-1 rounded-full bg-[linear-gradient(90deg,rgba(47,109,240,0.16),rgba(47,109,240,1))]" />
-        <span className="text-[10.5px] font-semibold text-stone-400">Meer</span>
-        {selNaam ? (
-          <Link href={`${basePath}#sol-selectie`} className="whitespace-nowrap rounded-full bg-[#2f6df0] px-2.5 py-1 font-[family-name:var(--font-archivo)] text-[10px] font-extrabold text-white hover:opacity-90">
-            {selNaam} ✕
-          </Link>
-        ) : topAantal > 0 ? (
-          <span className="whitespace-nowrap rounded-full bg-[#2f6df0] px-2.5 py-1 font-[family-name:var(--font-archivo)] text-[10px] font-extrabold text-white">
-            {REGIO_NAAM[topCode]} heetst
-          </span>
-        ) : null}
-      </div>
+      {events.length > 0 ? (
+        <ul className="flex flex-col">
+          {events.map((ev) => {
+            const d = new Date(ev.date + "T00:00:00");
+            const cert = CERTAINTY_STYLE[ev.certainty];
+            return (
+              <li
+                key={ev.id}
+                className="flex items-start gap-3 border-b border-stone-100 py-2.5 last:border-0 dark:border-stone-800"
+              >
+                <div className="flex w-10 shrink-0 flex-col items-center rounded-lg bg-stone-100 py-1 dark:bg-stone-800">
+                  <span className="font-[family-name:var(--font-archivo)] text-[15px] font-extrabold leading-none">{d.getDate()}</span>
+                  <span className="mt-0.5 font-[family-name:var(--font-space-mono)] text-[9px] font-bold uppercase text-stone-400">
+                    {MAAND_KORT[d.getMonth()]}
+                  </span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="line-clamp-2 text-[13px] font-semibold leading-snug">{ev.title}</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                    <span className="rounded bg-[#2f6df0]/10 px-1.5 py-0.5 font-[family-name:var(--font-space-mono)] text-[9px] font-bold uppercase tracking-wide text-[#2f6df0]">
+                      {KIND_LABEL[ev.kind]}
+                    </span>
+                    {ev.thread_title && (
+                      <span className="truncate font-[family-name:var(--font-space-mono)] text-[9.5px] text-stone-400">
+                        ↳ {ev.thread_title}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 font-[family-name:var(--font-space-mono)] text-[9px] font-bold uppercase tracking-wide ${cert.cls}`}
+                >
+                  {cert.label}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="text-sm text-stone-400">Nog niets gepland — de agenda vult zich met gedateerd nieuws.</p>
+      )}
     </div>
   );
 }
@@ -320,36 +391,6 @@ function MarktenTegel({ indices }: { indices: MarktIndex[] }) {
           </div>
         ))}
       </div>
-    </div>
-  );
-}
-
-// ── "Waar Sol vandaag las" — top bronnen als balken (terugval voor de kaart) ──
-function BronnenTegel({ bronnen }: { bronnen: { naam: string; n: number }[] }) {
-  const max = Math.max(1, ...bronnen.map((b) => b.n));
-  return (
-    <div className={`${TILE} flex flex-col p-6`}>
-      <div className="mb-3 flex items-center gap-2">
-        <Icon.Globe className="h-4 w-4 text-stone-700 dark:text-stone-200" />
-        <span className="font-[family-name:var(--font-archivo)] text-[13px] font-extrabold tracking-tight">Waar Sol las</span>
-        <span className="flex-1" />
-        <span className="font-[family-name:var(--font-space-mono)] text-[9.5px] font-bold tracking-widest text-stone-400">PER BRON</span>
-      </div>
-      {bronnen.length > 0 ? (
-        <div className="flex flex-col gap-2.5">
-          {bronnen.map((b) => (
-            <div key={b.naam} className="flex items-center gap-3">
-              <span className="w-28 shrink-0 truncate text-[12px] font-semibold" title={b.naam}>{b.naam}</span>
-              <span className="h-2 flex-1 overflow-hidden rounded-full bg-stone-100 dark:bg-stone-800">
-                <span className="block h-full rounded-full bg-[#2f6df0]" style={{ width: `${(b.n / max) * 100}%` }} />
-              </span>
-              <span className="w-5 shrink-0 text-right font-[family-name:var(--font-archivo)] text-[12px] font-extrabold">{b.n}</span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="text-sm text-stone-400">geen bronnen op deze dag</p>
-      )}
     </div>
   );
 }
@@ -414,12 +455,14 @@ export function EditionView({
   isToday,
   profileName,
   selectedRegio,
+  agenda = [],
 }: {
   view: EditionViewData | null;
   date: string;
   isToday: boolean;
   profileName?: string;
   selectedRegio?: string | null;
+  agenda?: AgendaEvent[];
 }) {
   const basePath = isToday ? "/" : `/editie/${date}`;
   const weather = view?.sections.find((s) => s.section.kind === "weather")?.weather ?? null;
@@ -436,15 +479,8 @@ export function EditionView({
     bronnen: new Set(allItems.map((i) => i.source_name).filter(Boolean)).size,
   };
 
-  // top bronnen op aantal items (terugval voor de kaart)
-  const bronTel = new Map<string, number>();
-  for (const it of allItems) if (it.source_name) bronTel.set(it.source_name, (bronTel.get(it.source_name) ?? 0) + 1);
-  const topBronnen = [...bronTel.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([naam, n]) => ({ naam, n }));
-
-  // regio-tellingen voor de wereldkaart (gezet door de pipeline bij finalize)
+  // regio-tellingen voor de (nu in de hero ingebedde) wereldkaart
   const regios = view?.edition.front_page?.regios ?? {};
-  const geo = regioStats(regios);
-  const toonKaart = geo.totaal >= 3 && geo.actief >= 2;
 
   // beurssnapshot voor de markten-kaart (leeg → tegel wordt niet getoond)
   const markten = view?.edition.front_page?.markten?.indices ?? [];
@@ -489,6 +525,9 @@ export function EditionView({
                 intro={intro}
                 bullets={bullets}
                 stats={stats}
+                regios={regios}
+                selectedRegio={selectedRegio}
+                basePath={basePath}
               />
             ) : (
               <LegeHero date={date} isToday={isToday} />
@@ -499,9 +538,9 @@ export function EditionView({
             </div>
           </div>
 
-          {/* rechterkolom: nieuwskaart (of bronnen-balken) + marktenkaart */}
+          {/* rechterkolom: agenda (gepland nieuws) + marktenkaart */}
           <div className="flex flex-col gap-3 lg:col-span-5">
-            {toonKaart ? <WereldKaartTegel counts={regios} selectedRegio={selectedRegio} basePath={basePath} /> : <BronnenTegel bronnen={topBronnen} />}
+            <AgendaTegel events={agenda} />
             {markten.length > 0 && <MarktenTegel indices={markten} />}
           </div>
         </div>

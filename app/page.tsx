@@ -7,7 +7,7 @@ import { redirect } from "next/navigation";
 import { hasDbConfig } from "@/modules/shared/db";
 import { todayLocal } from "@/modules/shared/config";
 import { isRegioCode } from "@/modules/shared/regios";
-import { getProfiles, getEdition, listEditionSummaries } from "@/app/lib/queries";
+import { getProfiles, getEdition, listEditionSummaries, getUpcomingAgenda } from "@/app/lib/queries";
 import { ProfielKiezer } from "@/app/components/ProfielKiezer";
 import { EditionScreen, parseView } from "@/app/components/EditionScreen";
 
@@ -50,9 +50,10 @@ export default async function Home({
   const calendarView = parseView(view);
 
   const today = todayLocal();
-  const [editionView, summaries] = await Promise.all([
+  const [editionView, summaries, agenda] = await Promise.all([
     getEdition(profileId, today),
     listEditionSummaries(profileId),
+    getUpcomingAgenda(profileId),
   ]);
 
   return (
@@ -70,6 +71,7 @@ export default async function Home({
         selectedRegio={selectedRegio}
         editionView={editionView}
         summaries={summaries}
+        agenda={agenda}
       />
     </div>
   );

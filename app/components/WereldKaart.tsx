@@ -7,7 +7,9 @@ import { REGIO_CODES, REGIO_NAAM, type RegioCode } from "@/modules/shared/regios
 import { COLS, ROWS, LAND_BY_REGIO, OCEAN } from "./wereldGrid";
 
 const ACCENT: [number, number, number] = [47, 109, 240]; // #2f6df0
-const rgba = (a: number) => `rgba(${ACCENT[0]}, ${ACCENT[1]}, ${ACCENT[2]}, ${a})`;
+const WIT: [number, number, number] = [255, 255, 255]; // wit op de blauwe hero
+const rgbaFn = (rgb: [number, number, number]) => (a: number) =>
+  `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${a})`;
 
 /** Samenvatting voor kop/legenda: heetste regio, totaal, aantal regio's met nieuws. */
 export function regioStats(counts: Record<string, number>) {
@@ -27,14 +29,19 @@ export function WereldKaart({
   counts,
   selectedRegio,
   basePath = "/",
+  tint = "blue",
 }: {
   counts: Record<string, number>;
   selectedRegio?: string | null;
   /** pad van de huidige editie ("/" voor vandaag, "/editie/<datum>" anders) */
   basePath?: string;
+  /** "white" tekent de kaart wit (voor op de blauwe hero) i.p.v. blauw */
+  tint?: "blue" | "white";
 }) {
   const max = Math.max(1, ...REGIO_CODES.map((c) => counts[c] ?? 0));
   const { topCode, topAantal } = regioStats(counts);
+  const wit = tint === "white";
+  const rgba = rgbaFn(wit ? WIT : ACCENT);
 
   return (
     <svg
@@ -45,15 +52,19 @@ export function WereldKaart({
       aria-label="Klikbare kaart met het aantal nieuwsitems per wereldregio"
     >
       <style>{`.regio-link{transition:opacity .12s}.regio-link:hover{opacity:.62}`}</style>
-      {OCEAN.map((d, i) => (
-        <circle
-          key={`o${i}`}
-          cx={d.c + 0.5}
-          cy={d.r + 0.5}
-          r={0.13}
-          className="[fill:rgba(11,11,13,0.05)] dark:[fill:rgba(255,255,255,0.06)]"
-        />
-      ))}
+      {OCEAN.map((d, i) =>
+        wit ? (
+          <circle key={`o${i}`} cx={d.c + 0.5} cy={d.r + 0.5} r={0.13} fill="rgba(255,255,255,0.18)" />
+        ) : (
+          <circle
+            key={`o${i}`}
+            cx={d.c + 0.5}
+            cy={d.r + 0.5}
+            r={0.13}
+            className="[fill:rgba(11,11,13,0.05)] dark:[fill:rgba(255,255,255,0.06)]"
+          />
+        ),
+      )}
       {REGIO_CODES.map((code) => {
         const n = counts[code] ?? 0;
         const isSel = code === selectedRegio;

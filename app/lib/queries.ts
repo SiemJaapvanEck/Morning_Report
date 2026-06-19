@@ -2,8 +2,11 @@
 // modules/ en de API-routes.
 
 import { db, unwrap } from "@/modules/shared/db";
+import { todayLocal } from "@/modules/shared/config";
 import { dominantLens, selectLenses } from "@/modules/threads";
 import type {
+  CalendarEventCertainty,
+  CalendarEventKind,
   DestepLens,
   Edition,
   EditionSection,
@@ -295,4 +298,49 @@ export async function getThreadArchive(profileId: string): Promise<ArchiveMega[]
       primarySector: dominantLens(kidLenses),
     };
   });
+}
+
+// ── Agenda: aankomende gedateerde gebeurtenissen (Phase B) ───────────────────
+
+export interface AgendaEvent {
+  id: string;
+  title: string;
+  kind: CalendarEventKind;
+  date: string;
+  certainty: CalendarEventCertainty;
+  thread_id: string | null;
+  /** verhaallijn waar het event bij hoort, voor een klein label */
+  thread_title: string | null;
+}
+
+/** Aankomende events van een profiel (vandaag en later), op datum oplopend. */
+export async function getUpcomingAgenda(profileId: string, limit = 12): Promise<AgendaEvent[]> {
+  const today = todayLocal();
+  const rows = unwrap(
+    await db()
+      .from("calendar_events")
+      .select("id, title, kind, date, certainty, thread_id, threads(title)")
+      .eq("profile_id", profileId)
+      .gte("date", today)
+      .order("date", { ascending: true })
+      .limit(limit),
+  ) as unknown as {
+    id: string;
+    title: string;
+    kind: CalendarEventKind;
+    date: string;
+    certainty: CalendarEventCertainty;
+    thread_id: string | null;
+    threads: { title: string } | null;
+  }[];
+
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    kind: r.kind,
+    date: r.date,
+    certainty: r.certainty,
+    thread_id: r.thread_id,
+    thread_title: r.threads?.title ?? null,
+  }));
 }

@@ -6,10 +6,32 @@
 ## Where we stand
 
 **Investment & Foresight Phase B — auto-scheduled agenda — is done and in
-`main`.** The `calendar_events` table (previously empty + unused) is now filled
-automatically: the scan extracts explicitly-dated forward events from article
-text, and a new `agenda` pipeline step persists them per-profile, linked to the
-source item and its thread. **Everything is green** (lint/tsc/**108 tests**/build).
+`main`, and now has a visible UI surface.** The `calendar_events` table is filled
+automatically by the pipeline (scan extracts dated events → new `agenda` step
+persists them per-profile, linked to source item + thread), **and** the dashboard
+now renders them. **Everything is green** (lint/tsc/**108 tests**/build).
+
+### Agenda UI + map relocation (this session, approved on localhost)
+
+Siem wanted to *see* Phase B before moving on. Built and approved:
+- **"Op de agenda" tile** on the dashboard right column (`EditionView.tsx`,
+  `AgendaTegel`): upcoming events as dated rows — date chip, title, `kind` label,
+  the `↳ storyline` it belongs to, and a certainty badge (bevestigd = emerald,
+  verwacht = amber, gerucht = faded). Fed by new `getUpcomingAgenda(profileId)`
+  query (`app/lib/queries.ts`, `AgendaEvent`), threaded through
+  `EditionScreen` + both edition pages.
+- **"Waar het nieuws vandaan komt" world map relocated** off the right column
+  **into the blue briefing hero** (top-right, small, white-on-blue): `WereldKaart`
+  gained a `tint="blue"|"white"` prop. Still interactive (region click filters
+  Sol's selectie). The old full-size map tile + the "Waar Sol las" fallback tile
+  were removed.
+- **Seed:** 8 representative events inserted into `calendar_events` for Siem's
+  profile, linked to his real storylines (Iran, SpaceX, Ariane 6, Spider-Man,
+  G7 AI-coalition, UE6, MW4, UK social-media ban), tagged `meta.seed = true` so
+  they're removable in one query (`delete from calendar_events where meta->>'seed' = 'true'`).
+  They'll be superseded by real scan-extracted events once an edition runs.
+
+**Next: archive dotted projections** (decided 19 June, see "What's open").
 
 **Phase A (finance section + RSS seed) was deliberately skipped** at Siem's
 request — we jumped straight to B. A is **not abandoned**, just deferred; pick it

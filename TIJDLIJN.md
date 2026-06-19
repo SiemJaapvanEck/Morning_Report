@@ -214,3 +214,14 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   (`buildAgendaRows`, `isValidIsoDate`) + 8 tests (100 → 108). Gate green;
   committed on the green gate (no live tick — no UI surface yet). Next: Phase C
   (per-thread prediction).
+
+- **19 June 2026 (vervolg) — Agenda UI: Phase B made visible.** Siem wanted to
+  see Phase B working before continuing. Added an "Op de agenda" tile to the
+  dashboard right column (upcoming calendar_events as dated rows: date chip, kind
+  label, ↳ storyline, certainty badge) via new getUpcomingAgenda query +
+  AgendaEvent type, threaded through EditionScreen + both edition pages. Relocated
+  the "Waar het nieuws vandaan komt" world map off the right column into the blue
+  briefing hero (small, white-on-blue) — WereldKaart got a tint prop; removed the
+  old map tile + "Waar Sol las" fallback. Seeded 8 representative events linked to
+  Siem's real storylines (meta.seed=true, removable). Approved on localhost; gate
+  green (108 tests). Next: archive dotted projection lines toward agenda events.

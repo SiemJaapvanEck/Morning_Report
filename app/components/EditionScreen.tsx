@@ -7,7 +7,7 @@ import { EditionNav, type CalendarView } from "./EditionNav";
 import { EditionView } from "./EditionView";
 import { EditionOverview } from "./EditionOverview";
 import { SwipePager } from "./SwipePager";
-import type { EditionView as EditionViewData, EditionSummary } from "@/app/lib/queries";
+import type { EditionView as EditionViewData, EditionSummary, AgendaEvent } from "@/app/lib/queries";
 
 /** searchParam → geldige kalenderweergave (default dag). */
 export function parseView(v?: string): CalendarView {
@@ -22,6 +22,7 @@ export function EditionScreen({
   selectedRegio,
   editionView,
   summaries,
+  agenda = [],
 }: {
   date: string;
   today: string;
@@ -30,6 +31,7 @@ export function EditionScreen({
   selectedRegio?: string | null;
   editionView: EditionViewData | null;
   summaries: EditionSummary[];
+  agenda?: AgendaEvent[];
 }) {
   const isToday = date === today;
   return (
@@ -43,6 +45,7 @@ export function EditionScreen({
             isToday={isToday}
             profileName={profileName}
             selectedRegio={selectedRegio}
+            agenda={agenda}
           />
         </SwipePager>
       ) : (

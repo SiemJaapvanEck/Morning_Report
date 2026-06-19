@@ -13,7 +13,8 @@ import { askAIJson } from "../shared/ai";
 import { budgetPolicy } from "../shared/budget";
 import { dedupeEntities } from "../threads";
 import { REGIO_CODES, REGIO_GEEN, REGIO_NAAM, isRegioCode } from "../shared/regios";
-import type { BudgetMode, Item, Topic, TopicScore, Band } from "../shared/types";
+import { CALENDAR_KINDS, CALENDAR_CERTAINTIES } from "../calendar";
+import type { BudgetMode, Item, Topic, TopicScore, Band, ExtractedEvent } from "../shared/types";
 
 // ============================================================
 // Scan: belang-classificatie (Haiku, batch)
@@ -29,6 +30,8 @@ interface ScanVerdict {
   regio: string;
   /** 2–5 kernentiteiten (eigennamen) uit het item, in normale schrijfwijze */
   entities: string[];
+  /** expliciet gedateerde toekomstige gebeurtenissen uit de tekst (mag leeg) */
+  events: ExtractedEvent[];
 }
 
 const SCAN_SCHEMA = {
@@ -45,8 +48,22 @@ const SCAN_SCHEMA = {
           topic_index: { type: "integer" },
           regio: { type: "string", enum: [...REGIO_CODES, REGIO_GEEN] },
           entities: { type: "array", items: { type: "string" } },
+          events: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                title: { type: "string" },
+                date: { type: "string" },
+                kind: { type: "string", enum: [...CALENDAR_KINDS] },
+                certainty: { type: "string", enum: [...CALENDAR_CERTAINTIES] },
+              },
+              required: ["title", "date", "kind", "certainty"],
+              additionalProperties: false,
+            },
+          },
         },
-        required: ["index", "belang", "is_reclame", "topic_index", "regio", "entities"],
+        required: ["index", "belang", "is_reclame", "topic_index", "regio", "entities", "events"],
         additionalProperties: false,
       },
     },
@@ -67,6 +84,8 @@ export interface ScanUitslag {
   regio: string | null;
   /** kernentiteiten (eigennamen) uit het item, ontdubbeld in displayvorm */
   entities: string[];
+  /** expliciet gedateerde toekomstige gebeurtenissen uit de tekst */
+  events: ExtractedEvent[];
 }
 
 /**
@@ -94,7 +113,7 @@ export async function scanBatch(
     tier: "scan",
     editionId,
     stepId,
-    maxTokens: 3000,
+    maxTokens: 3500,
     jsonSchema: SCAN_SCHEMA as unknown as Record<string, unknown>,
     system:
       "Je beoordeelt nieuwsitems voor een persoonlijk ochtendrapport. " +
@@ -109,7 +128,13 @@ export async function scanBatch(
       "(bv. algemeen tech-, wetenschap- of marktnieuws). " +
       "Geef tot slot per item 2 tot 5 kernentiteiten (entities): de belangrijkste eigennamen " +
       "— personen, organisaties, bedrijven, plaatsen of producten — die in het item centraal staan, " +
-      "in hun normale schrijfwijze (bv. \"SpaceX\", \"Europese Centrale Bank\", \"Tibet\").",
+      "in hun normale schrijfwijze (bv. \"SpaceX\", \"Europese Centrale Bank\", \"Tibet\"). " +
+      "Geef tot slot per item de toekomstige gebeurtenissen (events) waarvoor in de tekst een " +
+      "EXPLICIETE datum staat — bv. \"IPO op 1 juli\", \"verkiezingen 5 november\", \"cijfers in Q3\". " +
+      "Géén expliciete datum ⇒ lege lijst []; verzin nooit een datum. Elke event: title (korte " +
+      "omschrijving), date als YYYY-MM-DD (zet een kwartaal/maand op de eerste dag ervan, bv. Q3 → " +
+      `${new Date().getFullYear()}-07-01), kind uit (${CALENDAR_KINDS.join(", ")}), en certainty: ` +
+      "bevestigd (officieel/zeker), verwacht (gepland maar niet bevestigd) of gerucht (speculatie).",
     prompt: `Onderwerpen:\n${topicLijst || "(geen)"}\n\nBeoordeel deze items:\n\n${lijst}`,
   });
 
@@ -123,6 +148,7 @@ export async function scanBatch(
         topicId: topics[verdict.topic_index]?.id ?? null,
         regio: isRegioCode(verdict.regio) ? verdict.regio : null,
         entities: dedupeEntities(verdict.entities ?? []),
+        events: verdict.events ?? [],
       });
     }
   }

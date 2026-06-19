@@ -301,16 +301,44 @@ export interface ThreadTracking {
   created_at: string;
 }
 
+export type CalendarEventKind =
+  | "earnings"
+  | "release"
+  | "event"
+  | "dividend"
+  | "ipo"
+  | "verkiezing"
+  | "overig";
+export type CalendarEventCertainty = "bevestigd" | "verwacht" | "gerucht";
+
+/**
+ * A forward-dated event as the scan extracts it from a single item — before it
+ * is validated and linked into a CalendarEvent row by the agenda step.
+ */
+export interface ExtractedEvent {
+  title: string;
+  /** ISO date (YYYY-MM-DD) explicitly stated in the source text */
+  date: string;
+  kind: CalendarEventKind;
+  certainty: CalendarEventCertainty;
+}
+
 export interface CalendarEvent {
   id: string;
   title: string;
-  kind: "earnings" | "release" | "event" | "dividend" | "ipo" | "verkiezing" | "overig";
+  kind: CalendarEventKind;
   date: string;
-  certainty: "bevestigd" | "verwacht" | "gerucht";
+  certainty: CalendarEventCertainty;
   topic_id: string | null;
   source: string | null;
   meta: Record<string, unknown>;
   created_at: string;
+  /** whose agenda this event belongs to (null for legacy/global events) */
+  profile_id: string | null;
+  /** the source item it was extracted from */
+  item_id: string | null;
+  /** the storyline it belongs to, when the source item joined a thread */
+  thread_id: string | null;
 }
 
 export interface Capture {

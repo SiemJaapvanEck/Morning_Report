@@ -7,7 +7,7 @@
 
 import { db, unwrap } from "../shared/db";
 import { currentBudgetMode, budgetPolicy } from "../shared/budget";
-import { config } from "../shared/config";
+import { config, todayLocal } from "../shared/config";
 import { fetchWeather } from "../weather";
 import { fetchMarkten } from "../markten";
 import { activeSources, ingestSource } from "../ingest";
@@ -15,6 +15,7 @@ import { scanBatch, loadScoreContext, priority, assignBands, selectForScan } fro
 import { summarizeSection, deepDive, generateThreadUpdate } from "../generate";
 import { assembleUserContext, composeDailyPaper, type DigestTopic } from "../redactie";
 import { dedupeForEdition, archivePrimer } from "../archive";
+import { buildAgendaRows, persistAgendaRows, type AgendaItemInput } from "../calendar";
 import {
   loadActiveThreads,
   loadLinkedItemIds,
@@ -88,6 +89,7 @@ const planStep: StepHandler = async ({ edition }) => {
     { kind: "scan_rank", payload: {} },
     { kind: "select", payload: {} },
     { kind: "threads", payload: {} },
+    { kind: "agenda", payload: {} },
     { kind: "generate", payload: {} },
     { kind: "daily_paper", payload: {} },
     { kind: "finalize", payload: {} },
@@ -212,10 +214,16 @@ const scanRankStep: StepHandler = async ({ edition, step }) => {
           is_ad: verdict.isReclame,
           // een bron-gekoppeld topic (gezet bij ingestie) wint van de AI-gok
           topic_id: vastTopic.get(itemId) ?? verdict.topicId,
-          // wereldregio voor de "waar komt het nieuws vandaan"-kaart + de
-          // kernentiteiten voor thread-matching (fase 3); merge zodat eerder
+          // wereldregio voor de "waar komt het nieuws vandaan"-kaart, de
+          // kernentiteiten voor thread-matching (fase 3) en de gedateerde
+          // toekomst-events voor de agenda-stap (Phase B); merge zodat eerder
           // gezette velden (bv. media) niet verloren gaan
-          scan_meta: { ...existingMeta.get(itemId), regio: verdict.regio, entities: verdict.entities },
+          scan_meta: {
+            ...existingMeta.get(itemId),
+            regio: verdict.regio,
+            entities: verdict.entities,
+            events: verdict.events,
+          },
         })
         .eq("id", itemId);
       scanned++;
@@ -761,6 +769,68 @@ const finalizeStep: StepHandler = async ({ edition }) => {
 };
 
 // ============================================================
+// agenda — gedateerde toekomst-events uit de scan in de kalender zetten
+// ============================================================
+//
+// Loopt na `threads` zodat een event de verhaallijn van zijn bronitem erft. De
+// scan heeft per item al de expliciet gedateerde gebeurtenissen in
+// scan_meta.events gezet; hier filteren we op scope (gevolgd óf in een thread),
+// valideren we (echte toekomstdatum, bekende soort) en schrijven we ze per
+// profiel weg, gekoppeld aan bronitem en thread. Idempotent: de events van deze
+// editie-items worden eerst verwijderd en daarna opnieuw opgebouwd.
+
+const agendaStep: StepHandler = async ({ edition }) => {
+  const rows = unwrap(
+    await db()
+      .from("edition_items")
+      .select("item_id, items(url, topic_id, category_id, scan_meta)")
+      .eq("edition_id", edition.id),
+  ) as unknown as {
+    item_id: string;
+    items: {
+      url: string | null;
+      topic_id: string | null;
+      category_id: string | null;
+      scan_meta: { events?: AgendaItemInput["events"] } | null;
+    } | null;
+  }[];
+
+  const userCtx = await assembleUserContext(edition.profile_id);
+  const threadByItem = new Map(
+    (
+      unwrap(
+        await db().from("thread_items").select("thread_id, item_id").eq("edition_id", edition.id),
+      ) as { thread_id: string; item_id: string }[]
+    ).map((r) => [r.item_id, r.thread_id]),
+  );
+
+  const inputs: AgendaItemInput[] = rows
+    .filter((r) => r.items != null)
+    .map((r) => {
+      const item = r.items!;
+      const followed =
+        (item.topic_id != null && userCtx.followedTopicIds.has(item.topic_id)) ||
+        (item.category_id != null && userCtx.followedCategoryIds.has(item.category_id));
+      return {
+        itemId: r.item_id,
+        topicId: item.topic_id,
+        followed,
+        threadId: threadByItem.get(r.item_id) ?? null,
+        source: item.url,
+        events: item.scan_meta?.events ?? [],
+      };
+    });
+
+  const eligibleItemIds = inputs
+    .filter((i) => i.followed || i.threadId != null)
+    .map((i) => i.itemId);
+  const agendaRows = buildAgendaRows(edition.profile_id, inputs, todayLocal());
+
+  await persistAgendaRows(eligibleItemIds, agendaRows);
+  return { events: agendaRows.length, kandidaatItems: eligibleItemIds.length };
+};
+
+// ============================================================
 // Registry
 // ============================================================
 
@@ -772,6 +842,7 @@ export const stepRegistry: Record<string, StepHandler> = {
   scan_rank: scanRankStep,
   select: selectStep,
   threads: threadsStep,
+  agenda: agendaStep,
   generate: generateStep,
   daily_paper: dailyPaperStep,
   finalize: finalizeStep,

@@ -1,25 +1,59 @@
 # HANDOFF — current state
 
-> Last updated: 18 June 2026, session on Siem's account.
+> Last updated: 19 June 2026, session on Siem's account.
 > Read this first when picking up the project; working agreements live in CLAUDE.md.
 
 ## Where we stand
 
-**"Track-as-thread + custom RSS source" is done and in `main`.** Readers can now
-mark a followed topic to be maintained as a persistent storyline, and add their
-own RSS feed to the shared source catalog from the preferences screen. This
-landed on top of News Threads Phases 0–5c-3 (all complete). **Everything is
-green** (lint/tsc/**100 tests**/build).
+**Investment & Foresight Phase B — auto-scheduled agenda — is done and in
+`main`.** The `calendar_events` table (previously empty + unused) is now filled
+automatically: the scan extracts explicitly-dated forward events from article
+text, and a new `agenda` pipeline step persists them per-profile, linked to the
+source item and its thread. **Everything is green** (lint/tsc/**108 tests**/build).
 
-Pipeline: scan → select → **threads (match/link + mega-thread anchoring,
-tracked-topic gate)** → **generate (thread-aware)** → **daily_paper (assembly)**
-→ finalize.
+**Phase A (finance section + RSS seed) was deliberately skipped** at Siem's
+request — we jumped straight to B. A is **not abandoned**, just deferred; pick it
+up when the finance section is wanted. (Note: the custom-RSS UI from the previous
+session is the natural feeder for A.)
 
-Next up: the approved **"Investment & Foresight"** roadmap (Phases A–D, recorded
-under "What's open" below; replaces the old Phase 6). Next session starts at
-Phase A; first action there is proposing the free finance RSS feed list for
-Siem's approval before seeding. (Note: the new custom-RSS UI is a natural feeder
-for Phase A.)
+Pipeline: scan **(+ event extraction)** → select → **threads** → **agenda
+(new)** → **generate (thread-aware)** → **daily_paper** → finalize.
+
+### Phase B — auto-scheduled agenda, grounded in sources (this session, landed)
+
+Populate the agenda from real article text, source-grounded — no free-floating
+guesses. Four pieces:
+
+- **Migration `0011_calendar_event_links`** (applied to live DB): adds
+  `profile_id` (fk profiles, cascade), `item_id` (fk items), `thread_id`
+  (fk threads) to `calendar_events`, + indexes `(profile_id, date)` and
+  `(item_id)`. Idempotency lives in the step, so no DB unique constraint.
+- **Scan extraction** (`modules/rank`): the cheap batch scan call now also
+  returns `events[]` per item — **only** when the text states an explicit forward
+  date ("IPO op 1 juli", "verkiezingen 5 nov", "Q3" → first day of quarter).
+  Each event: `title`, `date` (YYYY-MM-DD), `kind`, `certainty`. No date ⇒ `[]`,
+  never invent one. No extra AI call (piggybacks scan); `maxTokens` 3000→3500.
+  Stashed in `items.scan_meta.events`. New `ExtractedEvent` type.
+- **New `agenda` step** (`modules/pipeline/steps.ts`): runs **after `threads`**
+  so an event inherits its source item's `thread_id`. Scopes to
+  **followed-or-threaded items only**, validates hard (real future date, known
+  kind/certainty, non-empty title — a cheap-model hallucination never lands),
+  dedupes on `(date, lower title)`, persists per-profile. Idempotent via
+  delete-by-`item_id` + re-insert.
+- **Pure core** (`modules/calendar`): `buildAgendaRows` + `isValidIsoDate` +
+  `CALENDAR_KINDS`/`CALENDAR_CERTAINTIES` constants + `persistAgendaRows`.
+  8 new tests (100 → 108). `modules/calendar` was dead code before this.
+
+**Scope decisions locked with Siem this session:** events populate
+**followed/threaded items only** (extraction runs on all scanned items but only
+in-scope items are persisted); landed the **full phase in one go**; committed on
+the **green gate** (no live pipeline tick — Phase B has no browser-observable
+surface yet, the agenda/graph UI is a later phase).
+
+**Not yet verified end-to-end against live data** — the next real edition run is
+the first true test. Validation is strict, so a bad extraction is dropped, not
+persisted, but watch the first `agenda` step's `{ events, kandidaatItems }`
+result.
 
 ### Track-as-thread + custom RSS source (this session, landed)
 
@@ -89,7 +123,10 @@ Siem's new roadmap, replacing the old Phase 6. One coherent loop:
 with a target date → that date becomes an agenda event → a dotted line on that
 thread's graph reaches toward it.**
 
-Cadence: **one phase per sprint, pause for review after each.** Start with A.
+Cadence: **one phase per sprint, pause for review after each.** Progress so far:
+**Phase A skipped (deferred, not abandoned)**, **Phase B done (this session)**.
+**Next up is Phase C** (per-thread prediction) — it builds directly on the agenda
+that B now fills.
 
 Decisions already locked with Siem:
 - Investment section = a **block inside the Daily Paper** (krant page), not a
@@ -104,8 +141,9 @@ Decisions already locked with Siem:
   sources** — no free-floating AI guesses; strict schema (no source basis ⇒ no
   prediction).
 
-**Phase A — Investment section in the Daily Paper.** A real finance block, fed
-by in-depth free RSS.
+**Phase A — Investment section in the Daily Paper. [SKIPPED — deferred.]** A real
+finance block, fed by in-depth free RSS. Skipped at Siem's request on 19 June to
+go straight to B; pick this up when the finance section is wanted.
 - Migration (seed): a `Beleggen` category + curated free finance RSS feeds
   (M&A, CEO changes, mergers/new BVs, IPOs, markets) into `sources`. They flow
   through the existing scan → select → threads pipeline untouched.
@@ -115,19 +153,14 @@ by in-depth free RSS.
   (amber/emerald markets accents).
 - Touches: migration, `modules/redactie`, `modules/shared/types.ts`, krant UI.
 
-**Phase B — Auto-scheduled agenda, grounded in sources.** Populate the empty
-`calendar_events` table from real article text.
-- Piggyback the existing scan call (already extracts entities) to also pull
-  *explicitly-dated* forward events — "IPO on July 1", "election Nov 5", "game
-  drops Q3" — each with `kind`, `certainty`, and the source item it came from.
-- Migration: add provenance + linkage to `calendar_events` — `profile_id`,
-  `thread_id`, source `item_id`/`url` (today it's global, unlinked). A pipeline
-  step persists them idempotently.
-- Touches: `modules/rank` (extraction), `modules/calendar`, a pipeline step,
-  migration, types.
+**Phase B — Auto-scheduled agenda, grounded in sources. [DONE — this session.]**
+See "Where we stand" above for the full landing notes. Summary: scan extracts
+explicitly-dated forward events; new `agenda` step persists them per-profile,
+linked to source item + thread; followed/threaded scope; strict validation;
+migration `0011`; +8 tests.
 
-**Phase C — Per-thread prediction piece, source-grounded.** Every threaded
-topic gets a short, confidence-tagged prediction.
+**Phase C — Per-thread prediction piece, source-grounded. [NEXT.]** Every
+threaded topic gets a short, confidence-tagged prediction.
 - Extend `generateThreadUpdate` output schema with `prediction`
   { text, target_date, confidence, source_basis }. The prompt already gets the
   thread's new items (titles/summaries/URLs); instruct it to predict **only**

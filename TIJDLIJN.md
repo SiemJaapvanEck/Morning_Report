@@ -199,3 +199,18 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   `createUserSource()` + `validateFeedUrl()` (parses the feed before insert),
   `POST /api/bronnen`, and a validate-&-add form in the preferences UI. +4 tests
   (96 → 100). Gate green; verified on localhost; pushed. Next: Phase A.
+
+- **19 June 2026 — Investment & Foresight Phase B: auto-scheduled agenda.**
+  Skipped Phase A (deferred, not abandoned) at Siem's request and built B. The
+  empty/unused `calendar_events` table is now filled automatically from article
+  text: the cheap scan call also extracts explicitly-dated forward events
+  (`ExtractedEvent`: title/date/kind/certainty; no date ⇒ none, never invented;
+  no extra AI call), stashed in `scan_meta.events`. New `agenda` pipeline step
+  runs after `threads`, scopes to followed/threaded items, validates hard (real
+  future date, known kind/certainty), dedupes on (date, lower title), and
+  persists per-profile linked to source item + thread; idempotent via
+  delete-by-item_id + re-insert. Migration `0011_calendar_event_links`
+  (profile_id/item_id/thread_id + indexes). Pure core in `modules/calendar`
+  (`buildAgendaRows`, `isValidIsoDate`) + 8 tests (100 → 108). Gate green;
+  committed on the green gate (no live tick — no UI surface yet). Next: Phase C
+  (per-thread prediction).

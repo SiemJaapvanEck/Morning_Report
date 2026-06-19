@@ -254,3 +254,15 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   predictions on Iran/SpaceX child threads (krant + archive + agenda all green on
   localhost); AI generation path itself proven only on a live run. Gate green.
   Next: Phase D — 52-week per-thread graphs under each Daily Paper article.
+
+- **19 June 2026 (vervolg 4) — Retired the Investment & Foresight roadmap;
+  planned "broaden the mega net".** No code. With the agenda + prediction loop
+  shipped, removed the A–D phase roadmap from HANDOFF (kept a de-phased factual
+  "shipped" record; fixed a duplicated section). Set "broaden the mega net" as the
+  active focus and worked it into a build-ready plan: co-occurrence clustering
+  (no LLM, no migration) — a pure buildAnchorClusters() that grows each anchor's
+  cluster from companion entities with high conditional probability P(anchor|companion)
+  + a min co-occurrence count, then assignMegaThreads matches on cluster
+  intersection instead of the exact anchor token. Guardrails against over-merging
+  (directional threshold, anchors never absorbed, count floor, strongest-cluster-only).
+  Siem develops it in a new session.

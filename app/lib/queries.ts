@@ -172,6 +172,20 @@ export interface ArchiveDot {
   childId: string;
 }
 
+/** An upcoming agenda event the storyline reaches toward (dotted projection). */
+export interface ArchiveProjection {
+  id: string;
+  date: string;
+  title: string;
+  kind: CalendarEventKind;
+  certainty: CalendarEventCertainty;
+  /** url of the source it was extracted from (for "read about it") */
+  source: string | null;
+  /** title + summary of the source article, when an item is linked */
+  sourceTitle: string | null;
+  sourceBody: string | null;
+}
+
 /** A mega-thread for the archive: its daily news volume + the child-story dots. */
 export interface ArchiveMega {
   id: string;
@@ -181,6 +195,8 @@ export interface ArchiveMega {
   dots: ArchiveDot[];
   /** the mega's main DESTEP sector — drives its line color in the chart */
   primarySector: DestepLens;
+  /** upcoming dated events (this mega or its children) the line projects toward */
+  projections: ArchiveProjection[];
 }
 
 /**
@@ -213,7 +229,7 @@ export async function getThreadArchive(profileId: string): Promise<ArchiveMega[]
     category_id: string | null;
   }[];
   if (children.length === 0) {
-    return megas.map((m) => ({ id: m.id, title: m.title, volume: [], dots: [], primarySector: "sociaal" as DestepLens }));
+    return megas.map((m) => ({ id: m.id, title: m.title, volume: [], dots: [], primarySector: "sociaal" as DestepLens, projections: [] }));
   }
 
   // Topic/category context so selectLenses gets more than bare entities — this
@@ -266,6 +282,66 @@ export async function getThreadArchive(profileId: string): Promise<ArchiveMega[]
     linksByChild.set(l.thread_id, arr);
   }
 
+  // Upcoming dated events (Phase B agenda) the storylines project toward. An
+  // event linked to a child thread belongs to that child's mega; one linked to
+  // the mega directly stays there. Only today-or-later events.
+  const childToMega = new Map<string, string>();
+  for (const m of megas) childToMega.set(m.id, m.id);
+  for (const c of children) childToMega.set(c.id, c.parent_thread_id);
+  const eventRows = unwrap(
+    await db()
+      .from("calendar_events")
+      .select("id, title, kind, date, certainty, thread_id, item_id, source")
+      .eq("profile_id", profileId)
+      .gte("date", todayLocal())
+      .in("thread_id", [...megas.map((m) => m.id), ...childIds]),
+  ) as {
+    id: string;
+    title: string;
+    kind: CalendarEventKind;
+    date: string;
+    certainty: CalendarEventCertainty;
+    thread_id: string | null;
+    item_id: string | null;
+    source: string | null;
+  }[];
+
+  // Source article (where the event was mentioned) so the projection is readable.
+  const evItemIds = [...new Set(eventRows.map((e) => e.item_id).filter(Boolean))] as string[];
+  const evItems = evItemIds.length
+    ? (unwrap(await db().from("items").select("id, title").in("id", evItemIds)) as { id: string; title: string }[])
+    : [];
+  const evSummaries = evItemIds.length
+    ? (unwrap(
+        await db()
+          .from("edition_items")
+          .select("item_id, summary_text")
+          .in("item_id", evItemIds)
+          .not("summary_text", "is", null),
+      ) as { item_id: string; summary_text: string | null }[])
+    : [];
+  const evTitleByItem = new Map(evItems.map((i) => [i.id, i.title]));
+  const evBodyByItem = new Map<string, string>();
+  for (const s of evSummaries) if (s.summary_text) evBodyByItem.set(s.item_id, s.summary_text);
+
+  const projByMega = new Map<string, ArchiveProjection[]>();
+  for (const e of eventRows) {
+    const megaId = e.thread_id ? childToMega.get(e.thread_id) : undefined;
+    if (!megaId) continue;
+    const arr = projByMega.get(megaId) ?? [];
+    arr.push({
+      id: e.id,
+      date: e.date,
+      title: e.title,
+      kind: e.kind,
+      certainty: e.certainty,
+      source: e.source,
+      sourceTitle: e.item_id ? evTitleByItem.get(e.item_id) ?? null : null,
+      sourceBody: e.item_id ? evBodyByItem.get(e.item_id) ?? null : null,
+    });
+    projByMega.set(megaId, arr);
+  }
+
   return megas.map((m) => {
     const kids = children.filter((c) => c.parent_thread_id === m.id);
     const dots: ArchiveDot[] = [];
@@ -296,6 +372,7 @@ export async function getThreadArchive(profileId: string): Promise<ArchiveMega[]
       volume: [...volume.entries()].map(([date, count]) => ({ date, count })).sort((a, b) => a.date.localeCompare(b.date)),
       dots: dots.sort((a, b) => a.date.localeCompare(b.date)),
       primarySector: dominantLens(kidLenses),
+      projections: (projByMega.get(m.id) ?? []).sort((a, b) => a.date.localeCompare(b.date)),
     };
   });
 }

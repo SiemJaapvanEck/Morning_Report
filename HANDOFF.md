@@ -5,11 +5,56 @@
 
 ## Where we stand
 
-**Investment & Foresight Phase B — auto-scheduled agenda — is done and in
-`main`, and now has a visible UI surface.** The `calendar_events` table is filled
-automatically by the pipeline (scan extracts dated events → new `agenda` step
-persists them per-profile, linked to source item + thread), **and** the dashboard
-now renders them. **Everything is green** (lint/tsc/**108 tests**/build).
+**Investment & Foresight Phase B is done and in `main`, with two visible UI
+surfaces: the dashboard agenda tile AND the archive's dotted projections.** The
+`calendar_events` table is filled automatically by the pipeline (scan extracts
+dated events → `agenda` step persists them per-profile), the dashboard renders
+upcoming events, and the `/archive` storyline chart now reaches forward to those
+events with selectable, readable projection markers. **Everything is green**
+(lint/tsc/**108 tests**/build). **Next up: Phase C — per-thread predictions.**
+
+### Archive dotted projections (this session, approved on localhost)
+
+The `/archive` storyline chart (`StorylineChart`) now projects each storyline
+forward to its upcoming agenda events:
+- **Split "now" axis:** real history gets the left ~60%, the projection horizon
+  the right ~40%, with a faint "NU" divider — so a few days of history stay
+  readable while months-out events still fit. Falls back to a single axis when a
+  profile has no future events.
+- **Dashed projection lines** from each storyline's last real point to its event
+  dates, ending in ◇ diamond markers. **Dash density + opacity encode certainty**
+  (bevestigd `5 2` tight → verwacht `3 4` → gerucht `1 6` sparse/faded).
+  Projections render for the **active** storyline only.
+- **Selectable + readable:** clicking a marker (or a child-story dot — unified
+  selection) swaps the panel underneath to a "Vooruitblik" card with the event's
+  kind + certainty badges, a description, and a `Bron bekijken →` link. When a
+  real event has a linked source item, the panel shows that article's summary;
+  seeded events (no `item_id`) just link out. **Copy is an honest placeholder**
+  ("a full source-based prediction comes once the editor writes one") until C.
+- Data: `getThreadArchive` attaches each mega's upcoming events
+  (`ArchiveProjection`: id, date, title, kind, certainty, source, sourceTitle,
+  sourceBody) — events on the mega or any child thread, today-or-later.
+- **Seed enriched:** +4 events on Iran/SpaceX children so the demo shows the full
+  fan across all three certainties (still `meta.seed = true`, removable).
+
+### Agenda UI + map relocation (earlier this session, in `main`)
+
+Siem wanted to *see* Phase B before moving on. Built and approved:
+- **"Op de agenda" tile** on the dashboard right column (`EditionView.tsx`,
+  `AgendaTegel`): upcoming events as dated rows — date chip, title, `kind` label,
+  the `↳ storyline` it belongs to, and a certainty badge (bevestigd = emerald,
+  verwacht = amber, gerucht = faded). Fed by new `getUpcomingAgenda(profileId)`
+  query (`app/lib/queries.ts`, `AgendaEvent`), threaded through
+  `EditionScreen` + both edition pages.
+- **"Waar het nieuws vandaan komt" world map relocated** off the right column
+  **into the blue briefing hero** (top-right, small, white-on-blue): `WereldKaart`
+  gained a `tint="blue"|"white"` prop. Still interactive (region click filters
+  Sol's selectie). The old full-size map tile + the "Waar Sol las" fallback tile
+  were removed.
+- **Seed:** representative events inserted into `calendar_events` for Siem's
+  profile, linked to his real storylines, tagged `meta.seed = true` so they're
+  removable in one query (`delete from calendar_events where meta->>'seed' = 'true'`).
+  They'll be superseded by real scan-extracted events once an edition runs.
 
 ### Agenda UI + map relocation (this session, approved on localhost)
 

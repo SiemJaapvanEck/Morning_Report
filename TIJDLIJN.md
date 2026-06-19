@@ -225,3 +225,17 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   old map tile + "Waar Sol las" fallback. Seeded 8 representative events linked to
   Siem's real storylines (meta.seed=true, removable). Approved on localhost; gate
   green (108 tests). Next: archive dotted projection lines toward agenda events.
+
+- **19 June 2026 (vervolg 2) — Archive dotted projections.** The /archive
+  storyline chart (StorylineChart) now reaches forward to upcoming agenda events.
+  getThreadArchive attaches each mega's future calendar_events (ArchiveProjection,
+  incl. source article title/summary). Chart got a split "nu" axis (history left
+  ~60%, projection horizon right ~40%, faint divider), dashed projection lines
+  from each storyline's last real point to ◇ date markers with dash density +
+  opacity encoding certainty (bevestigd tight → gerucht sparse/faded), and a
+  unified dot/projection selection: clicking a marker opens a "Vooruitblik" read
+  panel (kind + certainty badges, description, Bron-link; shows the source
+  article summary when an item is linked). Copy is an honest placeholder until
+  Phase C writes real predictions. Seed enriched (+4 Iran/SpaceX child events) to
+  show the full certainty fan. Approved on localhost; gate green (108 tests).
+  Next: Phase C — per-thread, source-grounded predictions.

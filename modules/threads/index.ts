@@ -783,7 +783,15 @@ export interface ThreadUpdateJob {
   /** this edition's deep edition_item ids of this thread — where the update body lands */
   deepEditionItemIds: string[];
   /** today's items linked to this thread — all genuinely new (unique(thread_id,item_id)) */
-  newItems: { id: string; title: string; summary: string | null; url: string | null; entities: string[] }[];
+  newItems: {
+    id: string;
+    title: string;
+    summary: string | null;
+    /** full article body (plain text) for deep research, or null for snippet-only feeds */
+    content: string | null;
+    url: string | null;
+    entities: string[];
+  }[];
 }
 
 /**
@@ -860,11 +868,12 @@ export async function nextThreadUpdateJob(editionId: string): Promise<ThreadUpda
   const todayItemIds = links.filter((l) => l.thread_id === chosen).map((l) => l.item_id);
   const items = todayItemIds.length
     ? (unwrap(
-        await db().from("items").select("id, title, raw_summary, url, scan_meta").in("id", todayItemIds),
+        await db().from("items").select("id, title, raw_summary, content, url, scan_meta").in("id", todayItemIds),
       ) as {
         id: string;
         title: string;
         raw_summary: string | null;
+        content: string | null;
         url: string | null;
         scan_meta: { entities?: string[] } | null;
       }[])
@@ -873,6 +882,7 @@ export async function nextThreadUpdateJob(editionId: string): Promise<ThreadUpda
     id: i.id,
     title: i.title,
     summary: i.raw_summary,
+    content: i.content,
     url: i.url,
     entities: i.scan_meta?.entities ?? [],
   }));
@@ -903,12 +913,19 @@ export async function applyThreadUpdate(
   deepEditionItemIds: string[],
   threadId: string,
   profileId: string,
-  update: Pick<ThreadUpdate, "headline" | "body" | "newState" | "prediction">,
+  update: Pick<ThreadUpdate, "headline" | "lead" | "ripples" | "newState" | "prediction">,
 ): Promise<void> {
+  // Flat text for the dashboard card + pre-Phase-1 readers; structured article
+  // (lead + ripples) as jsonb for the krant's two-layer render.
+  const summaryText = [update.lead, ...update.ripples.map((r) => `${r.subhead}\n${r.text}`)]
+    .filter((s) => s.trim().length > 0)
+    .join("\n\n")
+    .trim();
+  const article = { lead: update.lead, ripples: update.ripples };
   for (const id of deepEditionItemIds) {
     const { error } = await db()
       .from("edition_items")
-      .update({ summary_text: update.body })
+      .update({ summary_text: summaryText, article })
       .eq("id", id);
     if (error) throw new Error(`applyThreadUpdate item: ${error.message}`);
   }

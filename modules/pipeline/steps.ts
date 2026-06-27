@@ -13,7 +13,7 @@ import { fetchMarkten } from "../markten";
 import { activeSources, ingestSource } from "../ingest";
 import { scanBatch, loadScoreContext, priority, assignBands, selectForScan } from "../rank";
 import { summarizeSection, deepDive, generateThreadUpdate } from "../generate";
-import { assembleUserContext, composeDailyPaper, type DigestTopic } from "../redactie";
+import { assembleUserContext, composeDailyPaper, composeSectionIntros, type DigestTopic } from "../redactie";
 import { dedupeForEdition, archivePrimer } from "../archive";
 import { buildAgendaRows, persistAgendaRows, type AgendaItemInput } from "../calendar";
 import {
@@ -484,7 +484,7 @@ const generateStep: StepHandler = async ({ edition, step }) => {
       const update = await generateThreadUpdate(
         {
           thread: { title: job.title, state: job.state },
-          newItems: job.newItems.map((n) => ({ title: n.title, summary: n.summary, url: n.url })),
+          newItems: job.newItems.map((n) => ({ title: n.title, summary: n.summary, content: n.content, url: n.url })),
           lenses,
           archivePrimer: primer,
           scheduledEvents,
@@ -617,10 +617,15 @@ const dailyPaperStep: StepHandler = async ({ edition, step }) => {
   const deepRows = unwrap(
     await db()
       .from("edition_items")
-      .select("item_id, summary_text, items(image_url)")
+      .select("item_id, summary_text, article, items(image_url)")
       .eq("edition_id", edition.id)
       .eq("band", "deep"),
-  ) as unknown as { item_id: string; summary_text: string | null; items: { image_url: string | null } | null }[];
+  ) as unknown as {
+    item_id: string;
+    summary_text: string | null;
+    article: import("../shared/types").DeepArticle | null;
+    items: { image_url: string | null } | null;
+  }[];
 
   const threadIds = [...new Set(deepRows.map((d) => threadByItem.get(d.item_id)).filter(Boolean))] as string[];
   const threads = threadIds.length
@@ -658,10 +663,14 @@ const dailyPaperStep: StepHandler = async ({ edition, step }) => {
           thread.topic_id ? topicName.get(thread.topic_id) ?? null : null,
           thread.entities,
         );
+        // Phase-1 editions carry the structured article; older ones only have
+        // the flat summary_text, which becomes the lead with no ripples.
+        const deepArticle = deep.article ?? { lead: deep.summary_text ?? "", ripples: [] };
         const article: DailyPaperArticle = {
           thread_id: thread.id,
           headline: thread.title,
-          body: deep.summary_text as string,
+          lead: deepArticle.lead,
+          ripples: deepArticle.ripples ?? [],
           followed,
           image_url: deep.items?.image_url ?? null,
           destep_lenses: lenses,
@@ -677,11 +686,15 @@ const dailyPaperStep: StepHandler = async ({ edition, step }) => {
 
   // The editorial wrapper: summary + intro + one broad general roundup.
   const parts = await composeDailyPaper(dp_articles.map((a) => a.headline), topics, mode, edition.id, step.id);
+
+  // Sol's per-section editorial text: caption + small summary for each category.
+  const dp_sections = await composeSectionIntros(topics, mode, edition.id, step.id);
   if (parts) {
     dp_articles.push({
       thread_id: null,
       headline: parts.generalHeadline,
-      body: parts.generalBody,
+      lead: parts.generalBody,
+      ripples: [],
       followed: false,
       image_url: null,
       destep_lenses: [],
@@ -694,6 +707,7 @@ const dailyPaperStep: StepHandler = async ({ edition, step }) => {
     dp_summary: parts?.summary ?? null,
     dp_intro: parts?.intro ?? null,
     dp_articles,
+    dp_sections,
     // back-compat for finalize/BriefingHero until Phase 5b renders dp_*
     daily_paper: parts?.generalBody ?? null,
     intro: parts?.summary ?? null,
@@ -723,6 +737,8 @@ const finalizeStep: StepHandler = async ({ edition }) => {
   const dp_summary = (dpRow.data?.result?.dp_summary as string | undefined) ?? null;
   const dp_intro = (dpRow.data?.result?.dp_intro as string | undefined) ?? null;
   const dp_articles = (dpRow.data?.result?.dp_articles as DailyPaperArticle[] | undefined) ?? null;
+  const dp_sections =
+    (dpRow.data?.result?.dp_sections as import("../shared/types").DailyPaperSection[] | undefined) ?? null;
 
   const weather = await db()
     .from("edition_sections")
@@ -771,6 +787,7 @@ const finalizeStep: StepHandler = async ({ edition }) => {
     dp_summary,
     dp_intro,
     dp_articles,
+    dp_sections,
     weather: weather.data?.payload ?? null,
     markten,
     regios,

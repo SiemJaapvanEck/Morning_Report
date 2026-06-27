@@ -9,7 +9,7 @@
 import { askAI, askAIJson } from "../shared/ai";
 import { budgetPolicy } from "../shared/budget";
 import { db, unwrap } from "../shared/db";
-import type { BudgetMode } from "../shared/types";
+import type { BudgetMode, DailyPaperSection } from "../shared/types";
 
 // ============================================================
 // Cross-reference context (axis A: what the reader follows) — extended in a
@@ -207,4 +207,81 @@ export async function composeDailyPaper(
     generalHeadline: data.generalHeadline.trim(),
     generalBody: data.generalBody.trim(),
   };
+}
+
+// ============================================================
+// Section intros (Phase 0) — per newspaper section: a one-sentence caption
+// (Sol's angle) + a small 2-3 sentence roundup of that category's news.
+// ============================================================
+
+const SECTION_INTROS_SCHEMA = {
+  type: "object",
+  properties: {
+    sections: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          caption: { type: "string" },
+          summary: { type: "string" },
+        },
+        required: ["title", "caption", "summary"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["sections"],
+  additionalProperties: false,
+} as const;
+
+/** Pure: trim section intros and drop entries with no title or no text at all. */
+export function cleanSectionIntros(
+  raw: { sections?: { title?: string; caption?: string; summary?: string }[] } | null | undefined,
+): DailyPaperSection[] {
+  return (raw?.sections ?? [])
+    .map((s) => ({
+      title: (s?.title ?? "").trim(),
+      caption: (s?.caption ?? "").trim(),
+      summary: (s?.summary ?? "").trim(),
+    }))
+    .filter((s) => s.title.length > 0 && (s.caption.length > 0 || s.summary.length > 0));
+}
+
+/**
+ * Writes Sol's per-section editorial text: for each category with news today, a
+ * punchy one-sentence caption plus a short roundup summary. One `deep` call,
+ * budget-aware ('stop' / no token budget → []). Titles must match the section
+ * titles so the krant can line them up.
+ */
+export async function composeSectionIntros(
+  topics: DigestTopic[],
+  mode: BudgetMode,
+  editionId: string,
+  stepId?: string,
+): Promise<DailyPaperSection[]> {
+  const policy = budgetPolicy[mode];
+  const ordered = orderDigestTopics(topics).filter((t) => t.headlines.length > 0);
+  if (ordered.length === 0 || policy.solMaxTokens === 0) return [];
+
+  const blok = ordered
+    .map((t) => `## ${t.name}\n${t.headlines.map((h) => `- ${h}`).join("\n")}`)
+    .join("\n\n");
+
+  const { data } = await askAIJson<{ sections: { title: string; caption: string; summary: string }[] }>({
+    tier: "deep",
+    editionId,
+    stepId,
+    maxTokens: Math.min(1600, 200 + ordered.length * 140),
+    jsonSchema: SECTION_INTROS_SCHEMA as unknown as Record<string, unknown>,
+    system:
+      "Je bent de eindredacteur van een persoonlijk ochtendrapport, in het Nederlands, zakelijk en neutraal — geen personage, geen 'ik'. " +
+      "Voor ELKE aangeboden sectie schrijf je twee dingen: " +
+      "'caption' — één pakkende zin die de kern/insteek van die sectie vandaag vangt; " +
+      "'summary' — een kort overzicht van 2-3 zinnen van wat er vandaag in die categorie speelt, dat de losse koppen met elkaar verbindt. " +
+      "Gebruik EXACT de aangeboden sectietitel als 'title'. Behandel alleen de aangeboden secties, verzin er geen bij.",
+    prompt: `De secties met hun koppen van vandaag:\n\n${blok}`,
+  });
+
+  return cleanSectionIntros(data);
 }

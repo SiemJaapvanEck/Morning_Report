@@ -91,6 +91,8 @@ export interface Item {
   url: string | null;
   title: string;
   raw_summary: string | null;
+  /** full article body as plain text (from the feed's content:encoded), or null */
+  content: string | null;
   published_at: string | null;
   fetched_at: string;
   content_hash: string | null;
@@ -126,6 +128,18 @@ export interface FrontPage {
   dp_intro?: string;
   /** the Daily Paper body: one article per followed thread + one broad general article */
   dp_articles?: DailyPaperArticle[];
+  /** per-section editorial text: a one-sentence caption + a small category summary */
+  dp_sections?: DailyPaperSection[];
+}
+
+/** Sol's editorial intro for one newspaper section: a punchy caption + a short roundup. */
+export interface DailyPaperSection {
+  /** the section/category title this text belongs to (matches edition_sections.title) */
+  title: string;
+  /** one-sentence angle on the section's news (Sol's framing) */
+  caption: string;
+  /** a small 2-3 sentence summary of what happened in this category today */
+  summary: string;
 }
 
 /** One Daily Paper article — a thread update (followed topic) or the broad general roundup. */
@@ -144,12 +158,11 @@ export interface ThreadPrediction {
   source_basis: string;
 }
 
-export interface DailyPaperArticle {
+export interface DailyPaperArticle extends DeepArticle {
   /** thread this article updates; null = the broad general roundup article */
   thread_id: string | null;
   /** news-specific custom headline */
   headline: string;
-  body: string;
   /** does the reader actively follow this thread's topic/category? */
   followed: boolean;
   /** reused from a source item (og:image / feed thumbnail) */
@@ -162,15 +175,34 @@ export interface DailyPaperArticle {
   prediction: ThreadPrediction | null;
 }
 
+/** One "ripple" of a deep article: a reasoned consequence with its own subtitle. */
+export interface ArticleRipple {
+  /** a fitting, news-specific subtitle for this consequence (Dutch), e.g.
+   *  "Hoe Tesla een deel van de klap opving" */
+  subhead: string;
+  /** the reasoned consequence (1-2 sentences), grounded in the day's stories —
+   *  analysis, not invented facts */
+  text: string;
+}
+
+/**
+ * A "full story" deep article: source-grounded facts (`lead`) plus up to three
+ * reasoned consequences (`ripples`), each with its own fitting subtitle.
+ */
+export interface DeepArticle {
+  /** the source-grounded facts: what happened + the hard numbers (Dutch) */
+  lead: string;
+  /** up to 3 grounded consequences, each a labelled mini-section */
+  ripples: ArticleRipple[];
+}
+
 /**
  * The AI output of a thread-aware generation: an update that builds on the
  * thread's stored state, plus the rewritten state for the next edition.
  */
-export interface ThreadUpdate {
+export interface ThreadUpdate extends DeepArticle {
   /** news-specific headline for this update */
   headline: string;
-  /** the update prose (Dutch), building on the prior state — not from scratch */
-  body: string;
   /** the rewritten storyline state the next edition builds on */
   newState: string;
   /** which DESTEP lenses the update actually used (subset of the offered ones) */

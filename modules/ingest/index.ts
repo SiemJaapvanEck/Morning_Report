@@ -91,6 +91,7 @@ export async function ingestSource(source: Source): Promise<IngestResult> {
       url: item.url,
       title: item.title,
       raw_summary: item.summary,
+      content: item.content,
       published_at: item.publishedAt,
       content_hash: contentHash(item.title),
       is_ad: item.isAd,

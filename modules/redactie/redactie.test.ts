@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { orderDigestTopics, type DigestTopic } from "./index";
+import { orderDigestTopics, cleanSectionIntros, type DigestTopic } from "./index";
 
 const topic = (name: string, followed: boolean, headlines: string[]): DigestTopic => ({
   name,
@@ -27,5 +27,31 @@ describe("orderDigestTopics", () => {
       topic("Groot", false, ["a", "b", "c"]),
     ]);
     expect(out.map((t) => t.name)).toEqual(["Groot", "Klein"]);
+  });
+});
+
+describe("cleanSectionIntros (per-section caption + summary)", () => {
+  it("trims and keeps well-formed section text", () => {
+    expect(
+      cleanSectionIntros({
+        sections: [{ title: " Economie ", caption: " Onrust drukt de beurzen. ", summary: " Brede daling.  " }],
+      }),
+    ).toEqual([{ title: "Economie", caption: "Onrust drukt de beurzen.", summary: "Brede daling." }]);
+  });
+
+  it("drops sections without a title or with no text at all", () => {
+    const out = cleanSectionIntros({
+      sections: [
+        { title: "Politiek", caption: "Coalitie verdeeld.", summary: "" },
+        { title: "", caption: "geen titel", summary: "x" },
+        { title: "Leeg", caption: "  ", summary: "  " },
+      ],
+    });
+    expect(out).toEqual([{ title: "Politiek", caption: "Coalitie verdeeld.", summary: "" }]);
+  });
+
+  it("handles a missing/empty payload", () => {
+    expect(cleanSectionIntros(null)).toEqual([]);
+    expect(cleanSectionIntros({})).toEqual([]);
   });
 });

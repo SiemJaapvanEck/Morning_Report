@@ -1,8 +1,12 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
+import { cookies } from "next/headers";
+import { hasDbConfig } from "@/modules/shared/db";
+import { getProfiles } from "@/app/lib/queries";
 import { ServiceWorkerRegistratie } from "./components/ServiceWorkerRegistratie";
 import { ThemaKiezer } from "./components/ThemaKiezer";
+import { AccountWisselaar } from "./components/AccountWisselaar";
 import "./globals.css";
 
 // Vóór de eerste paint: opgeslagen thema toepassen (geen flits). Zonder
@@ -34,11 +38,25 @@ export const viewport: Viewport = {
   themeColor: "#1c1917",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Profielen + huidige keuze voor de account-wisselaar in de header. Faalt stil
+  // (geen DB-config of -fout) zodat de header altijd rendert.
+  let profiles: { id: string; name: string }[] = [];
+  let currentProfileId: string | null = null;
+  if (hasDbConfig()) {
+    try {
+      const cookieStore = await cookies();
+      currentProfileId = cookieStore.get("mr_profile")?.value ?? null;
+      profiles = (await getProfiles()).map((p) => ({ id: p.id, name: p.name }));
+    } catch {
+      // header valt terug op geen wisselaar
+    }
+  }
+
   return (
     <html
       lang="nl"
@@ -60,6 +78,7 @@ export default function RootLayout({
               <Link href="/instellingen" className="hover:text-stone-900 dark:hover:text-stone-100">
                 Instellingen
               </Link>
+              <AccountWisselaar profiles={profiles} currentId={currentProfileId} />
             </div>
           </nav>
         </header>

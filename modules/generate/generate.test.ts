@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cleanPrediction } from "./index";
+import { cleanPrediction, excerptForPrompt, cleanArticle, flattenArticle } from "./index";
 
 const TODAY = "2026-06-19";
 
@@ -47,5 +47,87 @@ describe("cleanPrediction (source-grounded, no basis ⇒ none)", () => {
   it("returns null for a missing object", () => {
     expect(cleanPrediction(null, TODAY)).toBeNull();
     expect(cleanPrediction(undefined, TODAY)).toBeNull();
+  });
+});
+
+describe("excerptForPrompt (bounded body fed to deep research)", () => {
+  it("prefers the full body over the short summary", () => {
+    expect(excerptForPrompt("De volledige tekst.", "kort", 100)).toBe("De volledige tekst.");
+  });
+
+  it("falls back to the summary when there is no body", () => {
+    expect(excerptForPrompt(null, "alleen een snippet", 100)).toBe("alleen een snippet");
+    expect(excerptForPrompt("   ", "snippet", 100)).toBe("snippet");
+  });
+
+  it("returns null when neither body nor summary has content", () => {
+    expect(excerptForPrompt(null, null, 100)).toBeNull();
+    expect(excerptForPrompt("  ", "  ", 100)).toBeNull();
+  });
+
+  it("bounds an over-long body and marks the cut", () => {
+    const body = "Eerste zin is lang genoeg. " + "x".repeat(200);
+    const out = excerptForPrompt(body, null, 40)!;
+    expect(out.length).toBeLessThanOrEqual(44); // ~maxChars + " […]"
+    expect(out.endsWith("[…]")).toBe(true);
+  });
+
+  it("cuts on a sentence boundary when one sits near the limit", () => {
+    const body = "Dit is de eerste zin van het artikel. " + "a".repeat(100);
+    expect(excerptForPrompt(body, null, 50)).toBe("Dit is de eerste zin van het artikel. […]");
+  });
+});
+
+describe("cleanArticle (two-layer article: ≤3 grounded ripples)", () => {
+  it("keeps a well-formed lead and trims its ripples", () => {
+    expect(
+      cleanArticle({
+        lead: "  SpaceX zakte 12,5%.  ",
+        ripples: [{ subhead: " Tesla mee omlaag ", text: " Beleggers verschoven.  " }],
+      }),
+    ).toEqual({
+      lead: "SpaceX zakte 12,5%.",
+      ripples: [{ subhead: "Tesla mee omlaag", text: "Beleggers verschoven." }],
+    });
+  });
+
+  it("drops ripples missing a subhead or text", () => {
+    const out = cleanArticle({
+      lead: "Feit.",
+      ripples: [
+        { subhead: "Goed", text: "met body" },
+        { subhead: "", text: "geen kop" },
+        { subhead: "geen body", text: "  " },
+      ],
+    });
+    expect(out.ripples).toEqual([{ subhead: "Goed", text: "met body" }]);
+  });
+
+  it("caps ripples at three", () => {
+    const many = Array.from({ length: 6 }, (_, i) => ({ subhead: `Kop ${i}`, text: `Tekst ${i}` }));
+    expect(cleanArticle({ lead: "L", ripples: many }).ripples).toHaveLength(3);
+  });
+
+  it("handles a missing/empty object", () => {
+    expect(cleanArticle(null)).toEqual({ lead: "", ripples: [] });
+    expect(cleanArticle({ lead: "L" })).toEqual({ lead: "L", ripples: [] });
+  });
+});
+
+describe("flattenArticle (structured → plain text)", () => {
+  it("joins the lead and each ripple as subhead + text", () => {
+    expect(
+      flattenArticle({
+        lead: "De feiten.",
+        ripples: [
+          { subhead: "Tesla", text: "Mee omlaag." },
+          { subhead: "Politiek", text: "Washington kijkt mee." },
+        ],
+      }),
+    ).toBe("De feiten.\n\nTesla\nMee omlaag.\n\nPolitiek\nWashington kijkt mee.");
+  });
+
+  it("returns just the lead when there are no ripples", () => {
+    expect(flattenArticle({ lead: "Alleen de feiten.", ripples: [] })).toBe("Alleen de feiten.");
   });
 });

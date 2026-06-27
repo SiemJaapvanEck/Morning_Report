@@ -15,6 +15,8 @@ export interface FeedItem {
   publishedAt: string | null;
   isAd: boolean;
   imageUrl: string | null;
+  /** Full article body as plain text (from content:encoded), or null for snippet-only feeds. */
+  content: string | null;
   /** Playable media (podcast audio / YouTube video), or null for plain articles. */
   media: { url: string; durationSec: number | null } | null;
 }
@@ -37,6 +39,35 @@ const AD_PATTERNS = [
 export function looksLikeAd(title: string, summary?: string | null, categories?: string[]): boolean {
   const haystacks = [title, summary ?? "", ...(categories ?? [])];
   return haystacks.some((text) => AD_PATTERNS.some((pattern) => pattern.test(text)));
+}
+
+/**
+ * Pure functie: strip feed-HTML naar leesbare platte tekst, zodat we het volledige
+ * artikel (content:encoded) als grondstof aan de deep-research-call kunnen geven.
+ * Blok-einden worden newlines; scripts/styles en overige tags verdwijnen; de meest
+ * voorkomende HTML-entiteiten worden gedecodeerd. Leeg/geen body → null.
+ */
+export function htmlToText(html: string | null | undefined): string | null {
+  if (!html) return null;
+  const text = html
+    .replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, " ") // scripts/styles eruit
+    .replace(/<\/(p|div|li|h[1-6]|blockquote)>/gi, "\n") // blok-einden → newline
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, " ") // resterende tags
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;|&#8217;|&#8216;/g, "'")
+    .replace(/&#8220;|&#8221;/g, '"')
+    .replace(/&hellip;|&#8230;/g, "…")
+    .replace(/&#?[a-z0-9]+;/gi, " ") // overige entiteiten → spatie
+    .replace(/[ \t]+/g, " ")
+    .replace(/ *\n */g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return text.length > 0 ? text : null;
 }
 
 /** Stabiele hash van de kerninhoud, voor cross-source dedupe. */
@@ -139,6 +170,8 @@ export async function fetchFeed(url: string): Promise<FeedItem[]> {
   return (feed.items ?? []).map((item) => {
     const title = item.title?.trim() ?? "(zonder titel)";
     const summary = item.contentSnippet?.trim() || item.summary?.trim() || null;
+    const raw = item as RawFeedItemMedia;
+    const content = htmlToText(raw["content:encoded"] || raw.content);
     return {
       guid: item.guid ?? item.link ?? title,
       url: item.link ?? null,
@@ -147,6 +180,7 @@ export async function fetchFeed(url: string): Promise<FeedItem[]> {
       publishedAt: item.isoDate ?? null,
       isAd: looksLikeAd(title, summary, item.categories),
       imageUrl: extractImage(item as RawFeedItemMedia),
+      content,
       media: extractMedia(item as RawFeedMedia),
     };
   });

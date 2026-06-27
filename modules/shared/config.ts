@@ -44,7 +44,7 @@ export const config = {
      * for noticeably lower than the cap — the threads layer funds richer
      * research by reclaiming broad-scan cost (see scan.maxRounds below).
      */
-    editionCeilingEur: Number(process.env.BUDGET_EDITION_EUR ?? "0.10"),
+    editionCeilingEur: Number(process.env.BUDGET_EDITION_EUR ?? "0.15"),
     /** Vanaf dit aandeel van het plafond schakelt de pipeline terug */
     zuinigVanaf: 0.6,
     minimaalVanaf: 0.85,
@@ -114,6 +114,16 @@ export const config = {
     anchorWindowDays: Number(process.env.THREADS_ANCHOR_WINDOW_DAYS ?? "14"),
     /** only form a mega-thread if the anchor spans at least this many child threads */
     anchorMinChildren: Number(process.env.THREADS_ANCHOR_MIN_CHILDREN ?? "3"),
+  },
+
+  generate: {
+    /**
+     * Deep research now feeds the item's full body (content:encoded) instead of a
+     * 200-char snippet. This bounds how much of that body reaches the model per
+     * item — the main cost knob for "more detail per topic". Excerpt is taken at
+     * feed-time, so it can be re-tuned without re-ingesting.
+     */
+    itemExcerptChars: Number(process.env.DEEP_ITEM_EXCERPT_CHARS ?? "1500"),
   },
 
   weather: {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { looksLikeAd, contentHash, extractImage, extractMedia, parseDuration } from "./feeds";
+import { looksLikeAd, contentHash, extractImage, extractMedia, parseDuration, htmlToText } from "./feeds";
 
 describe("looksLikeAd (reclamefilter, heuristische laag)", () => {
   it("herkent gesponsorde content en advertorials", () => {
@@ -95,6 +95,30 @@ describe("parseDuration (itunes:duration → seconden)", () => {
     expect(parseDuration(null)).toBeNull();
     expect(parseDuration("")).toBeNull();
     expect(parseDuration("onzin")).toBeNull();
+  });
+});
+
+describe("htmlToText (volledige feed-body → platte tekst)", () => {
+  it("strip tags en maakt blok-einden newlines", () => {
+    expect(htmlToText("<p>Eerste alinea.</p><p>Tweede alinea.</p>")).toBe(
+      "Eerste alinea.\nTweede alinea.",
+    );
+    expect(htmlToText("Regel een<br>Regel twee")).toBe("Regel een\nRegel twee");
+  });
+
+  it("gooit scripts en styles weg", () => {
+    expect(htmlToText("<p>Tekst</p><script>evil()</script><style>.x{}</style>")).toBe("Tekst");
+  });
+
+  it("decodeert veelvoorkomende HTML-entiteiten", () => {
+    expect(htmlToText("<p>SpaceX &amp; NASA&#39;s deal &hellip;</p>")).toBe("SpaceX & NASA's deal …");
+  });
+
+  it("normaliseert witruimte en geeft null bij lege body", () => {
+    expect(htmlToText("<p>  veel    ruimte  </p>")).toBe("veel ruimte");
+    expect(htmlToText("")).toBeNull();
+    expect(htmlToText(null)).toBeNull();
+    expect(htmlToText("<p>   </p>")).toBeNull();
   });
 });
 

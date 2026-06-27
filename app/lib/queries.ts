@@ -7,6 +7,7 @@ import { dominantLens, selectLenses } from "@/modules/threads";
 import type {
   CalendarEventCertainty,
   CalendarEventKind,
+  DeepArticle,
   DestepLens,
   Edition,
   EditionSection,
@@ -29,6 +30,8 @@ export interface SectionView {
     item_id: string;
     band: "deep" | "summary" | "headline";
     summary_text: string | null;
+    /** structured two-layer deep article (lead + ripples) for deep items, else null */
+    article: DeepArticle | null;
     sol_note: string | null;
     match_score: number | null;
     title: string;
@@ -65,7 +68,7 @@ export async function getEdition(profileId: string, date: string): Promise<Editi
     await db()
       .from("edition_items")
       .select(
-        "id, item_id, section_id, band, position, summary_text, sol_note, match_score, items(title, url, image_url, scan_meta, sources(name))",
+        "id, item_id, section_id, band, position, summary_text, article, sol_note, match_score, items(title, url, image_url, scan_meta, sources(name))",
       )
       .eq("edition_id", edition.id)
       .order("position"),
@@ -75,6 +78,7 @@ export async function getEdition(profileId: string, date: string): Promise<Editi
     section_id: string | null;
     band: "deep" | "summary" | "headline";
     summary_text: string | null;
+    article: DeepArticle | null;
     sol_note: string | null;
     match_score: number | null;
     items: {
@@ -96,6 +100,7 @@ export async function getEdition(profileId: string, date: string): Promise<Editi
         item_id: row.item_id,
         band: row.band,
         summary_text: row.summary_text,
+        article: row.article,
         sol_note: row.sol_note,
         match_score: row.match_score,
         title: row.items.title,

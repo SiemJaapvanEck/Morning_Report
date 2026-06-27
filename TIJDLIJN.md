@@ -266,3 +266,20 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   intersection instead of the exact anchor token. Guardrails against over-merging
   (directional threshold, anchors never absorbed, count floor, strongest-cluster-only).
   Siem develops it in a new session.
+
+- **27 June 2026 — Re-imagined the daily paper + built the "full story" engine.**
+  Pivoted from the mega-net plan to a bigger goal: the paper should read like a
+  real sectioned newspaper, and each deep article should tell the *whole* story.
+  Built three things, all green (133 tests) and verified on a live run.
+  (1) **Deep-research two-layer "full story":** Phase 2 — stop discarding the
+  feed's content:encoded, store it on items.content (migration 0013) and feed a
+  bounded body excerpt; Phase 1 — output becomes { lead, ripples } (facts + ≤3
+  grounded reasoned consequences, each with its own subtitle), persisted to
+  edition_items.article (migration 0014). Budget ceiling €0.10→€0.15.
+  (2) **Account switcher** in the header (switch Siem/Jesse without clearing
+  cookies). (3) **Daily Paper Phase 0 + A:** Sol writes a one-sentence caption +
+  small summary per section (composeSectionIntros → front_page.dp_sections), and
+  the krant is rebuilt as a full-width sectioned newspaper (masthead → Sol's
+  synthesis → Hoofdverhaal → sections with caption/summary + a depth mix). Open
+  next: Phase C (broaden the selection to fill the paper), Phase B (storyline
+  links + restore the Vooruitblik), Phase D (reviews steer the paper).

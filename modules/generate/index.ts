@@ -6,9 +6,9 @@
 
 import { askAI, askAIJson } from "../shared/ai";
 import { budgetPolicy } from "../shared/budget";
-import { todayLocal } from "../shared/config";
+import { config, todayLocal } from "../shared/config";
 import { isValidIsoDate } from "../calendar";
-import type { BudgetMode, Item, DestepLens, ThreadUpdate, ThreadPrediction } from "../shared/types";
+import type { BudgetMode, Item, DestepLens, ThreadUpdate, ThreadPrediction, DeepArticle } from "../shared/types";
 
 export interface GeneratedSummary {
   itemId: string;
@@ -68,7 +68,20 @@ const THREAD_UPDATE_SCHEMA = {
   type: "object",
   properties: {
     headline: { type: "string" },
-    body: { type: "string" },
+    lead: { type: "string" },
+    ripples: {
+      type: "array",
+      maxItems: 3,
+      items: {
+        type: "object",
+        properties: {
+          subhead: { type: "string" },
+          text: { type: "string" },
+        },
+        required: ["subhead", "text"],
+        additionalProperties: false,
+      },
+    },
     newState: { type: "string" },
     lenses: { type: "array", items: { type: "string", enum: LENS_VALUES } },
     prediction: {
@@ -83,9 +96,34 @@ const THREAD_UPDATE_SCHEMA = {
       additionalProperties: false,
     },
   },
-  required: ["headline", "body", "newState", "lenses", "prediction"],
+  required: ["headline", "lead", "ripples", "newState", "lenses", "prediction"],
   additionalProperties: false,
 } as const;
+
+/**
+ * Pure: validate + bound the model's two-layer article. A ripple survives only
+ * with both a subtitle and a body; at most 3 are kept (the "≤3 grounded ripples"
+ * rule). Lead is always trimmed. Keeps the depth honest without trusting the
+ * model to self-limit.
+ */
+export function cleanArticle(
+  raw: { lead?: string; ripples?: { subhead?: string; text?: string }[] } | null | undefined,
+): DeepArticle {
+  const lead = raw?.lead?.trim() ?? "";
+  const ripples = (raw?.ripples ?? [])
+    .map((r) => ({ subhead: (r?.subhead ?? "").trim(), text: (r?.text ?? "").trim() }))
+    .filter((r) => r.subhead.length > 0 && r.text.length > 0)
+    .slice(0, 3);
+  return { lead, ripples };
+}
+
+/** Pure: flatten a two-layer article to plain text (dashboard card + back-compat). */
+export function flattenArticle(article: DeepArticle): string {
+  return [article.lead, ...article.ripples.map((r) => `${r.subhead}\n${r.text}`)]
+    .filter((s) => s.trim().length > 0)
+    .join("\n\n")
+    .trim();
+}
 
 /**
  * Pure: turn the model's raw prediction object into a stored ThreadPrediction, or
@@ -108,10 +146,30 @@ export function cleanPrediction(
   return { text, target_date: date, confidence, source_basis: basis };
 }
 
+/**
+ * Pure: the body text fed to the model for one source item. Prefers the full
+ * article body (content), falls back to the short summary, and bounds the length
+ * to hold token cost — cutting on a sentence/line boundary near the limit so the
+ * model never sees a word sliced in half. Empty body → null.
+ */
+export function excerptForPrompt(
+  content: string | null,
+  summary: string | null,
+  maxChars: number,
+): string | null {
+  const body = (content?.trim() || summary?.trim()) ?? null;
+  if (!body) return null;
+  if (body.length <= maxChars) return body;
+  const cut = body.slice(0, maxChars);
+  const boundary = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("\n"));
+  const trimmed = boundary > maxChars * 0.6 ? cut.slice(0, boundary + 1) : cut;
+  return `${trimmed.trim()} […]`;
+}
+
 export interface ThreadUpdateInput {
   thread: { title: string; state: string | null };
   /** today's items on this thread — always genuinely new (unique(thread_id,item_id)) */
-  newItems: { title: string; summary: string | null; url: string | null }[];
+  newItems: { title: string; summary: string | null; content: string | null; url: string | null }[];
   /** the relevant DESTEP lenses to use (from selectLenses) */
   lenses: DestepLens[];
   /** titles the reader rated highly in this area — reader perspective */
@@ -138,8 +196,11 @@ export async function generateThreadUpdate(
   const lensList = input.lenses.join(", ") || "sociaal";
   const newsBlock =
     input.newItems
-      .map((it, i) => `${i + 1}. ${it.title}${it.summary ? ` — ${it.summary.slice(0, 200)}` : ""}`)
-      .join("\n") || "(geen losse nieuwe items — duid de algemene ontwikkeling)";
+      .map((it, i) => {
+        const body = excerptForPrompt(it.content, it.summary, config.generate.itemExcerptChars);
+        return `${i + 1}. ${it.title}${body ? `\n${body}` : ""}`;
+      })
+      .join("\n\n") || "(geen losse nieuwe items — duid de algemene ontwikkeling)";
   const primer = input.archivePrimer.length
     ? `De lezer waardeerde eerder in dit onderwerp: ${input.archivePrimer.join("; ")}.`
     : "";
@@ -148,21 +209,30 @@ export async function generateThreadUpdate(
       input.scheduledEvents.map((e) => `- ${e.date}: ${e.title} (${e.certainty})`).join("\n")
     : "";
 
-  const { data } = await askAIJson<ThreadUpdate & { prediction?: Record<string, string> }>({
+  const { data } = await askAIJson<
+    ThreadUpdate & { prediction?: Record<string, string>; ripples?: { subhead?: string; text?: string }[] }
+  >({
     tier: "deep",
     editionId,
     stepId,
-    maxTokens: 1000,
+    maxTokens: 1500,
     jsonSchema: THREAD_UPDATE_SCHEMA as unknown as Record<string, unknown>,
     system:
       "Je houdt een doorlopende verhaallijn bij voor een persoonlijk ochtendrapport, in het Nederlands. " +
-      "Je krijgt de stand van het verhaal tot nu toe en wat er vandaag bij komt. " +
-      "Schrijf een UPDATE die hierop VOORTBOUWT — niet opnieuw vanaf nul: verwijs kort naar wat er eerder speelde en benoem expliciet wat echt nieuw is. " +
-      "Gebruik alleen de aangeboden DESTEP-lenzen als invalshoek, en koppel aan beurs-/marktimpact waar dat relevant is. " +
-      "'body': 1-2 strakke alinea's (4-8 zinnen), feitelijk, geen kop in de tekst zelf. " +
+      "Je krijgt de stand van het verhaal tot nu toe en de volledige nieuwsteksten van vandaag. " +
+      "Schrijf het VOLLEDIGE verhaal achter dit onderwerp, in TWEE lagen, en bouw VOORT op de eerdere stand (niet vanaf nul): " +
+      "verwijs kort naar wat er eerder speelde en benoem expliciet wat echt nieuw is.\n" +
+      "LAAG 1 — 'lead': de feiten. Wat er vandaag gebeurde, mét de harde gegevens (getallen, namen, wie/wat). " +
+      "STRIKT op basis van de aangeboden teksten — verzin geen feiten, cijfers, namen of citaten. 1-2 alinea's (4-7 zinnen).\n" +
+      "LAAG 2 — 'ripples': de doorwerking. MAXIMAAL 3 gevolgen die je écht kunt onderbouwen met het aangeboden nieuws — " +
+      "de economische, politieke en maatschappelijke uitstraling, en de impact op verbonden partijen (andere bedrijven, " +
+      "stakeholders, sectoren). Elk gevolg is een object met 'subhead' — een pakkende, nieuws-specifieke subtitel " +
+      "(bijvoorbeeld 'Hoe Tesla een deel van de klap opving') — en 'text' (1-2 zinnen geredeneerde analyse). " +
+      "Dit is ANALYSE: redeneer over gevolgen, maar verzin geen concrete feiten/cijfers die niet in de bron staan. " +
+      "Kun je een gevolg niet onderbouwen? Laat het weg. Liever twee sterke gevolgen dan drie zwakke; bij dun nieuws mag 'ripples' leeg zijn.\n" +
       "'headline': een nieuws-specifieke kop voor deze update. " +
       "'newState': een bondige, bijgewerkte samenvatting van de héle verhaallijn tot nu toe (3-5 zinnen) die de volgende editie als startpunt gebruikt. " +
-      "'lenses': de lenzen die je daadwerkelijk gebruikte (subset van de aangeboden). " +
+      "'lenses': de DESTEP-lenzen die je daadwerkelijk gebruikte (subset van de aangeboden). " +
       "'prediction': een korte, concrete vooruitblik (1 zin) MET een streefdatum (YYYY-MM-DD), " +
       "een zekerheid (bevestigd/verwacht/gerucht) en een 'source_basis': benoem letterlijk wélk aangeboden " +
       "nieuwsitem of welke geagendeerde gebeurtenis de voorspelling onderbouwt. " +
@@ -175,12 +245,14 @@ export async function generateThreadUpdate(
       `Datum vandaag: ${todayLocal()}\n` +
       (primer ? `${primer}\n` : "") +
       (eventsBlock ? `${eventsBlock}\n` : "") +
-      `\nWat er vandaag bij komt:\n${newsBlock}`,
+      `\nWat er vandaag bij komt (volledige teksten):\n${newsBlock}`,
   });
 
+  const article: DeepArticle = cleanArticle(data);
   return {
     headline: data.headline.trim(),
-    body: data.body.trim(),
+    lead: article.lead,
+    ripples: article.ripples,
     newState: data.newState.trim(),
     lenses: data.lenses?.length ? data.lenses : input.lenses,
     prediction: cleanPrediction(data.prediction, todayLocal()),

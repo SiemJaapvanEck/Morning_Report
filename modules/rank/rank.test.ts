@@ -95,6 +95,34 @@ describe("assignBands (kostenpoort)", () => {
     const bands = assignBands([{ id: "x", priority: 0.2 }], "vol");
     expect(bands.get("x")).toBe("summary"); // onder de deep-drempel van 0.5
   });
+
+  it("Phase C: brede pool — deep + maxSummaries betaald, de rest gratis koppen", () => {
+    // 24 items, allemaal boven de deep-drempel zodat de banden puur door de
+    // budget-policy (deepDivesPerSectie) en maxSummaries bepaald worden.
+    const pool = Array.from({ length: 24 }, (_, i) => ({
+      id: `i${i}`,
+      priority: 0.9 - i * 0.01,
+    }));
+    const bands = assignBands(pool, "vol", 6);
+    const counts = { deep: 0, summary: 0, headline: 0 };
+    for (const b of bands.values()) counts[b]++;
+    expect(counts.deep).toBe(2); // budgetPolicy.vol.deepDivesPerSectie
+    expect(counts.summary).toBe(6); // de doorgegeven maxSummaries
+    expect(counts.headline).toBe(16); // de gratis staart vult "Ook in het nieuws"
+  });
+
+  it("Phase C: 'zuinig' degradeert paid tiers maar houdt de gratis staart", () => {
+    const pool = Array.from({ length: 24 }, (_, i) => ({
+      id: `z${i}`,
+      priority: 0.9 - i * 0.01,
+    }));
+    const bands = assignBands(pool, "zuinig", 6);
+    const counts = { deep: 0, summary: 0, headline: 0 };
+    for (const b of bands.values()) counts[b]++;
+    expect(counts.deep).toBe(1); // budgetPolicy.zuinig.deepDivesPerSectie
+    expect(counts.summary).toBe(6);
+    expect(counts.headline).toBe(17);
+  });
 });
 
 describe("ratingToDelta", () => {

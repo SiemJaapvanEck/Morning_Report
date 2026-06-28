@@ -252,7 +252,9 @@ const selectStep: StepHandler = async ({ edition }) => {
   const mode = await currentBudgetMode(edition.id);
   const ctx = await loadScoreContext(edition.profile_id);
 
-  const cutoff = new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString();
+  const cutoff = new Date(
+    Date.now() - config.select.freshWindowHours * 60 * 60 * 1000,
+  ).toISOString();
   const fresh: Item[] = unwrap(
     await db()
       .from("items")
@@ -261,7 +263,7 @@ const selectStep: StepHandler = async ({ edition }) => {
       .not("importance", "is", null)
       .gte("fetched_at", cutoff)
       .order("published_at", { ascending: false })
-      .limit(200),
+      .limit(config.select.freshPoolLimit),
   );
 
   const unique = await dedupeForEdition(edition.profile_id, fresh);
@@ -294,9 +296,9 @@ const selectStep: StepHandler = async ({ edition }) => {
     const ranked = inCategory
       .map((item) => ({ id: item.id, priority: priority(item, ctx) }))
       .sort((a, b) => b.priority - a.priority)
-      .slice(0, 10); // max 10 items per sectie
+      .slice(0, config.select.maxPerCategory);
 
-    const bands = assignBands(ranked, mode);
+    const bands = assignBands(ranked, mode, config.select.maxSummariesPerSection);
 
     const section = unwrap(
       await db()

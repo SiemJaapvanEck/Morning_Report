@@ -79,6 +79,22 @@ export const config = {
     candidatePool: Number(process.env.SCAN_CANDIDATE_POOL ?? "800"),
   },
 
+  select: {
+    // Cost gate → paper breadth. Most ingested items never reach the paper; the
+    // select step ranks the fresh pool per category and assigns bands. Headlines
+    // (the "Ook in het nieuws" brief list) are free, so we broaden the tail hard
+    // while keeping the paid deep/summary tiers bounded (deep stays governed by
+    // budgetPolicy). These knobs are the "more articles than paper" dial.
+    /** newest N fresh items loaded into the per-category ranking */
+    freshPoolLimit: Number(process.env.SELECT_FRESH_POOL ?? "400"),
+    /** how far back "fresh" reaches, in hours */
+    freshWindowHours: Number(process.env.SELECT_FRESH_WINDOW_H ?? "48"),
+    /** max items kept per category section (the rest of the pool is dropped) */
+    maxPerCategory: Number(process.env.SELECT_MAX_PER_CATEGORY ?? "24"),
+    /** max paid "summary" cards per section below the deep dives; rest = free headlines */
+    maxSummariesPerSection: Number(process.env.SELECT_MAX_SUMMARIES ?? "6"),
+  },
+
   ingest: {
     // Media feeds (podcast/video) are evergreen and skip the 48h freshness
     // rule, so an unbounded feed pulls its whole backcatalog (e.g. ~500

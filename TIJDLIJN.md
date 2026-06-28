@@ -283,3 +283,14 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   synthesis → Hoofdverhaal → sections with caption/summary + a depth mix). Open
   next: Phase C (broaden the selection to fill the paper), Phase B (storyline
   links + restore the Vooruitblik), Phase D (reviews steer the paper).
+
+- **28 June 2026 — Phase C: broadened + ranked the selection (the "more articles
+  than paper" fix).** Found that the ranking Phase C asked for (profile + threads
+  + reviews) was already in priority() + the thread path, so this was purely about
+  the funnel caps. Chose a Lean posture: broaden the free headline tail, keep paid
+  tiers flat. Added an env-tunable config.select block and wired it into selectStep
+  + assignBands — fresh pool 200→400, window 36h→48h, per-category 10→24, summaries
+  5→6, deep count unchanged. Live run (both profiles): the free headline tail grew
+  18→76 (4.2×), paid tiers stayed flat, cost ~€0.03 vs the €0.15 ceiling, and
+  Siem's previously-thin profile now has a full 130-item paper. 135 tests green.
+  Next: Phase B (storyline links + restore the Vooruitblik).

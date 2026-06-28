@@ -11,7 +11,7 @@ import { config, todayLocal } from "../shared/config";
 import { fetchWeather } from "../weather";
 import { fetchMarkten } from "../markten";
 import { activeSources, ingestSource } from "../ingest";
-import { scanBatch, loadScoreContext, priority, assignBands, selectForScan } from "../rank";
+import { scanBatch, loadScoreContext, priority, assignBands, selectForScan, isUserSelected } from "../rank";
 import { summarizeSection, deepDive, generateThreadUpdate } from "../generate";
 import { assembleUserContext, composeDailyPaper, composeSectionIntros, type DigestTopic } from "../redactie";
 import { dedupeForEdition, archivePrimer } from "../archive";
@@ -298,7 +298,14 @@ const selectStep: StepHandler = async ({ edition }) => {
       .sort((a, b) => b.priority - a.priority)
       .slice(0, config.select.maxPerCategory);
 
-    const bands = assignBands(ranked, mode, config.select.maxSummariesPerSection);
+    // Phase D: followed items are deep-eligible even below the priority gate.
+    const followedIds = new Set(
+      inCategory
+        .filter((item) => isUserSelected(item, ctx.followedTopicIds, ctx.followedCategoryIds))
+        .map((item) => item.id),
+    );
+
+    const bands = assignBands(ranked, mode, config.select.maxSummariesPerSection, followedIds);
 
     const section = unwrap(
       await db()

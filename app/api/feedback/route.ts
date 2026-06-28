@@ -4,7 +4,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { db } from "@/modules/shared/db";
-import { applyFeedback } from "@/modules/rank";
+import { applyFeedback, applyItemFeedback } from "@/modules/rank";
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
@@ -38,9 +38,11 @@ export async function POST(request: NextRequest) {
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    // scores direct bijwerken voor topic/categorie/bron;
-    // item-ratings tellen via hun topic (komt in fase 4 met de volledige hiërarchie)
-    if (body.target_type !== "item") {
+    // scores direct bijwerken. Item-ratings tellen via hun topic/categorie
+    // (Phase D); topic/categorie/bron werken hun eigen score bij.
+    if (body.target_type === "item") {
+      await applyItemFeedback(profileId, body.target_id, body.rating);
+    } else {
       await applyFeedback(profileId, body.target_type, body.target_id, body.rating);
     }
     return NextResponse.json({ ok: true });

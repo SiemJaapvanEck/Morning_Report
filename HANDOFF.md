@@ -5,89 +5,93 @@
 
 ## Where we stand
 
-Two phases of the re-imagined daily paper shipped this session: **Phase C**
-(broaden + rank the selection) and **Phase B** (storyline links + restore
-Vooruitblik + followed-first ordering). Both are in `main` and green
-(lint/tsc/**139 tests**/build). No schema changes this session; the latest
-applied migrations remain `0013`/`0014`.
+The full **C → B → D** roadmap of the re-imagined daily paper is now **done**.
+This session shipped all three phases, each verified and pushed to `main`:
+Phase C (broaden + rank the selection), Phase B (storyline links + restore
+Vooruitblik + followed-first), and Phase D (reviews + follows actively steer the
+paper). Everything is in `main` and green (lint/tsc/**144 tests**/build). No
+schema changes this session; latest applied migrations remain `0013`/`0014`.
 
 The pipeline shape is unchanged (scan → select → threads → agenda → generate →
-daily_paper → finalize). All Phase B + C work was in the `select` step, config,
-and the krant reading surface — no new AI calls, no migrations.
+daily_paper → finalize). All work was in the `select` step, the `rank` module,
+config, the feedback route, and the krant reading surface — no migrations, no new
+AI calls.
 
 ### Roadmap context
 
-Order **C → B → D**, then deep-research 3/4. **C and B are done**; **D is next.**
-(Overarching direction unchanged: Plan A — block-slices on top of the pure
-engine; the Daily Paper PRD is paused, not abandoned. Memory:
+**C, B, and D are all complete.** What remains of the re-imagined paper is
+deferred: deep-research Phase 3/4 and finishing the Daily Paper PRD. (Overarching
+direction unchanged: Plan A — block-slices on top of the pure engine. Memory:
 `block-slice-architecture`, `daily-paper-reimagination`.)
 
 ### Shipped this session (in `main`)
 
 **Phase C — broaden + rank the selection** (commit `432e7e7`). The funnel capped
-hard so little reached the paper. Finding: the ranking C asked for (profile +
-threads + reviews) was already in `priority()` + the thread path, so C was purely
-about the caps. Lean posture: broaden the free headline tail, keep paid tiers
-flat. New env-tunable `config.select` block wired into `selectStep` +
-`assignBands` — fresh pool 200→400, window 36h→48h, per-category 10→24, summaries
-5→6; deep count unchanged. Live run: headline tail 18→76 (4.2×), paid tiers flat,
-cost ~€0.03 vs the €0.15 ceiling; Siem's previously-thin profile now gets a full
-130-item paper.
+hard. Lean posture: broaden the free headline tail, keep paid tiers flat. New
+env-tunable `config.select` block in `selectStep` + `assignBands` — fresh pool
+200→400, window 36h→48h, per-category 10→24, summaries 5→6; deep count unchanged.
+Live: headline tail 18→76 (4.2×), cost ~€0.03 vs the €0.15 ceiling; Siem's
+previously-thin profile now gets a full 130-item paper.
 
-**Phase B — storyline links + Vooruitblik + followed-first** (this commit). The
-Phase A reshape rendered the krant from section items and dropped the storyline
-connection + the prediction box. All the data already existed, so B was a
-thread-join in `getEdition` + rendering — no schema, no AI:
-- `getEdition` (`app/lib/queries.ts`) now attaches to each **deep** article: its
-  storyline `{ thread_id, title, part }` and the thread's `prediction`, plus
-  `followedCategoryIds` on the edition. A deep item can match several threads, so
-  the storyline pick is **deterministic**: most-established storyline (highest
-  "deel N", tie-broken by id).
-- New pure helper `orderSectionsFollowedFirst` (`app/lib/krant.ts`, 4 tests).
-- `EditieWeergave.tsx`: a `Verhaallijn · {title} · deel N` label (links to
-  `/archive`) and a restored **Vooruitblik** box (forecast text + target date +
-  certainty chip) on the lead + featured deep articles; sections reordered
-  followed-first.
+**Phase B — storyline links + Vooruitblik + followed-first** (commit `7ff37fd`).
+`getEdition` (`app/lib/queries.ts`) attaches to each deep article its storyline
+`{ thread_id, title, deel N }` and the thread's `prediction`, plus
+`followedCategoryIds`; storyline pick is deterministic (most-established thread).
+New pure helper `orderSectionsFollowedFirst` (`app/lib/krant.ts`). The krant shows
+a `Verhaallijn · deel N` label (→ /archive) and a Vooruitblik box (forecast +
+target date + certainty) on lead + featured articles, and orders sections
+followed-first.
 
-**Verified on localhost** (today's 2026-06-28 editions; no pipeline re-run
-needed — the data was already persisted). Every deep article links to a thread
-(storyline labels render on all), real predictions show (e.g. the Iran/Hormuz
-and SpaceX forecasts). Siem checked and approved the look.
+**Phase D — reviews + follows actively steer the paper** (this commit). Two
+signals barely moved the paper before; now they bite. No schema, no new AI:
+- **Item ratings count.** New `applyItemFeedback` (`modules/rank/index.ts`)
+  resolves an article's `topic_id` (else `category_id`) and moves its
+  `topic_scores` (reusing `applyFeedback`); the feedback route now calls it for
+  `target_type:"item"` instead of dropping it (the old "fase 4" TODO). Rating an
+  article in the krant steers its topic for every future edition.
+- **Follows boost ranking.** `ScoreContext` carries `followedTopicIds` +
+  `followedCategoryIds` (loaded in `loadScoreContext`); `priority()` +
+  `preRankScore()` lift a followed topic/category to an interest **floor**
+  (`config.rank.followInterestFloor`, default 0.6, env `RANK_FOLLOW_FLOOR`).
+- **Featuring tilt.** `assignBands` takes an optional `followedIds` set; followed
+  items are deep-eligible below the 0.5 gate (still bounded by budget mode). The
+  select step builds the set from the followed context.
+
+**Verified on real data** (read-only, no writes/AI): a quiet followed category
+gains a featured article (Goed nieuws deep 1→2); busy categories stay at 2 deep
+(their slots are already filled by high-importance news), so the visible effect
+there is section-first ordering + which items rank top — by design. Siem confirmed
+on localhost that ranking "is working better now."
 
 ## What's open
 
-Roadmap order **D**, then deep-research 3/4:
-
-- **Phase D — Reviews steer the paper.** Make the −2…+2 ratings + follows
-  *actively* promote/demote what's selected and featured. Note the base ranking
-  already blends reviews/follows via `priority()` (topic_scores absorb
-  `ratingToDelta`); D is about making it *visibly and strongly* steer selection +
-  featuring (and likely the deep/headline split), and tuning the strength. **←
-  next**
 - **Deep-research Phase 3/4 (deferred):** two-pass research per topic if a single
-  rich call breaches the ~7s tick wall; scale to 6–12 deep topics/edition.
+  rich call breaches the ~7s tick wall; scale to 6–12 deep topics/edition. **←
+  the obvious next build**
 - **Daily Paper PRD** — finish it (paused mid-grilling).
+- **Broader direction:** continue the block-slice re-architecture (Plan A) as the
+  app layer grows.
 
 ## Known issues / things to keep in mind
 
-- **Followed-first ordering is currently a no-op** — neither profile follows a
-  *category* (`follow_marks` of target_type `category` = 0), so the section
-  reorder has nothing to lift. It's unit-tested and activates the moment a
-  category is followed in Instellingen. (Topic follows exist but the krant orders
-  by category section.)
-- **Storyline "deel N" counts editions, not articles** — distinct editions the
-  thread appeared in, on/before the edition date. Good enough; revisit if a
-  thread can appear twice in a day.
+- **Follow steer is strongest for quiet categories + ordering.** Following a
+  busy category (Tech/Wereldtoneel) won't add deep articles — its 2 deep slots
+  are already filled by high-importance news; the follow shows up as section-first
+  ordering + item prioritization. The band-tilt adds a featured article only when
+  a followed category is quiet. This is deliberate (don't bury huge news). Tune
+  via `RANK_FOLLOW_FLOOR` if a stronger tilt is wanted.
+- **Followed-first ordering needs a category follow.** It keys on `follow_marks`
+  of target_type `category`; topic-only follows don't reorder sections.
 - **Phase C `select` knobs are env-tunable** — `SELECT_FRESH_POOL`,
   `SELECT_FRESH_WINDOW_H`, `SELECT_MAX_PER_CATEGORY`, `SELECT_MAX_SUMMARIES`
-  override the defaults (400 / 48 / 24 / 6) without code changes.
+  (defaults 400 / 48 / 24 / 6).
+- **Storyline "deel N" counts editions, not articles** — distinct editions the
+  thread appeared in, on/before the edition date.
 - **Pipeline runs are sleep-sensitive.** A live `npm run pipeline` aborts
   in-flight AI fetches if the laptop sleeps (absurd multi-minute "timeout"
-  durations in the log); the step machine's retries absorb it, but keep the
-  machine awake for a full run.
+  durations); the step machine's retries absorb it, but keep the machine awake.
 - **`content` only flows forward** — items ingested before 27 Jun have
-  `content = null`; full bodies + ripples appear only on newer items. Old
-  editions fall back gracefully.
+  `content = null`; full bodies + ripples appear only on newer items.
 - **Today's editions (2026-06-28) are real, regenerated data** on both profiles.
 - **Dev server / preview:** runs on `localhost:3000`. Siem checks localhost
   himself — don't screenshot.

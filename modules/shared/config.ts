@@ -79,6 +79,16 @@ export const config = {
     candidatePool: Number(process.env.SCAN_CANDIDATE_POOL ?? "800"),
   },
 
+  rank: {
+    // Phase D: follows + reviews actively steer the paper. Following a
+    // topic/category raises its effective interest to this floor, so followed
+    // content ranks to the top of its section (selected + featured) even at a
+    // neutral score. Negative ratings still demote via the score itself. The
+    // single knob for "how strongly do my follows bend the paper".
+    /** interest floor (0..1) applied to followed topics/categories */
+    followInterestFloor: Number(process.env.RANK_FOLLOW_FLOOR ?? "0.6"),
+  },
+
   select: {
     // Cost gate → paper breadth. Most ingested items never reach the paper; the
     // select step ranks the fresh pool per category and assigns bands. Headlines

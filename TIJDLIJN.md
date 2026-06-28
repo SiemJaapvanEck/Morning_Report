@@ -306,3 +306,16 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   on the lead + featured articles, and orders sections followed-first. Verified on
   localhost (every deep article links to a thread; real Iran/SpaceX predictions show).
   139 tests green. Next: Phase D (reviews actively steer the paper).
+
+- **28 June 2026 — Phase D: reviews + follows actively steer the paper (C→B→D done).**
+  Two reader signals barely moved the paper; now they bite (no schema, no AI). Item
+  ratings count: applyItemFeedback resolves an article's topic (else category) and
+  moves its topic_scores — closes the old "fase 4" TODO in the feedback route.
+  Follows boost ranking: ScoreContext carries the followed sets and priority()/
+  preRankScore() lift a followed topic/category to an interest floor (config.rank.
+  followInterestFloor, default 0.6). Featuring tilt: assignBands takes followedIds,
+  making followed items deep-eligible below the 0.5 gate (still budget-bounded).
+  Verified on real data: a quiet followed category gains a featured article; busy
+  ones stay at 2 deep (slots already filled) so the effect there is ordering +
+  prioritization. Siem confirmed on localhost. 144 tests green. The C→B→D roadmap
+  is complete; deep-research 3/4 + the Daily Paper PRD remain (deferred).

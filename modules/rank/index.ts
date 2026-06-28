@@ -11,6 +11,7 @@
 import { db, unwrap } from "../shared/db";
 import { askAIJson } from "../shared/ai";
 import { budgetPolicy } from "../shared/budget";
+import { config } from "../shared/config";
 import { dedupeEntities } from "../threads";
 import { REGIO_CODES, REGIO_GEEN, REGIO_NAAM, isRegioCode } from "../shared/regios";
 import { CALENDAR_KINDS, CALENDAR_CERTAINTIES } from "../calendar";
@@ -163,6 +164,8 @@ export interface ScoreContext {
   topicScores: Map<string, number>;    // topic_id → score
   categoryScores: Map<string, number>; // category_id → score
   sourceWeights: Map<string, number>;  // source_id → multiplier
+  followedTopicIds: Set<string>;       // actively followed topics (Phase D boost)
+  followedCategoryIds: Set<string>;    // actively followed categories
 }
 
 export async function loadScoreContext(profileId: string): Promise<ScoreContext> {
@@ -170,11 +173,20 @@ export async function loadScoreContext(profileId: string): Promise<ScoreContext>
     await db().from("topic_scores").select("*").eq("profile_id", profileId),
   );
   const sources = unwrap(await db().from("sources").select("id, weight"));
+  const follows = unwrap(
+    await db()
+      .from("follow_marks")
+      .select("target_type, target_id")
+      .eq("profile_id", profileId)
+      .eq("active", true),
+  ) as { target_type: string; target_id: string }[];
 
   const ctx: ScoreContext = {
     topicScores: new Map(),
     categoryScores: new Map(),
     sourceWeights: new Map(sources.map((s: { id: string; weight: number }) => [s.id, s.weight])),
+    followedTopicIds: new Set(follows.filter((f) => f.target_type === "topic").map((f) => f.target_id)),
+    followedCategoryIds: new Set(follows.filter((f) => f.target_type === "category").map((f) => f.target_id)),
   };
   for (const score of scores) {
     if (score.target_type === "topic") ctx.topicScores.set(score.target_id, score.score);
@@ -197,10 +209,17 @@ export function priority(
   ctx: ScoreContext,
 ): number {
   // overerving: expliciete topic-score wint, anders categorie, anders neutraal
-  const interesse =
+  let interesse =
     (item.topic_id != null ? ctx.topicScores.get(item.topic_id) : undefined) ??
     (item.category_id != null ? ctx.categoryScores.get(item.category_id) : undefined) ??
     0;
+
+  // Phase D: een actief gevolgd topic/categorie tilt de interesse naar een vloer,
+  // zodat gevolgd nieuws bovenaan zijn sectie komt (ook bij neutrale score). Een
+  // hogere expliciete score blijft staan; negatieve ratings dempen nog steeds.
+  if (isUserSelected(item, ctx.followedTopicIds, ctx.followedCategoryIds)) {
+    interesse = Math.max(interesse, config.rank.followInterestFloor);
+  }
 
   const sourceWeight = item.source_id != null ? (ctx.sourceWeights.get(item.source_id) ?? 1.0) : 1.0;
   const belang = item.importance ?? 0.3;
@@ -244,7 +263,7 @@ export function recencyFactor(
 
 /** Did the reader actively select this item's topic or category? */
 export function isUserSelected(
-  item: PreRankItem,
+  item: Pick<Item, "topic_id" | "category_id">,
   followedTopicIds: Set<string>,
   followedCategoryIds: Set<string>,
 ): boolean {
@@ -259,10 +278,13 @@ export function isUserSelected(
  * priority(), but without importance — higher means more worth scanning.
  */
 export function preRankScore(item: PreRankItem, ctx: ScoreContext, now = Date.now()): number {
-  const interest =
+  let interest =
     (item.topic_id != null ? ctx.topicScores.get(item.topic_id) : undefined) ??
     (item.category_id != null ? ctx.categoryScores.get(item.category_id) : undefined) ??
     0;
+  if (isUserSelected(item, ctx.followedTopicIds, ctx.followedCategoryIds)) {
+    interest = Math.max(interest, config.rank.followInterestFloor);
+  }
   const interestFactor = 1 + interest * 0.75; // -1..1 → 0.25..1.75, mirrors priority()
   const sourceWeight = item.source_id != null ? (ctx.sourceWeights.get(item.source_id) ?? 1.0) : 1.0;
   return sourceWeight * recencyFactor(item.published_at, now) * interestFactor;
@@ -300,16 +322,22 @@ export function selectForScan<T extends PreRankItem & { id: string }>(
  * Pure functie: verdeelt gerangschikte items over banden, rekening houdend
  * met de budget-modus. Topband = deep-dive, midden = samenvatting,
  * onderkant = alleen kop.
+ *
+ * Phase D: een gevolgd item (id in `followedIds`) is deep-waardig óók als zijn
+ * prioriteit onder de 0.5-drempel ligt — zodat wat de lezer volgt betrouwbaar
+ * een featured artikel wordt. Het aantal blijft begrensd door deepDivesPerSectie.
  */
 export function assignBands(
   ranked: { id: string; priority: number }[],
   mode: BudgetMode,
   maxSummaries = 5,
+  followedIds?: Set<string>,
 ): Map<string, Band> {
   const policy = budgetPolicy[mode];
   const bands = new Map<string, Band>();
   ranked.forEach((entry, i) => {
-    if (i < policy.deepDivesPerSectie && entry.priority >= 0.5) {
+    const deepEligible = entry.priority >= 0.5 || (followedIds?.has(entry.id) ?? false);
+    if (i < policy.deepDivesPerSectie && deepEligible) {
       bands.set(entry.id, "deep");
     } else if (i < policy.deepDivesPerSectie + maxSummaries && policy.samenvattingMaxTokens > 0) {
       bands.set(entry.id, "summary");
@@ -358,4 +386,21 @@ export async function applyFeedback(
     { onConflict: "profile_id,target_type,target_id" },
   );
   if (error) throw new Error(`Feedback: ${error.message}`);
+}
+
+/**
+ * Phase D: a rating on a single article feeds back into its topic (preferred) or
+ * category, so rating an item in the krant steers future editions. No standalone
+ * item score — the hierarchy lives in topic_scores; an item without a topic or
+ * category simply has nowhere to land (no-op, not an error).
+ */
+export async function applyItemFeedback(profileId: string, itemId: string, rating: number): Promise<void> {
+  const item = await db().from("items").select("topic_id, category_id").eq("id", itemId).maybeSingle();
+  const topicId = item.data?.topic_id as string | null | undefined;
+  const categoryId = item.data?.category_id as string | null | undefined;
+  if (topicId) {
+    await applyFeedback(profileId, "topic", topicId, rating);
+  } else if (categoryId) {
+    await applyFeedback(profileId, "category", categoryId, rating);
+  }
 }

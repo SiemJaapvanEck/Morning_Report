@@ -15,6 +15,8 @@ function ctx(overrides: Partial<ScoreContext> = {}): ScoreContext {
     topicScores: new Map(),
     categoryScores: new Map(),
     sourceWeights: new Map(),
+    followedTopicIds: new Set(),
+    followedCategoryIds: new Set(),
     ...overrides,
   };
 }
@@ -59,6 +61,28 @@ describe("priority", () => {
     );
     expect(p).toBeCloseTo(0.6 * 0.5);
   });
+
+  it("Phase D: een gevolgd topic tilt naar de interesse-vloer", () => {
+    const followed = priority(
+      { topic_id: "t-follow", category_id: null, source_id: null, importance: 0.5 },
+      ctx({ followedTopicIds: new Set(["t-follow"]) }),
+    );
+    const neutral = priority(
+      { topic_id: "t-plain", category_id: null, source_id: null, importance: 0.5 },
+      ctx(),
+    );
+    // vloer 0.6 → factor 1 + 0.6*0.75 = 1.45; gevolgd overtreft neutraal (factor 1)
+    expect(followed).toBeCloseTo(0.5 * 1.45);
+    expect(followed).toBeGreaterThan(neutral);
+  });
+
+  it("Phase D: de vloer verlaagt een al hogere score niet", () => {
+    const p = priority(
+      { topic_id: "t-1", category_id: null, source_id: null, importance: 0.5 },
+      ctx({ topicScores: new Map([["t-1", 1.0]]), followedTopicIds: new Set(["t-1"]) }),
+    );
+    expect(p).toBeCloseTo(0.5 * 1.75); // 1.0 > vloer 0.6, dus de score blijft staan
+  });
 });
 
 describe("assignBands (kostenpoort)", () => {
@@ -94,6 +118,16 @@ describe("assignBands (kostenpoort)", () => {
   it("lage prioriteit krijgt geen deep-dive, ook bovenaan de lijst", () => {
     const bands = assignBands([{ id: "x", priority: 0.2 }], "vol");
     expect(bands.get("x")).toBe("summary"); // onder de deep-drempel van 0.5
+  });
+
+  it("Phase D: een gevolgd item is deep-waardig ook onder de 0.5-drempel", () => {
+    const bands = assignBands([{ id: "x", priority: 0.2 }], "vol", 5, new Set(["x"]));
+    expect(bands.get("x")).toBe("deep");
+  });
+
+  it("Phase D: de followed-tilt respecteert de budget-modus (minimaal = geen deep)", () => {
+    const bands = assignBands([{ id: "x", priority: 0.2 }], "minimaal", 5, new Set(["x"]));
+    expect(bands.get("x")).not.toBe("deep");
   });
 
   it("Phase C: brede pool — deep + maxSummaries betaald, de rest gratis koppen", () => {
@@ -175,6 +209,12 @@ describe("preRankScore (no LLM needed)", () => {
     const s = preRankScore({ source_id: null, category_id: "cat-1", topic_id: null, published_at: fresh }, context, now);
     expect(s).toBeCloseTo(1.75); // interest 1.0 → factor 1.75
   });
+
+  it("Phase D: a followed topic lifts the pre-rank score to the floor", () => {
+    const context = ctx({ followedTopicIds: new Set(["t-follow"]) });
+    const s = preRankScore({ source_id: null, category_id: null, topic_id: "t-follow", published_at: fresh }, context, now);
+    expect(s).toBeCloseTo(1.45); // floor 0.6 → factor 1.45
+  });
 });
 
 describe("isUserSelected", () => {
@@ -182,12 +222,12 @@ describe("isUserSelected", () => {
   const followedCats = new Set(["cat-1"]);
 
   it("matches on a followed topic or category", () => {
-    expect(isUserSelected({ source_id: null, category_id: null, topic_id: "topic-1", published_at: null }, followedTopics, followedCats)).toBe(true);
-    expect(isUserSelected({ source_id: null, category_id: "cat-1", topic_id: null, published_at: null }, followedTopics, followedCats)).toBe(true);
+    expect(isUserSelected({ category_id: null, topic_id: "topic-1" }, followedTopics, followedCats)).toBe(true);
+    expect(isUserSelected({ category_id: "cat-1", topic_id: null }, followedTopics, followedCats)).toBe(true);
   });
 
   it("is false when neither is followed", () => {
-    expect(isUserSelected({ source_id: null, category_id: "cat-x", topic_id: "topic-x", published_at: null }, followedTopics, followedCats)).toBe(false);
+    expect(isUserSelected({ category_id: "cat-x", topic_id: "topic-x" }, followedTopics, followedCats)).toBe(false);
   });
 });
 

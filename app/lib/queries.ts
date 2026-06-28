@@ -14,12 +14,23 @@ import type {
   EditionStatus,
   FrontPage,
   Profile,
+  ThreadPrediction,
   WeatherSnapshot,
 } from "@/modules/shared/types";
 
 export interface EditionView {
   edition: Edition;
   sections: SectionView[];
+  /** category_ids the reader actively follows — the krant leads with these */
+  followedCategoryIds: string[];
+}
+
+/** The storyline a deep article belongs to: thread + which installment this is. */
+export interface StorylineRef {
+  thread_id: string;
+  title: string;
+  /** "deel N": how many editions this storyline has appeared in, up to this one */
+  part: number;
 }
 
 export interface SectionView {
@@ -39,6 +50,10 @@ export interface SectionView {
     image_url: string | null;
     source_name: string | null;
     regio: string | null;
+    /** the ongoing storyline this deep article updates, or null */
+    storyline: StorylineRef | null;
+    /** the storyline's current source-grounded forecast, or null */
+    prediction: ThreadPrediction | null;
   }[];
 }
 
@@ -90,6 +105,79 @@ export async function getEdition(profileId: string, date: string): Promise<Editi
     };
   }[];
 
+  // Phase B: attach the storyline (thread + "deel N") and its forecast to the
+  // deep articles. All of it is already persisted — thread_items links items to
+  // threads, threads carry title + prediction. Older editions with no thread
+  // links simply get null storyline/prediction (graceful fallback).
+  const deepItemIds = rows.filter((r) => r.band === "deep").map((r) => r.item_id);
+  const storylineByItem = new Map<string, StorylineRef>();
+  const predictionByItem = new Map<string, ThreadPrediction>();
+  if (deepItemIds.length > 0) {
+    const links = unwrap(
+      await db().from("thread_items").select("thread_id, item_id").in("item_id", deepItemIds),
+    ) as { thread_id: string; item_id: string }[];
+    const threadIds = [...new Set(links.map((l) => l.thread_id))];
+    if (threadIds.length > 0) {
+      const threads = unwrap(
+        await db().from("threads").select("id, title, prediction").in("id", threadIds),
+      ) as { id: string; title: string; prediction: ThreadPrediction | null }[];
+      const threadById = new Map(threads.map((t) => [t.id, t]));
+
+      // "deel N": distinct editions (on or before today's date) this thread has
+      // appeared in. One pass over the thread's items joined to their editions.
+      const partLinks = unwrap(
+        await db().from("thread_items").select("thread_id, edition_id").in("thread_id", threadIds),
+      ) as { thread_id: string; edition_id: string | null }[];
+      const editionIds = [...new Set(partLinks.map((l) => l.edition_id).filter(Boolean))] as string[];
+      const editionDates = editionIds.length
+        ? ((unwrap(
+            await db().from("editions").select("id, date").in("id", editionIds),
+          ) as { id: string; date: string }[]).reduce((m, e) => m.set(e.id, e.date), new Map<string, string>()))
+        : new Map<string, string>();
+      const partByThread = new Map<string, number>();
+      for (const tid of threadIds) {
+        const eds = new Set(
+          partLinks
+            .filter((l) => l.thread_id === tid && l.edition_id && (editionDates.get(l.edition_id) ?? "") <= date)
+            .map((l) => l.edition_id as string),
+        );
+        partByThread.set(tid, Math.max(1, eds.size));
+      }
+
+      // A deep item can match several threads; pick the most-established storyline
+      // (highest "deel N", tie-broken by id) so the label is deterministic.
+      const candidatesByItem = new Map<string, string[]>();
+      for (const link of links) {
+        const arr = candidatesByItem.get(link.item_id) ?? [];
+        arr.push(link.thread_id);
+        candidatesByItem.set(link.item_id, arr);
+      }
+      for (const [itemId, tids] of candidatesByItem) {
+        const best = tids
+          .filter((id) => threadById.has(id))
+          .sort((a, b) => (partByThread.get(b) ?? 1) - (partByThread.get(a) ?? 1) || a.localeCompare(b))[0];
+        if (!best) continue;
+        const thread = threadById.get(best)!;
+        storylineByItem.set(itemId, {
+          thread_id: thread.id,
+          title: thread.title,
+          part: partByThread.get(thread.id) ?? 1,
+        });
+        if (thread.prediction) predictionByItem.set(itemId, thread.prediction);
+      }
+    }
+  }
+
+  const followMarks = unwrap(
+    await db()
+      .from("follow_marks")
+      .select("target_id")
+      .eq("profile_id", profileId)
+      .eq("target_type", "category")
+      .eq("active", true),
+  ) as { target_id: string }[];
+  const followedCategoryIds = followMarks.map((m) => m.target_id);
+
   const sectionViews: SectionView[] = sections.map((section) => ({
     section,
     weather: section.kind === "weather" ? (section.payload as unknown as WeatherSnapshot) : null,
@@ -108,10 +196,12 @@ export async function getEdition(profileId: string, date: string): Promise<Editi
         image_url: row.items.image_url,
         source_name: row.items.sources?.name ?? null,
         regio: row.items.scan_meta?.regio ?? null,
+        storyline: storylineByItem.get(row.item_id) ?? null,
+        prediction: predictionByItem.get(row.item_id) ?? null,
       })),
   }));
 
-  return { edition, sections: sectionViews };
+  return { edition, sections: sectionViews, followedCategoryIds };
 }
 
 export async function listEditions(profileId: string, limit = 30): Promise<Edition[]> {

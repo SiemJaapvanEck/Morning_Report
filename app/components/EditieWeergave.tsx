@@ -3,9 +3,11 @@
 // een diepte-mix: featured deep-artikelen, samenvattingen, korte koppen).
 // Vol-breed. Bereikbaar via de "Lees de krant"-knop op het dag-dashboard.
 
+import Link from "next/link";
 import { Archivo, Space_Mono } from "next/font/google";
 import type { EditionView, SectionView } from "@/app/lib/queries";
-import type { FrontPage, WeatherSnapshot } from "@/modules/shared/types";
+import { orderSectionsFollowedFirst } from "@/app/lib/krant";
+import type { CalendarEventCertainty, FrontPage, ThreadPrediction, WeatherSnapshot } from "@/modules/shared/types";
 import { ItemRating } from "./ItemRating";
 
 const archivo = Archivo({ subsets: ["latin"], weight: ["600", "700", "800"], variable: "--font-archivo" });
@@ -58,6 +60,60 @@ function SolSynthese({ text }: { text: string }) {
   );
 }
 
+// Verhaallijn-label: koppelt een diep artikel aan zijn lopende storyline en
+// toont welke aflevering ("deel N") dit is. Linkt naar het archief.
+function VerhaallijnLabel({ storyline }: { storyline: NonNullable<Item["storyline"]> }) {
+  return (
+    <Link
+      href="/archive"
+      className="inline-flex items-center gap-1.5 font-[family-name:var(--font-space-mono)] text-[10.5px] font-bold uppercase tracking-wide text-[#2f6df0] hover:underline"
+    >
+      <span>Verhaallijn</span>
+      <span className="text-stone-400">·</span>
+      <span className="normal-case tracking-normal">{storyline.title}</span>
+      <span className="text-stone-400">·</span>
+      <span>deel {storyline.part}</span>
+    </Link>
+  );
+}
+
+const CERTAINTY_LABEL: Record<CalendarEventCertainty, string> = {
+  bevestigd: "bevestigd",
+  verwacht: "verwacht",
+  gerucht: "gerucht",
+};
+const CERTAINTY_CHIP: Record<CalendarEventCertainty, string> = {
+  bevestigd: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
+  verwacht: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
+  gerucht: "bg-stone-200 text-stone-600 dark:bg-stone-800 dark:text-stone-300",
+};
+
+// De Vooruitblik: de bron-gefundeerde voorspelling van de storyline (1-2 zinnen,
+// met streefdatum + zekerheid). Verschijnt alleen als de thread een prediction heeft.
+function Vooruitblik({ prediction }: { prediction: ThreadPrediction }) {
+  const datum = new Date(prediction.target_date + "T00:00:00").toLocaleDateString("nl-NL", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  return (
+    <div className="mt-5 rounded-2xl border border-[#2f6df0]/30 bg-[#2f6df0]/5 p-4 dark:border-[#2f6df0]/40 dark:bg-[#2f6df0]/10">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-[family-name:var(--font-space-mono)] text-[10px] font-bold uppercase tracking-widest text-[#2f6df0]">
+          Vooruitblik
+        </span>
+        <span className="font-[family-name:var(--font-space-mono)] text-[10px] text-stone-400">→ {datum}</span>
+        <span
+          className={`rounded-full px-2 py-0.5 font-[family-name:var(--font-space-mono)] text-[9.5px] font-bold uppercase ${CERTAINTY_CHIP[prediction.confidence]}`}
+        >
+          {CERTAINTY_LABEL[prediction.confidence]}
+        </span>
+      </div>
+      <p className="mt-2 text-[14px] leading-relaxed text-stone-700 dark:text-stone-200">{prediction.text}</p>
+    </div>
+  );
+}
+
 // De doorwerking: ≤3 gelabelde gevolgen onder een diep artikel.
 function Ripples({ ripples }: { ripples: { subhead: string; text: string }[] }) {
   if (ripples.length === 0) return null;
@@ -91,6 +147,11 @@ function LeadArtikel({ item }: { item: Item }) {
       <h2 className="font-[family-name:var(--font-archivo)] text-[30px] font-extrabold leading-[1.06] tracking-tight sm:text-[34px]">
         {titel(item, "")}
       </h2>
+      {item.storyline && (
+        <div className="mt-2">
+          <VerhaallijnLabel storyline={item.storyline} />
+        </div>
+      )}
       {lead && (
         <div className="mt-4 max-w-4xl space-y-3 text-[15.5px] leading-relaxed text-stone-700 dark:text-stone-300">
           {lead.split(/\n\n+/).map((para, i) => (
@@ -99,6 +160,7 @@ function LeadArtikel({ item }: { item: Item }) {
         </div>
       )}
       <Ripples ripples={ripples} />
+      {item.prediction && <Vooruitblik prediction={item.prediction} />}
       <div className="mt-5 flex items-center justify-between gap-3">
         {item.source_name && (
           <span className="font-[family-name:var(--font-space-mono)] text-[11px] text-stone-400">{item.source_name}</span>
@@ -121,6 +183,11 @@ function FeaturedArtikel({ item }: { item: Item }) {
         </h4>
         <ItemRating targetType="item" targetId={item.item_id} />
       </div>
+      {item.storyline && (
+        <div className="mt-1.5">
+          <VerhaallijnLabel storyline={item.storyline} />
+        </div>
+      )}
       {lead && (
         <div className="mt-2 space-y-2 text-[14px] leading-relaxed text-stone-600 dark:text-stone-300">
           {lead.split(/\n\n+/).slice(0, 3).map((para, i) => (
@@ -129,6 +196,7 @@ function FeaturedArtikel({ item }: { item: Item }) {
         </div>
       )}
       <Ripples ripples={ripples} />
+      {item.prediction && <Vooruitblik prediction={item.prediction} />}
       {item.source_name && (
         <p className="mt-3 font-[family-name:var(--font-space-mono)] text-[11px] text-stone-400">{item.source_name}</p>
       )}
@@ -238,7 +306,10 @@ export function EditieWeergave({ view }: { view: EditionView }) {
   const sectionText = new Map(
     (frontPage?.dp_sections ?? []).map((s) => [s.title, { caption: s.caption, summary: s.summary }] as const),
   );
-  const categorySections = view.sections.filter((s) => s.section.kind === "category" && s.items.length > 0);
+  const categorySections = orderSectionsFollowedFirst(
+    view.sections.filter((s) => s.section.kind === "category" && s.items.length > 0),
+    view.followedCategoryIds,
+  );
 
   // Het hoofdverhaal: het sterkst passende diepe artikel over alle secties heen.
   const deepItems = categorySections.flatMap((s) => s.items.filter((i) => i.band === "deep"));

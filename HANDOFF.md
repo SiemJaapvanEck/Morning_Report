@@ -5,97 +5,89 @@
 
 ## Where we stand
 
-This session shipped **Phase C — Broaden + rank the selection**, the real fix for
-"more articles than paper". The change is in `main` and green
-(lint/tsc/**135 tests**/build). No schema changes (config + step logic only); the
-two prior migrations (`0013`, `0014`) remain the latest applied.
+Two phases of the re-imagined daily paper shipped this session: **Phase C**
+(broaden + rank the selection) and **Phase B** (storyline links + restore
+Vooruitblik + followed-first ordering). Both are in `main` and green
+(lint/tsc/**139 tests**/build). No schema changes this session; the latest
+applied migrations remain `0013`/`0014`.
 
 The pipeline shape is unchanged (scan → select → threads → agenda → generate →
-daily_paper → finalize). Phase C only loosened the **funnel caps** in the
-`select` step and the band split — everything else is untouched.
+daily_paper → finalize). All Phase B + C work was in the `select` step, config,
+and the krant reading surface — no new AI calls, no migrations.
 
 ### Roadmap context
 
-The re-imagined daily paper follows the order **C → B → D**, then deep-research
-3/4. **C is now done**; B is next. (Overarching direction unchanged: Plan A —
-re-architect the app layer into "block-slices", keep the pure engine; the Daily
-Paper PRD is paused, not abandoned. Memory: `block-slice-architecture`,
-`daily-paper-reimagination`.)
+Order **C → B → D**, then deep-research 3/4. **C and B are done**; **D is next.**
+(Overarching direction unchanged: Plan A — block-slices on top of the pure
+engine; the Daily Paper PRD is paused, not abandoned. Memory:
+`block-slice-architecture`, `daily-paper-reimagination`.)
 
 ### Shipped this session (in `main`)
 
-**Phase C — broaden the funnel, keep cost flat.** Key finding during planning:
-the *ranking* Phase C named ("by profile + threads + reviews") was **already in
-place** — `priority()` (`modules/rank/index.ts`) blends interest (topic_scores,
-which absorb review ratings via `ratingToDelta` + follows), source weight (with
-feedback baked in), and importance; thread featuring already happens via the
-generate thread-update path. So Phase C was almost entirely about the **caps**,
-not a new ranking formula. Posture chosen with Siem: **Lean** — broaden the free
-headline tail hard, keep the paid (deep/summary) tiers ~flat.
+**Phase C — broaden + rank the selection** (commit `432e7e7`). The funnel capped
+hard so little reached the paper. Finding: the ranking C asked for (profile +
+threads + reviews) was already in `priority()` + the thread path, so C was purely
+about the caps. Lean posture: broaden the free headline tail, keep paid tiers
+flat. New env-tunable `config.select` block wired into `selectStep` +
+`assignBands` — fresh pool 200→400, window 36h→48h, per-category 10→24, summaries
+5→6; deep count unchanged. Live run: headline tail 18→76 (4.2×), paid tiers flat,
+cost ~€0.03 vs the €0.15 ceiling; Siem's previously-thin profile now gets a full
+130-item paper.
 
-Three caps loosened, all via a new env-tunable `config.select` block
-(`modules/shared/config.ts`):
+**Phase B — storyline links + Vooruitblik + followed-first** (this commit). The
+Phase A reshape rendered the krant from section items and dropped the storyline
+connection + the prediction box. All the data already existed, so B was a
+thread-join in `getEdition` + rendering — no schema, no AI:
+- `getEdition` (`app/lib/queries.ts`) now attaches to each **deep** article: its
+  storyline `{ thread_id, title, part }` and the thread's `prediction`, plus
+  `followedCategoryIds` on the edition. A deep item can match several threads, so
+  the storyline pick is **deterministic**: most-established storyline (highest
+  "deel N", tie-broken by id).
+- New pure helper `orderSectionsFollowedFirst` (`app/lib/krant.ts`, 4 tests).
+- `EditieWeergave.tsx`: a `Verhaallijn · {title} · deel N` label (links to
+  `/archive`) and a restored **Vooruitblik** box (forecast text + target date +
+  certainty chip) on the lead + featured deep articles; sections reordered
+  followed-first.
 
-- **Fresh pool** 200 → **400** items (`freshPoolLimit`), window 36h → **48h**
-  (`freshWindowHours`) — `selectStep` in `modules/pipeline/steps.ts`.
-- **Per-category cap** 10 → **24** (`maxPerCategory`) — the killer cap; anything
-  past rank 10 used to never reach the paper, not even as a free headline.
-- **Paid summaries** 5 → **6** per section (`maxSummariesPerSection`), passed into
-  `assignBands(...)`. **Deep count unchanged** (still governed by `budgetPolicy`),
-  so the extra breadth lands in the **free** "Ook in het nieuws" headline tail.
-
-The krant UI needed no changes — `getEdition` has no per-section cap and
-`BriefLijst` renders all headlines, so the broader selection just fills the page.
-
-**Verified on a live run** (2026-06-28, both profiles). Measured before → after:
-
-| Edition | total | deep | summary | headline | cost |
-|---|---|---|---|---|---|
-| 27 Jun Jesse (before) | 67 | 15 | 34 | 18 | €0.038 |
-| **28 Jun Jesse (after)** | **130** | 14 | 40 | **76** | €0.028 |
-| 27 Jun Siem (before) | 1 | 0 | 1 | 0 | — |
-| **28 Jun Siem (after)** | **130** | 12 | 42 | **76** | €0.045 |
-
-The free headline tail grew 4.2× (18 → 76); paid tiers stayed flat; cost stayed
-far under the €0.15 ceiling (budget mode never left `vol`). Bonus: Siem's profile
-went from 1 item to a full 130-item paper — the old "Siem's profile is thin"
-issue is resolved. Run on localhost: `npm run dev`, open either profile's krant
-for 2026-06-28.
+**Verified on localhost** (today's 2026-06-28 editions; no pipeline re-run
+needed — the data was already persisted). Every deep article links to a thread
+(storyline labels render on all), real predictions show (e.g. the Iran/Hormuz
+and SpaceX forecasts). Siem checked and approved the look.
 
 ## What's open
 
-Roadmap order **B → D**, then deep-research 3/4:
+Roadmap order **D**, then deep-research 3/4:
 
-- **Phase B — Storyline links + restore Vooruitblik.** Surface explicit
-  *"Verhaallijn · deel N"* links per article, and reconnect thread data so the
-  **prediction box returns** (dropped from the krant in the Phase A reshape — see
-  known issues). Also: followed-section-first ordering. **← next**
-- **Phase D — Reviews steer the paper.** Make the −2…+2 ratings + follows actively
-  promote/demote what's selected and featured. (Note: the base ranking already
-  blends reviews/follows via `priority()`; Phase D is about making it *visibly*
-  steer selection + featuring.)
+- **Phase D — Reviews steer the paper.** Make the −2…+2 ratings + follows
+  *actively* promote/demote what's selected and featured. Note the base ranking
+  already blends reviews/follows via `priority()` (topic_scores absorb
+  `ratingToDelta`); D is about making it *visibly and strongly* steer selection +
+  featuring (and likely the deep/headline split), and tuning the strength. **←
+  next**
 - **Deep-research Phase 3/4 (deferred):** two-pass research per topic if a single
   rich call breaches the ~7s tick wall; scale to 6–12 deep topics/edition.
 - **Daily Paper PRD** — finish it (paused mid-grilling).
 
 ## Known issues / things to keep in mind
 
-- **Inline "Vooruitblik" (prediction) is still missing from the krant** — the
-  Phase A layout renders from section items, which don't carry the thread
-  prediction. It returns in Phase B. Data is intact (threads, `calendar_events`,
-  dashboard agenda, archive).
+- **Followed-first ordering is currently a no-op** — neither profile follows a
+  *category* (`follow_marks` of target_type `category` = 0), so the section
+  reorder has nothing to lift. It's unit-tested and activates the moment a
+  category is followed in Instellingen. (Topic follows exist but the krant orders
+  by category section.)
+- **Storyline "deel N" counts editions, not articles** — distinct editions the
+  thread appeared in, on/before the edition date. Good enough; revisit if a
+  thread can appear twice in a day.
 - **Phase C `select` knobs are env-tunable** — `SELECT_FRESH_POOL`,
   `SELECT_FRESH_WINDOW_H`, `SELECT_MAX_PER_CATEGORY`, `SELECT_MAX_SUMMARIES`
-  override the defaults (400 / 48 / 24 / 6) without code changes if the paper
-  needs re-balancing.
-- **Pipeline runs are sleep-sensitive.** This session's live run was interrupted
-  by the laptop sleeping; in-flight AI fetches aborted "due to timeout" (absurd
-  16–35 min durations in the log). The step machine's retries (maxAttempts 3)
-  absorbed it and both editions finalized cleanly — but don't mistake those
-  timeouts for a code bug; keep the machine awake for a full `npm run pipeline`.
-- **`content` only flows forward** — the ~8,600 pre-existing items have
-  `content = null`; full bodies + ripples appear on items ingested after the
-  27 Jun change. Old editions fall back gracefully.
+  override the defaults (400 / 48 / 24 / 6) without code changes.
+- **Pipeline runs are sleep-sensitive.** A live `npm run pipeline` aborts
+  in-flight AI fetches if the laptop sleeps (absurd multi-minute "timeout"
+  durations in the log); the step machine's retries absorb it, but keep the
+  machine awake for a full run.
+- **`content` only flows forward** — items ingested before 27 Jun have
+  `content = null`; full bodies + ripples appear only on newer items. Old
+  editions fall back gracefully.
 - **Today's editions (2026-06-28) are real, regenerated data** on both profiles.
 - **Dev server / preview:** runs on `localhost:3000`. Siem checks localhost
   himself — don't screenshot.

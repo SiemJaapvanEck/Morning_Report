@@ -294,3 +294,15 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   18→76 (4.2×), paid tiers stayed flat, cost ~€0.03 vs the €0.15 ceiling, and
   Siem's previously-thin profile now has a full 130-item paper. 135 tests green.
   Next: Phase B (storyline links + restore the Vooruitblik).
+
+- **28 June 2026 — Phase B: storyline links + restored Vooruitblik + followed-first.**
+  The Phase A reshape had dropped the storyline connection and the prediction box
+  from the krant; the data still existed, so this was a thread-join in getEdition +
+  rendering (no schema, no AI). getEdition now attaches per deep article its
+  storyline { thread_id, title, deel N } and the thread's prediction (deterministic
+  pick: most-established storyline), plus followedCategoryIds. New pure helper
+  orderSectionsFollowedFirst (4 tests). EditieWeergave shows a "Verhaallijn · deel N"
+  label (links to /archive) and a Vooruitblik box (forecast + target date + certainty)
+  on the lead + featured articles, and orders sections followed-first. Verified on
+  localhost (every deep article links to a thread; real Iran/SpaceX predictions show).
+  139 tests green. Next: Phase D (reviews actively steer the paper).

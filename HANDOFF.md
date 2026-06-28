@@ -1,100 +1,105 @@
 # HANDOFF — current state
 
-> Last updated: 28 June 2026, session on Siem's account.
+> Last updated: 28 June 2026 (second session of the day), on Siem's account.
 > Read this first when picking up the project; working agreements live in CLAUDE.md.
 
 ## Where we stand
 
-The full **C → B → D** roadmap of the re-imagined daily paper is now **done**.
-This session shipped all three phases, each verified and pushed to `main`:
-Phase C (broaden + rank the selection), Phase B (storyline links + restore
-Vooruitblik + followed-first), and Phase D (reviews + follows actively steer the
-paper). Everything is in `main` and green (lint/tsc/**144 tests**/build). No
-schema changes this session; latest applied migrations remain `0013`/`0014`.
+**Deep-research Phase 4 is done and committed** (`4c18da8`, pushed to `main`):
+deep research now scales to 8–10 topics spread across every live category, and
+every deep topic — storyline or one-off — gets the full two-layer
+`{ lead, ripples }` article. Gate green (lint/tsc/**153 tests**/build). No schema
+changes; latest migrations remain `0013`/`0014`. Pipeline shape unchanged
+(scan → select → threads → agenda → generate → daily_paper → finalize).
 
-The pipeline shape is unchanged (scan → select → threads → agenda → generate →
-daily_paper → finalize). All work was in the `select` step, the `rank` module,
-config, the feedback route, and the krant reading surface — no migrations, no new
-AI calls.
+**Phase 3 was skipped** (deliberately): the deep call runs 10–16s, past the ~7s
+*soft* tick budget, but the tick route's hard ceiling is `maxDuration = 60`, so a
+single rich call is safe. Two-pass would add complexity for no production gain.
 
-### Roadmap context
+**Phase 5 is fully designed + de-risked but NOT built** — it is blocked on one
+thing only: a **`TAVILY_API_KEY`** in `.env.local` (see "What's open").
 
-**C, B, and D are all complete.** What remains of the re-imagined paper is
-deferred: deep-research Phase 3/4 and finishing the Daily Paper PRD. (Overarching
-direction unchanged: Plan A — block-slices on top of the pure engine. Memory:
-`block-slice-architecture`, `daily-paper-reimagination`.)
+Today's editions (2026-06-28) on both profiles were regenerated twice this
+session and reflect the Phase 4 logic.
 
-### Shipped this session (in `main`)
+## Shipped this session (commit `4c18da8`)
 
-**Phase C — broaden + rank the selection** (commit `432e7e7`). The funnel capped
-hard. Lean posture: broaden the free headline tail, keep paid tiers flat. New
-env-tunable `config.select` block in `selectStep` + `assignBands` — fresh pool
-200→400, window 36h→48h, per-category 10→24, summaries 5→6; deep count unchanged.
-Live: headline tail 18→76 (4.2×), cost ~€0.03 vs the €0.15 ceiling; Siem's
-previously-thin profile now gets a full 130-item paper.
+**Phase 4 — scale + deepen deep research across categories.**
+- **Global deep distribution.** New pure `distributeBands` (`modules/rank/index.ts`)
+  replaces the per-section "top-2 above 0.5" gate that starved quiet categories
+  (their best story sits below 0.5 → zero deep). A GLOBAL deep budget is handed out
+  round-robin — each category gets its strongest eligible story before any gets a
+  second. Knobs: `GENERATE_MAX_DEEP` (10), `GENERATE_DEEP_FLOOR` (0.35),
+  `GENERATE_MAX_DEEP_PER_CAT` (2). `selectStep` now ranks all categories, then
+  distributes once (two-pass: build → distribute → insert).
+- **Topic-aware summary floor.** Any topic matching ≥ `SELECT_TOPIC_SUMMARY_FLOOR`
+  (0.90) keeps its own summary past the per-section cap, so standout topics never
+  drop to a bare headline.
+- **Unified the deep path.** New `deepArticle` (`modules/generate/index.ts`) gives a
+  non-storyline deep item the SAME two-layer article as a thread update; the shallow
+  single-paragraph `deepDive` is retired. Every deep item now has an `article` jsonb.
+- **Deepened each article.** Ripple cap 3→5 (`GENERATE_MAX_RIPPLES`), lead 4-7→6-10
+  sentences, thread-update tokens 1500→2200. `cleanArticle` takes a `maxRipples` param.
+- **Verified live on both profiles:** deep 10 / 8 across 6 / 8 categories (was 9 / 5
+  bunched), cost ~€0.03/edition (ceiling €0.15).
 
-**Phase B — storyline links + Vooruitblik + followed-first** (commit `7ff37fd`).
-`getEdition` (`app/lib/queries.ts`) attaches to each deep article its storyline
-`{ thread_id, title, deel N }` and the thread's `prediction`, plus
-`followedCategoryIds`; storyline pick is deterministic (most-established thread).
-New pure helper `orderSectionsFollowedFirst` (`app/lib/krant.ts`). The krant shows
-a `Verhaallijn · deel N` label (→ /archive) and a Vooruitblik box (forecast +
-target date + certainty) on lead + featured articles, and orders sections
-followed-first.
+### THE key finding (drives Phase 5)
 
-**Phase D — reviews + follows actively steer the paper** (this commit). Two
-signals barely moved the paper before; now they bite. No schema, no new AI:
-- **Item ratings count.** New `applyItemFeedback` (`modules/rank/index.ts`)
-  resolves an article's `topic_id` (else `category_id`) and moves its
-  `topic_scores` (reusing `applyFeedback`); the feedback route now calls it for
-  `target_type:"item"` instead of dropping it (the old "fase 4" TODO). Rating an
-  article in the krant steers its topic for every future edition.
-- **Follows boost ranking.** `ScoreContext` carries `followedTopicIds` +
-  `followedCategoryIds` (loaded in `loadScoreContext`); `priority()` +
-  `preRankScore()` lift a followed topic/category to an interest **floor**
-  (`config.rank.followInterestFloor`, default 0.6, env `RANK_FOLLOW_FLOOR`).
-- **Featuring tilt.** `assignBands` takes an optional `followedIds` set; followed
-  items are deep-eligible below the 0.5 gate (still bounded by budget mode). The
-  select step builds the set from the followed context.
-
-**Verified on real data** (read-only, no writes/AI): a quiet followed category
-gains a featured article (Goed nieuws deep 1→2); busy categories stay at 2 deep
-(their slots are already filled by high-importance news), so the visible effect
-there is section-first ordering + which items rank top — by design. Siem confirmed
-on localhost that ranking "is working better now."
+After the unify, **ripples are still near-zero** (avg 0.2–0.4 per article). Root
+cause is **not the code — it's thin source text.** RSS gives ~350-char summaries,
+and the model correctly refuses to fabricate consequences it can't ground.
+Measured: articles WITH ripples averaged 1091 source chars; those WITHOUT, 358. So
+the next lever is **source enrichment**, not more prompt/path tuning.
 
 ## What's open
 
-- **Deep-research Phase 3/4 (deferred):** two-pass research per topic if a single
-  rich call breaches the ~7s tick wall; scale to 6–12 deep topics/edition. **←
-  the obvious next build**
+- **Phase 5 — web-search grounding (designed, awaiting a key). ← the next build.**
+  Decisions, all made with Siem this session:
+  - **Route: Tavily search API.** NOT xAI's agentic web search. (I spiked xAI: its
+    `/v1/responses` endpoint with the `web_search` tool AND `text.format` json_schema
+    works in ONE call and returns real grounded ripples + citations — but it costs
+    ~€0.02–0.04/article because the agentic model fires several searches and injects
+    the results as input tokens. ~5× our budget.) Tavily decouples retrieval (free
+    tier ~1000/mo; our volume ~540/mo = €0) from our existing cheap synthesis call.
+  - **Shape:** per deep topic, query Tavily with the topic title/entities → LLM
+    snippets+citations → fed into the existing `deepArticle`/`generateThreadUpdate`
+    JSON call as grounding. Ground ALL 8–10 deep topics. ~+€0.002/article → edition
+    ~€0.05, fits €0.15, **no ceiling change**.
+  - **Build:** a small Tavily client (a plain fetch, like ingest's RSS — NOT through
+    `askAI`, since it's not an LLM call), wired into the generate step before the
+    synthesis call. Pure helpers tested.
+  - **BLOCKER:** add `TAVILY_API_KEY` to `.env.local` (free signup, no card). Cannot
+    be built+verified without it.
 - **Daily Paper PRD** — finish it (paused mid-grilling).
-- **Broader direction:** continue the block-slice re-architecture (Plan A) as the
-  app layer grows.
+- **Broader direction:** continue the block-slice re-architecture (Plan A).
 
 ## Known issues / things to keep in mind
 
-- **Follow steer is strongest for quiet categories + ordering.** Following a
-  busy category (Tech/Wereldtoneel) won't add deep articles — its 2 deep slots
-  are already filled by high-importance news; the follow shows up as section-first
-  ordering + item prioritization. The band-tilt adds a featured article only when
-  a followed category is quiet. This is deliberate (don't bury huge news). Tune
-  via `RANK_FOLLOW_FLOOR` if a stronger tilt is wanted.
-- **Followed-first ordering needs a category follow.** It keys on `follow_marks`
-  of target_type `category`; topic-only follows don't reorder sections.
-- **Phase C `select` knobs are env-tunable** — `SELECT_FRESH_POOL`,
-  `SELECT_FRESH_WINDOW_H`, `SELECT_MAX_PER_CATEGORY`, `SELECT_MAX_SUMMARIES`
-  (defaults 400 / 48 / 24 / 6).
-- **Storyline "deel N" counts editions, not articles** — distinct editions the
-  thread appeared in, on/before the edition date.
-- **Pipeline runs are sleep-sensitive.** A live `npm run pipeline` aborts
-  in-flight AI fetches if the laptop sleeps (absurd multi-minute "timeout"
-  durations); the step machine's retries absorb it, but keep the machine awake.
+- **Ripples need rich source text** (see key finding). Without it, deep articles are
+  lead-only. Phase 5 (Tavily) is the fix; until then ripples appear only where a feed
+  gave a substantial body.
+- **Phase 4 select/deep knobs are env-tunable** — `GENERATE_MAX_DEEP` (10),
+  `GENERATE_DEEP_FLOOR` (0.35), `GENERATE_MAX_DEEP_PER_CAT` (2),
+  `GENERATE_MAX_RIPPLES` (5), `SELECT_TOPIC_SUMMARY_FLOOR` (0.90). Phase C knobs
+  unchanged (`SELECT_FRESH_POOL` 400 / `_WINDOW_H` 48 / `_MAX_PER_CATEGORY` 24 /
+  `_MAX_SUMMARIES` 6).
+- **xAI web search is via `/v1/responses`** (Agent Tools API), NOT chat/completions;
+  legacy `search_parameters` Live Search is deprecated (410). The endpoint reports
+  `usage.cost_in_usd_ticks` (÷ 1e10 = USD) and `server_side_tool_usage_details`.
+  Kept for reference in case we ever want the agentic route.
+- **Regenerating an edition:** today's `pipeline_steps` are all `done`, so a re-run
+  does nothing. To force it, reset the `select`→`finalize` rows (positions 22–27) to
+  `pending` for the edition (delete the requeue duplicates first); `claim_next_step`
+  enforces position order so the chain replays. `select` wipes+reinserts
+  `edition_items` (feedback lives in `topic_scores`, not lost). To re-gen only deep
+  bodies, null `summary_text`+`article` on the deep items and reset `generate`+down.
+- **Pipeline runs are sleep-sensitive.** A live `npm run pipeline` aborts in-flight
+  AI fetches if the laptop sleeps (absurd multi-minute "timeout" durations); the step
+  machine's retries absorb it, but keep the machine awake.
 - **`content` only flows forward** — items ingested before 27 Jun have
-  `content = null`; full bodies + ripples appear only on newer items.
-- **Today's editions (2026-06-28) are real, regenerated data** on both profiles.
-- **Dev server / preview:** runs on `localhost:3000`. Siem checks localhost
-  himself — don't screenshot.
+  `content = null`; full bodies appear only on newer items.
+- **Dev server:** runs on `localhost:3000`. Siem checks localhost himself — don't
+  screenshot.
 - **Throwaway dev scripts** (untracked, NOT committed): `scripts/verify-{threads,
   phase4,phase5a}.ts`, `scripts/backfill-threads.ts`. `.claude/` + `Morning Report
   design/` stay untracked; `CLAUDE.md` is gitignored.

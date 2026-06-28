@@ -319,3 +319,20 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   ones stay at 2 deep (slots already filled) so the effect there is ordering +
   prioritization. Siem confirmed on localhost. 144 tests green. The C→B→D roadmap
   is complete; deep-research 3/4 + the Daily Paper PRD remain (deferred).
+
+- **28 June 2026 (2nd session) — Deep-research Phase 4 + Phase 5 designed.**
+  Phase 4 (commit 4c18da8): scale + deepen deep research. New pure distributeBands
+  hands out a GLOBAL deep budget round-robin across categories (cap 10, floor 0.35,
+  per-cat 2), replacing the per-section "top-2 above 0.5" gate that starved quiet
+  categories. Topic-aware summary floor (match >= 0.90 keeps its own summary).
+  Unified the deep path: every deep item now gets the two-layer {lead,ripples}
+  article via new deepArticle (shallow deepDive retired). Ripple cap 3->5, longer
+  lead, tokens 1500->2200. Verified live: deep 10/8 across 6/8 categories, ~EUR0.03.
+  Phase 3 skipped (10-16s ticks are safe under the 60s hard ceiling). KEY FINDING:
+  ripples stay near-zero because RSS source text is thin (~350 chars) and the model
+  won't fabricate — articles with ripples avg 1091 source chars, without 358. So the
+  next lever is source enrichment. Phase 5 designed + de-risked with Siem: ground the
+  deep call via the Tavily search API (free tier covers our ~540/mo) feeding snippets
+  into the existing cheap call — NOT xAI's agentic web search (spiked: works in one
+  call with json_schema, but ~5x our budget). Blocked on adding TAVILY_API_KEY to
+  .env.local. 153 tests green.

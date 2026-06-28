@@ -336,3 +336,19 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   into the existing cheap call — NOT xAI's agentic web search (spiked: works in one
   call with json_schema, but ~5x our budget). Blocked on adding TAVILY_API_KEY to
   .env.local. 153 tests green.
+
+- **28 June 2026 (3rd session) — Deep-research Phase 5 shipped: web grounding.**
+  New modules/tavily client (plain fetch, NOT askAI): pure tested helpers buildQuery/
+  shapeGrounding/formatGroundingBlock + defensive searchTavily (any failure -> empty
+  grounding, pipeline unchanged). Wired into generate: each deep topic queries Tavily
+  on its title+entities, snippets feed the existing deepArticle/generateThreadUpdate
+  call as attributed source under the no-fabrication rule. Config tavily block, all
+  env-tunable (TAVILY_GROUNDING/MAX_RESULTS/SEARCH_DEPTH/SNIPPET_CHARS). No schema
+  change, no ceiling change. Verified end-to-end on both profiles via the real
+  pipeline: ripples avg 0.2/0.38 -> 1.00 (3-6x lift); rich on stories that warrant
+  it, zero on curiosity items (model still won't invent). 164 tests green. Diagnosed
+  a scare along the way: the budget guard is cumulative per edition/day, so 3x
+  regenerating tripped the throttle (minimaal -> deepDivesPerSectie 0) and starved
+  Siem's deep articles — rebuilt Siem-only with BUDGET_EDITION_EUR raised (env-only).
+  Also confirmed ripples render only on the krant view; a down dev server was serving
+  stale browser cache. Clean edition cost measured ~EUR0.07 (ceiling 0.15).

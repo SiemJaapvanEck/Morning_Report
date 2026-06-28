@@ -8,7 +8,17 @@ import { askAI, askAIJson } from "../shared/ai";
 import { budgetPolicy } from "../shared/budget";
 import { config, todayLocal } from "../shared/config";
 import { isValidIsoDate } from "../calendar";
+import { formatGroundingBlock, type Grounding } from "../tavily";
 import type { BudgetMode, Item, DestepLens, ThreadUpdate, ThreadPrediction, DeepArticle } from "../shared/types";
+
+// Phase 5 — one sentence appended to a deep-research system prompt when web
+// grounding is present, so the model treats the snippets as additional source
+// under the same no-fabrication discipline as the feed text.
+const GROUNDING_RULE =
+  "\nJe krijgt mogelijk AANVULLENDE WEBBRONNEN onderaan. Behandel die als geldige bron, " +
+  "gelijkwaardig aan de aangeboden nieuwsteksten: gebruik ze om de feiten en de gevolgen " +
+  "te onderbouwen. Dezelfde regel blijft gelden — verzin niets dat niet in de aangeboden " +
+  "teksten óf deze webbronnen staat.";
 
 export interface GeneratedSummary {
   itemId: string;
@@ -179,6 +189,8 @@ export interface ThreadUpdateInput {
   archivePrimer: string[];
   /** dated events already on this thread — extra grounding for the prediction */
   scheduledEvents: { title: string; date: string; certainty: string }[];
+  /** Phase 5 — web-search snippets to ground the article; omit/empty = none */
+  grounding?: Grounding;
 }
 
 /**
@@ -211,6 +223,7 @@ export async function generateThreadUpdate(
     ? `Reeds geagendeerde gebeurtenissen op deze verhaallijn:\n` +
       input.scheduledEvents.map((e) => `- ${e.date}: ${e.title} (${e.certainty})`).join("\n")
     : "";
+  const groundingBlock = input.grounding ? formatGroundingBlock(input.grounding) : "";
 
   const { data } = await askAIJson<
     ThreadUpdate & { prediction?: Record<string, string>; ripples?: { subhead?: string; text?: string }[] }
@@ -240,7 +253,8 @@ export async function generateThreadUpdate(
       "een zekerheid (bevestigd/verwacht/gerucht) en een 'source_basis': benoem letterlijk wélk aangeboden " +
       "nieuwsitem of welke geagendeerde gebeurtenis de voorspelling onderbouwt. " +
       "STRIKT: voorspel ALLEEN op basis van de aangeboden items en geagendeerde gebeurtenissen — verzin niets. " +
-      "Heb je geen concrete grond of geen datum? Laat 'text', 'target_date' en 'source_basis' dan LEEG ('').",
+      "Heb je geen concrete grond of geen datum? Laat 'text', 'target_date' en 'source_basis' dan LEEG ('')." +
+      (groundingBlock ? GROUNDING_RULE : ""),
     prompt:
       `Verhaallijn: ${input.thread.title}\n` +
       `Stand tot nu toe: ${input.thread.state ?? "(nieuw verhaal — nog geen eerdere stand)"}\n` +
@@ -248,7 +262,8 @@ export async function generateThreadUpdate(
       `Datum vandaag: ${todayLocal()}\n` +
       (primer ? `${primer}\n` : "") +
       (eventsBlock ? `${eventsBlock}\n` : "") +
-      `\nWat er vandaag bij komt (volledige teksten):\n${newsBlock}`,
+      `\nWat er vandaag bij komt (volledige teksten):\n${newsBlock}` +
+      (groundingBlock ? `\n\n${groundingBlock}` : ""),
   });
 
   const article: DeepArticle = cleanArticle(data);
@@ -297,10 +312,12 @@ export async function deepArticle(
   mode: BudgetMode,
   editionId: string,
   stepId?: string,
+  grounding?: Grounding,
 ): Promise<DeepArticle | null> {
   if (budgetPolicy[mode].deepDivesPerSectie === 0) return null;
 
   const body = excerptForPrompt(item.content, item.raw_summary, config.generate.itemExcerptChars);
+  const groundingBlock = grounding ? formatGroundingBlock(grounding) : "";
 
   const { data } = await askAIJson<{ lead?: string; ripples?: { subhead?: string; text?: string }[] }>({
     tier: "deep",
@@ -318,8 +335,11 @@ export async function deepArticle(
       "stakeholders, sectoren). Elk gevolg is een object met 'subhead' — een pakkende, nieuws-specifieke subtitel — " +
       "en 'text' (1-2 zinnen geredeneerde analyse). Dit is ANALYSE: redeneer over gevolgen, maar verzin geen concrete " +
       "feiten/cijfers die niet in de bron staan. Kun je een gevolg niet onderbouwen? Laat het weg. Liever een paar sterke " +
-      "gevolgen dan veel zwakke; bij dun nieuws mag 'ripples' leeg zijn.",
-    prompt: `${item.title}\n\n${body ?? item.raw_summary ?? ""}\n\nBron-URL: ${item.url ?? "onbekend"}`,
+      "gevolgen dan veel zwakke; bij dun nieuws mag 'ripples' leeg zijn." +
+      (groundingBlock ? GROUNDING_RULE : ""),
+    prompt:
+      `${item.title}\n\n${body ?? item.raw_summary ?? ""}\n\nBron-URL: ${item.url ?? "onbekend"}` +
+      (groundingBlock ? `\n\n${groundingBlock}` : ""),
   });
 
   return cleanArticle(data);

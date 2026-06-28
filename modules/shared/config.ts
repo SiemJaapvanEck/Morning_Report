@@ -176,6 +176,26 @@ export const config = {
     deepDiveMaxTokens: Number(process.env.GENERATE_DEEPDIVE_TOKENS ?? "900"),
   },
 
+  tavily: {
+    // Phase 5 — web-search grounding for deep research. RSS gives ~350-char
+    // summaries; deep articles correctly refuse to invent consequences they
+    // can't ground, so ripples stay near-zero. Tavily fetches real article text
+    // per deep topic, fed into the existing synthesis call as extra source.
+    // Retrieval is free on the dev tier (~1000/mo; our volume ~540/mo), decoupled
+    // from the LLM call — so cost is just the ~+€0.002/article of extra input
+    // tokens. No key ⇒ grounding silently off, pipeline unchanged.
+    apiKey: process.env.TAVILY_API_KEY ?? "",
+    /** master switch; "off" disables grounding even with a key present */
+    enabled: (process.env.TAVILY_GROUNDING ?? "on").toLowerCase() !== "off",
+    /** results kept per deep topic (the main grounding-cost dial) */
+    maxResults: Number(process.env.TAVILY_MAX_RESULTS ?? "5"),
+    /** "basic" (1 credit) or "advanced" (2 credits, deeper extraction) */
+    searchDepth: (process.env.TAVILY_SEARCH_DEPTH ?? "basic") as "basic" | "advanced",
+    /** bound the snippet text per result fed to the model (token cost) */
+    maxSnippetChars: Number(process.env.TAVILY_SNIPPET_CHARS ?? "1200"),
+    endpoint: "https://api.tavily.com/search",
+  },
+
   weather: {
     // Default: Arnhem
     lat: Number(process.env.WEATHER_LAT ?? "51.98"),

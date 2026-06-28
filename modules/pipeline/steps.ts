@@ -14,6 +14,7 @@ import { activeSources, ingestSource } from "../ingest";
 import { scanBatch, loadScoreContext, priority, distributeBands, selectForScan, isUserSelected } from "../rank";
 import type { CategoryBands } from "../rank";
 import { summarizeSection, deepArticle, flattenArticle, generateThreadUpdate } from "../generate";
+import { searchTavily, buildQuery, tavilyEnabled } from "../tavily";
 import { assembleUserContext, composeDailyPaper, composeSectionIntros, type DigestTopic } from "../redactie";
 import { dedupeForEdition, archivePrimer } from "../archive";
 import { buildAgendaRows, persistAgendaRows, type AgendaItemInput } from "../calendar";
@@ -510,6 +511,12 @@ const generateStep: StepHandler = async ({ edition, step }) => {
       const scheduledEvents = scheduledRows
         .filter((e) => e.meta?.prediction !== true)
         .map((e) => ({ title: e.title, date: e.date, certainty: e.certainty }));
+      // Phase 5 — web grounding: enrich thin RSS source with real article text
+      // before synthesis, so ripples have something concrete to stand on. The
+      // call never throws (empty grounding on any failure), so it's safe inline.
+      const grounding = tavilyEnabled()
+        ? await searchTavily(buildQuery(job.title, job.threadEntities))
+        : undefined;
       const update = await generateThreadUpdate(
         {
           thread: { title: job.title, state: job.state },
@@ -517,6 +524,7 @@ const generateStep: StepHandler = async ({ edition, step }) => {
           lenses,
           archivePrimer: primer,
           scheduledEvents,
+          grounding,
         },
         mode,
         edition.id,
@@ -582,7 +590,15 @@ const generateStep: StepHandler = async ({ edition, step }) => {
         // Phase 4: a non-storyline deep item gets the SAME two-layer article
         // (lead + ripples) as a thread update, stored as both flat text (card)
         // and structured jsonb (krant), so every deep topic has real depth.
-        const article = await deepArticle(entry.items, mode, edition.id, step.id);
+        // Phase 5: ground it with web search first (entities from scan_meta, when
+        // present) so a one-off deep topic gets the same enrichment as a thread.
+        const entities = Array.isArray(entry.items.scan_meta?.entities)
+          ? (entry.items.scan_meta!.entities as string[])
+          : [];
+        const grounding = tavilyEnabled()
+          ? await searchTavily(buildQuery(entry.items.title, entities))
+          : undefined;
+        const article = await deepArticle(entry.items, mode, edition.id, step.id, grounding);
         if (article) {
           await db()
             .from("edition_items")

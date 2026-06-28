@@ -103,6 +103,12 @@ export const config = {
     maxPerCategory: Number(process.env.SELECT_MAX_PER_CATEGORY ?? "24"),
     /** max paid "summary" cards per section below the deep dives; rest = free headlines */
     maxSummariesPerSection: Number(process.env.SELECT_MAX_SUMMARIES ?? "6"),
+    // Phase 4 — topic-aware summary floor. Beyond the per-section maxSummaries
+    // cap, every TOPIC whose best item matches at least this strongly (clamped
+    // priority 0..1, the % shown on the card) is guaranteed its own summary —
+    // so the day's standout topics never drop to a bare headline.
+    /** match ≥ this → the topic's top item gets a summary regardless of the cap */
+    topicSummaryFloor: Number(process.env.SELECT_TOPIC_SUMMARY_FLOOR ?? "0.90"),
   },
 
   ingest: {
@@ -150,6 +156,24 @@ export const config = {
      * feed-time, so it can be re-tuned without re-ingesting.
      */
     itemExcerptChars: Number(process.env.DEEP_ITEM_EXCERPT_CHARS ?? "1500"),
+    // Phase 4 — scale + deepen deep research. The per-section "top-2 above 0.5"
+    // gate starved quiet categories (their best story sits below 0.5 → zero
+    // deep). Replaced by a GLOBAL top-N selection with a lower floor, spread
+    // round-robin across categories so every live category earns depth, bounded
+    // by maxDeepTopics so cost stays under the €0.15 ceiling.
+    /** total deep articles per edition, distributed across categories */
+    maxDeepTopics: Number(process.env.GENERATE_MAX_DEEP ?? "10"),
+    /** min priority for a story to earn a deep slot (followed items bypass this) */
+    deepFloor: Number(process.env.GENERATE_DEEP_FLOOR ?? "0.35"),
+    /** ceiling per category so one busy section can't eat the whole deep budget */
+    maxDeepPerCategory: Number(process.env.GENERATE_MAX_DEEP_PER_CAT ?? "2"),
+    // Phase 4 — deepen each article ("both": more topics AND richer per topic).
+    /** max grounded ripples kept per deep article (was a hard 3) */
+    maxRipples: Number(process.env.GENERATE_MAX_RIPPLES ?? "5"),
+    /** token budget for one thread-update deep article (longer lead + more ripples) */
+    threadUpdateMaxTokens: Number(process.env.GENERATE_THREAD_TOKENS ?? "2200"),
+    /** token budget for one non-thread deep-dive paragraph */
+    deepDiveMaxTokens: Number(process.env.GENERATE_DEEPDIVE_TOKENS ?? "900"),
   },
 
   weather: {

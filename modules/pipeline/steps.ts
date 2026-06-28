@@ -11,8 +11,9 @@ import { config, todayLocal } from "../shared/config";
 import { fetchWeather } from "../weather";
 import { fetchMarkten } from "../markten";
 import { activeSources, ingestSource } from "../ingest";
-import { scanBatch, loadScoreContext, priority, assignBands, selectForScan, isUserSelected } from "../rank";
-import { summarizeSection, deepDive, generateThreadUpdate } from "../generate";
+import { scanBatch, loadScoreContext, priority, distributeBands, selectForScan, isUserSelected } from "../rank";
+import type { CategoryBands } from "../rank";
+import { summarizeSection, deepArticle, flattenArticle, generateThreadUpdate } from "../generate";
 import { assembleUserContext, composeDailyPaper, composeSectionIntros, type DigestTopic } from "../redactie";
 import { dedupeForEdition, archivePrimer } from "../archive";
 import { buildAgendaRows, persistAgendaRows, type AgendaItemInput } from "../calendar";
@@ -288,25 +289,44 @@ const selectStep: StepHandler = async ({ edition }) => {
       .in("id", oldSections.map((s: { id: string }) => s.id));
   }
 
+  // Pass 1: rank each category, then distribute the deep budget GLOBALLY so
+  // depth spreads across categories instead of 2-per-busy-section (Phase 4).
+  const followedIds = new Set(
+    unique
+      .filter((item) => isUserSelected(item, ctx.followedTopicIds, ctx.followedCategoryIds))
+      .map((item) => item.id),
+  );
+  const perCategory = categories
+    .map((category) => {
+      const inCategory = unique.filter((item) => item.category_id === category.id);
+      const ranked = inCategory
+        .map((item) => ({
+          id: item.id,
+          priority: priority(item, ctx),
+          topicId: item.topic_id ?? null,
+        }))
+        .sort((a, b) => b.priority - a.priority)
+        .slice(0, config.select.maxPerCategory);
+      return { category, ranked };
+    })
+    .filter((c) => c.ranked.length > 0);
+
+  const cats: CategoryBands[] = perCategory.map((c) => ({
+    categoryId: c.category.id,
+    ranked: c.ranked,
+  }));
+  const bands = distributeBands(cats, mode, {
+    maxSummaries: config.select.maxSummariesPerSection,
+    globalDeepCap: config.generate.maxDeepTopics,
+    perCategoryDeepCap: config.generate.maxDeepPerCategory,
+    deepFloor: config.generate.deepFloor,
+    topicSummaryFloor: config.select.topicSummaryFloor,
+    followedIds,
+  });
+
+  // Pass 2: create each section and insert its items with the assigned bands.
   let placed = 0;
-  for (const category of categories) {
-    const inCategory = unique.filter((item) => item.category_id === category.id);
-    if (inCategory.length === 0) continue;
-
-    const ranked = inCategory
-      .map((item) => ({ id: item.id, priority: priority(item, ctx) }))
-      .sort((a, b) => b.priority - a.priority)
-      .slice(0, config.select.maxPerCategory);
-
-    // Phase D: followed items are deep-eligible even below the priority gate.
-    const followedIds = new Set(
-      inCategory
-        .filter((item) => isUserSelected(item, ctx.followedTopicIds, ctx.followedCategoryIds))
-        .map((item) => item.id),
-    );
-
-    const bands = assignBands(ranked, mode, config.select.maxSummariesPerSection, followedIds);
-
+  for (const { category, ranked } of perCategory) {
     const section = unwrap(
       await db()
         .from("edition_sections")
@@ -559,9 +579,15 @@ const generateStep: StepHandler = async ({ edition, step }) => {
         }
       } else {
         const entry = deepItems[0];
-        const text = await deepDive(entry.items, mode, edition.id, step.id);
-        if (text) {
-          await db().from("edition_items").update({ summary_text: text }).eq("id", entry.id);
+        // Phase 4: a non-storyline deep item gets the SAME two-layer article
+        // (lead + ripples) as a thread update, stored as both flat text (card)
+        // and structured jsonb (krant), so every deep topic has real depth.
+        const article = await deepArticle(entry.items, mode, edition.id, step.id);
+        if (article) {
+          await db()
+            .from("edition_items")
+            .update({ summary_text: flattenArticle(article), article })
+            .eq("id", entry.id);
           generated++;
         }
       }

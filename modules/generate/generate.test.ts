@@ -78,7 +78,7 @@ describe("excerptForPrompt (bounded body fed to deep research)", () => {
   });
 });
 
-describe("cleanArticle (two-layer article: ≤3 grounded ripples)", () => {
+describe("cleanArticle (two-layer article: bounded grounded ripples)", () => {
   it("keeps a well-formed lead and trims its ripples", () => {
     expect(
       cleanArticle({
@@ -103,9 +103,10 @@ describe("cleanArticle (two-layer article: ≤3 grounded ripples)", () => {
     expect(out.ripples).toEqual([{ subhead: "Goed", text: "met body" }]);
   });
 
-  it("caps ripples at three", () => {
-    const many = Array.from({ length: 6 }, (_, i) => ({ subhead: `Kop ${i}`, text: `Tekst ${i}` }));
-    expect(cleanArticle({ lead: "L", ripples: many }).ripples).toHaveLength(3);
+  it("caps ripples at the given maxRipples", () => {
+    const many = Array.from({ length: 8 }, (_, i) => ({ subhead: `Kop ${i}`, text: `Tekst ${i}` }));
+    expect(cleanArticle({ lead: "L", ripples: many }, 5).ripples).toHaveLength(5);
+    expect(cleanArticle({ lead: "L", ripples: many }, 3).ripples).toHaveLength(3);
   });
 
   it("handles a missing/empty object", () => {

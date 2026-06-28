@@ -71,7 +71,9 @@ const THREAD_UPDATE_SCHEMA = {
     lead: { type: "string" },
     ripples: {
       type: "array",
-      maxItems: 3,
+      // Upper hint for the model; cleanArticle enforces the real cap from
+      // config.generate.maxRipples (Phase 4 — richer per topic).
+      maxItems: 6,
       items: {
         type: "object",
         properties: {
@@ -102,18 +104,19 @@ const THREAD_UPDATE_SCHEMA = {
 
 /**
  * Pure: validate + bound the model's two-layer article. A ripple survives only
- * with both a subtitle and a body; at most 3 are kept (the "≤3 grounded ripples"
- * rule). Lead is always trimmed. Keeps the depth honest without trusting the
- * model to self-limit.
+ * with both a subtitle and a body; at most `maxRipples` are kept (Phase 4 raised
+ * this from a hard 3, env `GENERATE_MAX_RIPPLES`). Lead is always trimmed. Keeps
+ * the depth honest without trusting the model to self-limit.
  */
 export function cleanArticle(
   raw: { lead?: string; ripples?: { subhead?: string; text?: string }[] } | null | undefined,
+  maxRipples = config.generate.maxRipples,
 ): DeepArticle {
   const lead = raw?.lead?.trim() ?? "";
   const ripples = (raw?.ripples ?? [])
     .map((r) => ({ subhead: (r?.subhead ?? "").trim(), text: (r?.text ?? "").trim() }))
     .filter((r) => r.subhead.length > 0 && r.text.length > 0)
-    .slice(0, 3);
+    .slice(0, maxRipples);
   return { lead, ripples };
 }
 
@@ -215,7 +218,7 @@ export async function generateThreadUpdate(
     tier: "deep",
     editionId,
     stepId,
-    maxTokens: 1500,
+    maxTokens: config.generate.threadUpdateMaxTokens,
     jsonSchema: THREAD_UPDATE_SCHEMA as unknown as Record<string, unknown>,
     system:
       "Je houdt een doorlopende verhaallijn bij voor een persoonlijk ochtendrapport, in het Nederlands. " +
@@ -223,13 +226,13 @@ export async function generateThreadUpdate(
       "Schrijf het VOLLEDIGE verhaal achter dit onderwerp, in TWEE lagen, en bouw VOORT op de eerdere stand (niet vanaf nul): " +
       "verwijs kort naar wat er eerder speelde en benoem expliciet wat echt nieuw is.\n" +
       "LAAG 1 — 'lead': de feiten. Wat er vandaag gebeurde, mét de harde gegevens (getallen, namen, wie/wat). " +
-      "STRIKT op basis van de aangeboden teksten — verzin geen feiten, cijfers, namen of citaten. 1-2 alinea's (4-7 zinnen).\n" +
-      "LAAG 2 — 'ripples': de doorwerking. MAXIMAAL 3 gevolgen die je écht kunt onderbouwen met het aangeboden nieuws — " +
+      "STRIKT op basis van de aangeboden teksten — verzin geen feiten, cijfers, namen of citaten. 2-3 alinea's (6-10 zinnen).\n" +
+      `LAAG 2 — 'ripples': de doorwerking. MAXIMAAL ${config.generate.maxRipples} gevolgen die je écht kunt onderbouwen met het aangeboden nieuws — ` +
       "de economische, politieke en maatschappelijke uitstraling, en de impact op verbonden partijen (andere bedrijven, " +
       "stakeholders, sectoren). Elk gevolg is een object met 'subhead' — een pakkende, nieuws-specifieke subtitel " +
       "(bijvoorbeeld 'Hoe Tesla een deel van de klap opving') — en 'text' (1-2 zinnen geredeneerde analyse). " +
       "Dit is ANALYSE: redeneer over gevolgen, maar verzin geen concrete feiten/cijfers die niet in de bron staan. " +
-      "Kun je een gevolg niet onderbouwen? Laat het weg. Liever twee sterke gevolgen dan drie zwakke; bij dun nieuws mag 'ripples' leeg zijn.\n" +
+      "Kun je een gevolg niet onderbouwen? Laat het weg. Liever een paar sterke gevolgen dan veel zwakke; bij dun nieuws mag 'ripples' leeg zijn.\n" +
       "'headline': een nieuws-specifieke kop voor deze update. " +
       "'newState': een bondige, bijgewerkte samenvatting van de héle verhaallijn tot nu toe (3-5 zinnen) die de volgende editie als startpunt gebruikt. " +
       "'lenses': de DESTEP-lenzen die je daadwerkelijk gebruikte (subset van de aangeboden). " +
@@ -259,27 +262,65 @@ export async function generateThreadUpdate(
   };
 }
 
-/** Deep-dive voor één topband-item: langere duiding via het sterke model. */
-export async function deepDive(
+const DEEP_ARTICLE_SCHEMA = {
+  type: "object",
+  properties: {
+    lead: { type: "string" },
+    ripples: {
+      type: "array",
+      maxItems: 6,
+      items: {
+        type: "object",
+        properties: {
+          subhead: { type: "string" },
+          text: { type: "string" },
+        },
+        required: ["subhead", "text"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["lead", "ripples"],
+  additionalProperties: false,
+} as const;
+
+/**
+ * Deep research for one non-storyline topband item: the SAME two-layer article
+ * (facts lead + grounded ripples) as a thread update, but for a single fresh
+ * item with no prior state and no prediction. Phase 4 unified the deep path so
+ * every deep topic — storyline or one-off — gets the full-story treatment
+ * instead of the old shallow single-paragraph deep-dive. `deep` tier,
+ * budget-gated exactly like the thread update (null in 'stop'/'minimaal').
+ */
+export async function deepArticle(
   item: Item,
   mode: BudgetMode,
   editionId: string,
   stepId?: string,
-): Promise<string | null> {
-  const policy = budgetPolicy[mode];
-  if (policy.deepDivesPerSectie === 0) return null;
+): Promise<DeepArticle | null> {
+  if (budgetPolicy[mode].deepDivesPerSectie === 0) return null;
 
-  const result = await askAI({
+  const body = excerptForPrompt(item.content, item.raw_summary, config.generate.itemExcerptChars);
+
+  const { data } = await askAIJson<{ lead?: string; ripples?: { subhead?: string; text?: string }[] }>({
     tier: "deep",
     editionId,
     stepId,
-    maxTokens: 600,
+    maxTokens: config.generate.threadUpdateMaxTokens,
+    jsonSchema: DEEP_ARTICLE_SCHEMA as unknown as Record<string, unknown>,
     system:
-      "Je schrijft de duiding bij het belangrijkste nieuws van de dag voor een persoonlijk ochtendrapport, " +
-      "in het Nederlands. Geef context: waarom dit ertoe doet, wat eraan voorafging, wat te verwachten. " +
-      "Lengte: één strakke alinea van 4-6 zinnen. Geen kop, geen opsomming.",
-    prompt: `${item.title}\n\n${item.raw_summary ?? ""}\n\nBron-URL: ${item.url ?? "onbekend"}`,
+      "Je schrijft het VOLLEDIGE verhaal achter het belangrijkste nieuws van de dag voor een persoonlijk " +
+      "ochtendrapport, in het Nederlands, in TWEE lagen.\n" +
+      "LAAG 1 — 'lead': de feiten. Wat er gebeurde, mét de harde gegevens (getallen, namen, wie/wat). " +
+      "STRIKT op basis van de aangeboden tekst — verzin geen feiten, cijfers, namen of citaten. 2-3 alinea's (6-10 zinnen).\n" +
+      `LAAG 2 — 'ripples': de doorwerking. MAXIMAAL ${config.generate.maxRipples} gevolgen die je écht kunt onderbouwen — ` +
+      "de economische, politieke en maatschappelijke uitstraling, en de impact op verbonden partijen (andere bedrijven, " +
+      "stakeholders, sectoren). Elk gevolg is een object met 'subhead' — een pakkende, nieuws-specifieke subtitel — " +
+      "en 'text' (1-2 zinnen geredeneerde analyse). Dit is ANALYSE: redeneer over gevolgen, maar verzin geen concrete " +
+      "feiten/cijfers die niet in de bron staan. Kun je een gevolg niet onderbouwen? Laat het weg. Liever een paar sterke " +
+      "gevolgen dan veel zwakke; bij dun nieuws mag 'ripples' leeg zijn.",
+    prompt: `${item.title}\n\n${body ?? item.raw_summary ?? ""}\n\nBron-URL: ${item.url ?? "onbekend"}`,
   });
 
-  return result.text.trim();
+  return cleanArticle(data);
 }

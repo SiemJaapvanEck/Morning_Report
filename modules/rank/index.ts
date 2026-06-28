@@ -349,6 +349,102 @@ export function assignBands(
 }
 
 // ============================================================
+// Phase 4 — global, topic-aware band distribution
+// ============================================================
+
+/** One category's ranked items, richest first (already capped to maxPerCategory). */
+export interface CategoryBands {
+  categoryId: string;
+  ranked: { id: string; priority: number; topicId: string | null }[];
+}
+
+export interface DistributeOptions {
+  /** paid summary cards per section below the deep band */
+  maxSummaries: number;
+  /** total deep articles for the whole edition, spread across categories */
+  globalDeepCap: number;
+  /** ceiling per category so one busy section can't eat the whole deep budget */
+  perCategoryDeepCap: number;
+  /** min priority to earn a deep slot; followed items bypass it */
+  deepFloor: number;
+  /** match (clamped priority 0..1) ≥ this → the topic's top item is guaranteed a summary */
+  topicSummaryFloor: number;
+  /** followed item ids — always deep-eligible regardless of deepFloor */
+  followedIds?: Set<string>;
+}
+
+/**
+ * Pure: assign bands across ALL categories at once, replacing the per-section
+ * "top-2 above 0.5" gate that starved quiet categories. Deep is a GLOBAL budget
+ * handed out round-robin — each category gets its strongest eligible story before
+ * any category gets a second — so depth reaches every live category while the
+ * total stays bounded by `globalDeepCap` (and the budget mode). Summaries are
+ * per-section, plus a topic floor: any topic matching ≥ topicSummaryFloor keeps
+ * its own summary even past the per-section cap.
+ */
+export function distributeBands(
+  cats: CategoryBands[],
+  mode: BudgetMode,
+  opts: DistributeOptions,
+): Map<string, Band> {
+  const policy = budgetPolicy[mode];
+  const bands = new Map<string, Band>();
+
+  // 1. DEEP — global budget, spread round-robin across categories. The budget
+  // mode still governs: deepDivesPerSectie === 0 (minimaal/stop) ⇒ no deep at all.
+  let deepBudget = policy.deepDivesPerSectie === 0 ? 0 : opts.globalDeepCap;
+  const queues = cats.map((c) => ({
+    eligible: c.ranked.filter(
+      (r) => r.priority >= opts.deepFloor || (opts.followedIds?.has(r.id) ?? false),
+    ),
+    taken: 0,
+  }));
+  while (deepBudget > 0) {
+    let placedThisRound = 0;
+    for (const q of queues) {
+      if (deepBudget <= 0) break;
+      if (q.taken >= opts.perCategoryDeepCap) continue;
+      const next = q.eligible[q.taken];
+      if (!next) continue;
+      bands.set(next.id, "deep");
+      q.taken++;
+      deepBudget--;
+      placedThisRound++;
+    }
+    if (placedThisRound === 0) break; // every category exhausted or capped
+  }
+
+  // 2. SUMMARY — per category: top maxSummaries non-deep items, plus the topic floor.
+  if (policy.samenvattingMaxTokens > 0) {
+    for (const c of cats) {
+      const rest = c.ranked.filter((r) => bands.get(r.id) !== "deep");
+      for (let i = 0; i < rest.length && i < opts.maxSummaries; i++) {
+        bands.set(rest[i].id, "summary");
+      }
+      // Topic floor: the strongest item of each high-match topic gets a summary
+      // regardless of the per-section cap (so standout topics never go bare).
+      const topByTopic = new Map<string, { id: string; priority: number }>();
+      for (const r of rest) {
+        if (!r.topicId) continue;
+        const cur = topByTopic.get(r.topicId);
+        if (!cur || r.priority > cur.priority) topByTopic.set(r.topicId, r);
+      }
+      for (const top of topByTopic.values()) {
+        if (Math.min(1, top.priority) >= opts.topicSummaryFloor && bands.get(top.id) !== "deep") {
+          bands.set(top.id, "summary");
+        }
+      }
+    }
+  }
+
+  // 3. everything else is a free headline
+  for (const c of cats) {
+    for (const r of c.ranked) if (!bands.has(r.id)) bands.set(r.id, "headline");
+  }
+  return bands;
+}
+
+// ============================================================
 // Feedback verwerken → scores bijwerken
 // ============================================================
 

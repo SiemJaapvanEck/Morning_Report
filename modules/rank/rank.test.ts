@@ -2,12 +2,15 @@ import { describe, it, expect } from "vitest";
 import {
   priority,
   assignBands,
+  distributeBands,
   ratingToDelta,
   recencyFactor,
   preRankScore,
   isUserSelected,
   selectForScan,
   type ScoreContext,
+  type CategoryBands,
+  type DistributeOptions,
 } from "./index";
 
 function ctx(overrides: Partial<ScoreContext> = {}): ScoreContext {
@@ -156,6 +159,102 @@ describe("assignBands (kostenpoort)", () => {
     expect(counts.deep).toBe(1); // budgetPolicy.zuinig.deepDivesPerSectie
     expect(counts.summary).toBe(6);
     expect(counts.headline).toBe(17);
+  });
+});
+
+describe("distributeBands (Phase 4 — global, topic-aware)", () => {
+  const dopts = (over: Partial<DistributeOptions> = {}): DistributeOptions => ({
+    maxSummaries: 6,
+    globalDeepCap: 10,
+    perCategoryDeepCap: 2,
+    deepFloor: 0.35,
+    topicSummaryFloor: 0.9,
+    ...over,
+  });
+  const cat = (id: string, items: [string, number, string?][]): CategoryBands => ({
+    categoryId: id,
+    ranked: items.map(([itemId, p, topic]) => ({ id: itemId, priority: p, topicId: topic ?? null })),
+  });
+
+  it("spreads deep across categories before deepening any one (round-robin)", () => {
+    const cats = [
+      cat("A", [["a1", 0.9], ["a2", 0.8]]),
+      cat("B", [["b1", 0.85]]),
+      cat("C", [["c1", 0.7], ["c2", 0.6]]),
+    ];
+    const bands = distributeBands(cats, "vol", dopts({ globalDeepCap: 3 }));
+    // budget 3, one per category in round 1 → each category's top story, no seconds
+    expect(bands.get("a1")).toBe("deep");
+    expect(bands.get("b1")).toBe("deep");
+    expect(bands.get("c1")).toBe("deep");
+    expect(bands.get("a2")).not.toBe("deep");
+    expect(bands.get("c2")).not.toBe("deep");
+  });
+
+  it("hands out remaining budget for second slots once every category has one", () => {
+    const cats = [
+      cat("A", [["a1", 0.9], ["a2", 0.8]]),
+      cat("B", [["b1", 0.85]]),
+      cat("C", [["c1", 0.7], ["c2", 0.6]]),
+    ];
+    const bands = distributeBands(cats, "vol", dopts({ globalDeepCap: 4 }));
+    const deep = [...bands].filter(([, b]) => b === "deep").map(([id]) => id).sort();
+    expect(deep).toEqual(["a1", "a2", "b1", "c1"]); // A gets its 2nd before depth elsewhere
+  });
+
+  it("a quiet category earns deep below the old 0.5 gate (deepFloor 0.35)", () => {
+    const cats = [
+      cat("Busy", [["x", 0.95], ["y", 0.9]]),
+      cat("Quiet", [["q", 0.4]]),
+    ];
+    const bands = distributeBands(cats, "vol", dopts({ globalDeepCap: 10 }));
+    expect(bands.get("q")).toBe("deep"); // 0.4 ≥ deepFloor, would have been starved before
+  });
+
+  it("an item below the deepFloor gets no deep slot", () => {
+    const cats = [cat("Quiet", [["q", 0.2]])];
+    const bands = distributeBands(cats, "vol", dopts());
+    expect(bands.get("q")).not.toBe("deep");
+  });
+
+  it("a followed item bypasses the deepFloor", () => {
+    const cats = [cat("Quiet", [["q", 0.2]])];
+    const bands = distributeBands(cats, "vol", dopts({ followedIds: new Set(["q"]) }));
+    expect(bands.get("q")).toBe("deep");
+  });
+
+  it("the global cap bounds total deep regardless of per-category headroom", () => {
+    const cats = [
+      cat("A", [["a1", 0.9], ["a2", 0.85]]),
+      cat("B", [["b1", 0.8], ["b2", 0.75]]),
+      cat("C", [["c1", 0.7], ["c2", 0.65]]),
+    ];
+    const bands = distributeBands(cats, "vol", dopts({ globalDeepCap: 3 }));
+    expect([...bands.values()].filter((b) => b === "deep")).toHaveLength(3);
+  });
+
+  it("budget mode minimaal disables deep entirely", () => {
+    const cats = [cat("A", [["a1", 0.95]])];
+    const bands = distributeBands(cats, "minimaal", dopts());
+    expect([...bands.values()]).not.toContain("deep");
+  });
+
+  it("a high-match topic keeps its own summary past the per-section cap", () => {
+    // No deep (cap 0) so the topic-floor logic is isolated. maxSummaries 1 →
+    // normally only the single top item is summarized.
+    const cats = [
+      cat("C", [["i1", 0.95, "T1"], ["i2", 0.93, "T2"], ["i3", 0.5, "T3"]]),
+    ];
+    const bands = distributeBands(cats, "vol", dopts({ globalDeepCap: 0, maxSummaries: 1 }));
+    expect(bands.get("i1")).toBe("summary"); // top of section
+    expect(bands.get("i2")).toBe("summary"); // ≥0.9 topic floor, beyond the cap
+    expect(bands.get("i3")).toBe("headline"); // below the floor → stays free
+  });
+
+  it("budget mode stop makes everything a headline", () => {
+    const cats = [cat("A", [["a1", 0.95, "T1"], ["a2", 0.9, "T2"]])];
+    const bands = distributeBands(cats, "stop", dopts());
+    expect(new Set(bands.values())).toEqual(new Set(["headline"]));
   });
 });
 

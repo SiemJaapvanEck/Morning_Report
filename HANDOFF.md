@@ -1,121 +1,152 @@
 # HANDOFF — current state
 
-> Last updated: 28 June 2026 (third session of the day), on Siem's account.
+> Last updated: 29 June 2026, on Siem's account.
 > Read this first when picking up the project; working agreements live in CLAUDE.md.
 
 ## Where we stand
 
-**Deep-research Phase 5 (web-search grounding) is DONE and being pushed this
-session.** Deep articles now ground their facts + ripples in real web text
-fetched per topic via Tavily, fed into the existing synthesis call. This fixes
-the Phase 4 key finding (ripples were near-zero because RSS source text was too
-thin). Gate green (lint/tsc/**164 tests**/build). No schema changes; latest
-migrations remain `0013`/`0014`. Pipeline shape unchanged
+**Threads have been re-architected into an entity-anchored, flat model (Phase A
+of a multi-phase rework). DONE, gate green, committed — but NOT yet run against
+live data.** This is the start of a larger thread/Daily-Paper redesign Siem is
+driving. The next session starts **Phase B: rebuild the `/archive` page** to a
+flat list of self-contained story timelines (reference image below).
+
+Gate green: lint / tsc / **166 tests** / build. No schema migration needed
+(`anchor_entity` already existed on `threads`). Pipeline shape unchanged
 (scan → select → threads → agenda → generate → daily_paper → finalize).
 
-**Verified live on both profiles, end-to-end through the real pipeline:**
-ripples went from avg **0.2 / 0.38** (Siem / Jesse) to avg **1.00** on both —
-roughly a 3–6× lift. Today's editions (2026-06-28) were rebuilt and reflect the
-Phase 5 logic. Substantive ripples land on stories that warrant them (Iran
-strikes, Netanyahu/Lebanon, Anthropic gov access); curiosity/science items
-(supernova, CERN, PlayStation) correctly get zero — the model still refuses to
-invent consequences it can't ground.
+**Important:** verification this session was a **read-only simulation**
+(`scripts/verify-anchor-threads.ts`) against Siem's real 2026-06-28 edition. The
+live pipeline was **not** run and **no live data was mutated** — the database
+still holds the *old* fuzzy/mega threads. A rebuild is the first task of Phase B
+(see "What's open").
 
-**Phases 3 + 4 stand as before.** Phase 3 (two-pass deep) was deliberately
-skipped — the single rich deep call (10–16s) fits the tick route's hard
-`maxDuration = 60` ceiling, so two-pass adds complexity for no gain.
+## The new thread model (what Phase A changed)
 
-## Shipped this session (Phase 5)
+Every thread is now **one self-contained story anchored on a single entity**
+(Ford, PlayStation, Israel) — flat, no mega/parent–child nesting.
 
-**Web-search grounding for deep research.**
-- **New `modules/tavily/index.ts`** — a small client. Pure, tested helpers:
-  `buildQuery(title, entities)` (focused query, dedupes entities already in the
-  title, caps how many it appends), `shapeGrounding` (bounds + filters raw
-  results), `formatGroundingBlock` (numbered, attributed Dutch citation block),
-  `tavilyEnabled()`. Impure `searchTavily` via plain `fetch` — **NOT** through
-  `askAI` (it's retrieval, not an LLM call). Fully defensive: missing key /
-  network error / bad response → empty grounding, pipeline runs unchanged.
-- **`modules/shared/config.ts`** — new `tavily` block: `apiKey`, `enabled`
-  master switch (`TAVILY_GROUNDING=off` to disable), `maxResults` (5),
-  `searchDepth` (basic), `maxSnippetChars` (1200), endpoint. All env-tunable.
-- **`modules/generate/index.ts`** — `generateThreadUpdate` (via
-  `ThreadUpdateInput.grounding`) and `deepArticle` (new optional `grounding`
-  arg) inject the grounding block into the prompt + add a `GROUNDING_RULE`
-  sentence that treats web snippets as valid source under the same
-  no-fabrication discipline. Output schema unchanged (citations go INTO the
-  prompt, not into a new article field — keeps "no schema change").
-- **`modules/pipeline/steps.ts`** — `generateStep` fetches Tavily grounding per
-  deep topic before synthesis: the thread path uses `job.threadEntities`, the
-  one-off `deepArticle` path uses `item.scan_meta.entities`. Guarded by
-  `tavilyEnabled()`.
-- **Tests:** 11 new pure-helper tests (`modules/tavily/tavily.test.ts`).
-  Total 153 → **164**.
+- **Birth paths** (a thread opens when an entity qualifies via any of):
+  1. **recurring** — entity appears across ≥ `anchorMinDays` (3) distinct days
+     **AND** in ≥ `anchorMinItems` (5) items in the window (the *volume floor*).
+  2. **big_topic** — a same-day cross-source cluster of ≥ `bigTopicMinCluster`
+     (5) items → instant-on (a breaking story gets a thread the day it breaks).
+  3. **followed/tracked** — a followed+deep item, or any item on an explicitly
+     tracked topic, anchored on its primary entity.
+- **Linking** — an item joins the **single best** existing anchor thread whose
+  anchor entity it contains (`matchByAnchor`; earliest/most-salient entity wins,
+  ties by thread id). One item → at most one thread (keeps generate's
+  one-update-per-thread intact).
+- **Category/topic** for a new thread come from `resolveThreadMeta` (mode over
+  today's items carrying the anchor) so the archive can filter by category.
 
-### Cost (measured today)
-A clean single edition with Phase 5 is **~€0.07** (range €0.06–0.09): deep
-research ~€0.035, daily-paper synthesis ~€0.030, scan/rank ~€0.015, summaries
-~€0.005, **Tavily €0.00** (free dev tier, ~540/mo ≪ 1000 limit). Well under the
-**€0.15** ceiling. Note: it now sits not far below the `zuinig` throttle (€0.09)
-— watch this if we keep deepening articles. Two editions/day ≈ €0.14/day ≈ €4/mo.
+### Decisions made this session (all Siem's calls)
+- **Entity-anchored, flat** model (not "loosen old gates", not a topic/entity
+  hybrid).
+- **Conservative** birth + a **volume floor** (`anchorMinItems = 5`) to cut the
+  noise — without it the recurrence bar alone opened ~41 threads/edition incl.
+  datelines and one-off institutions; with it, ~30 on the backfill edition (a
+  one-time cliff — in steady state most anchors already exist, so daily opens
+  are a handful).
+- Archive filter taxonomy = **our 7 content categories**.
+- **Kept entity-only despite ~22% item coverage.** Measured: of 130 items on the
+  2026-06-28 edition only ~28 attach to a thread; 97% carry a topic (19 distinct
+  topics) so a topic-backbone hybrid would reach ~97% coverage — but Siem chose
+  **curated/sharp over comprehensive**, accepting that most daily news stays
+  loose one-offs. Do not re-open this without him; it was a deliberate choice.
 
-## What's open
+### Code touched
+- **`modules/threads/index.ts`** — removed `matchThread`, `planThreadActions`
+  (+ its `NewThreadPlan`/`ThreadActions`/`ThreadPlanConfig` types), and the whole
+  mega layer (`assignMegaThreads`, `MegaAssignment`, and DB helpers
+  `findOrCreateMegaThread`/`setThreadParent`/`clearThreadParents`/
+  `deleteChildlessMegaThreads`). Added pure `primaryEntity`, `dominantEntity`,
+  `bigTopicAnchors`, `personalAnchors`, `mergeAnchors`, `matchByAnchor`,
+  `resolveThreadMeta` + `AnchorSpec`/`AnchorReason`. `EntityDays` now tracks a
+  per-entity item `count`; `detectAnchors(entityDays, minDays, minItems)`.
+- **`modules/pipeline/steps.ts`** — `threadsStep` rewritten around the anchor
+  model; mega graduation/reparenting removed.
+- **`modules/shared/config.ts`** — `threads` block: added `anchorMinItems` (5,
+  env `THREADS_ANCHOR_MIN_ITEMS`); removed the now-dead `matchMinOverlap` and
+  `anchorMinChildren`. Kept `bigTopicMinOverlap` (0.3), `bigTopicMinCluster` (5),
+  `anchorMinDays` (3), `anchorWindowDays` (14).
+- **`modules/threads/threads.test.ts`** — tests for the removed functions
+  dropped, tests for the new pure functions added (153→**166** total project).
 
-- **Surface the deep article on the dashboard.** Ripples currently render ONLY
-  on the **krant** view (`/editie/[datum]/krant`, `EditieWeergave.tsx` →
-  `Ripples` component, for deep-band items). The main dashboard
-  (`/editie/[datum]`, `EditionScreen`/`EditionView`) renders **no ripples at
-  all** — a deep article shows only its flattened summary there. Worth deciding
-  whether the dashboard should preview ripples too.
-- **Optional: surface source citations in the UI.** Tavily snippets currently
-  ground the model invisibly. We could add the source links to the article
-  output (would touch schema + UI — deferred to keep Phase 5 clean).
-- **Jesse's edition** has 9/10 deep items with a lead (one came up empty during
-  the earlier shared full run); only Siem's was rebuilt this session. Easy to
-  top up with a `generate` re-run if wanted.
-- **Daily Paper PRD** — finish it (paused mid-grilling).
-- **Broader direction:** continue the block-slice re-architecture (Plan A).
+## What's open — Phase B and beyond
+
+1. **Live rebuild (do this first in Phase B).** Write `scripts/rebuild-threads.ts`
+   to wipe the old fuzzy/mega threads and re-derive entity-anchored threads from
+   the existing item/entity history, so the archive has real content. **Safe:**
+   the written deep articles live on `edition_items` (`summary_text`/`article`),
+   NOT on `threads`, so they survive the wipe; only the accumulated `state` prose
+   is lost (regenerates over time). It is destructive, so **dry-run it and show
+   Siem the thread list before any real wipe** (per CLAUDE.md "confirm
+   hard-to-reverse"). Alternative to a wipe: just let the next pipeline run create
+   anchor threads going forward (old null-anchor threads become inert).
+2. **Rebuild `/archive` + `StorylineChart` to the reference image** (see below):
+   a flat list of all stories as rows, with a working **category filter** over the
+   7 categories and **Latest / Longest / Most active** sort. Replace the
+   `getThreadArchive`/`ArchiveMega` query with a `listStories(profileId)` that
+   returns one row per anchor thread with: category, status, region, first/last
+   event dates, event count, last-updated, and the event dots.
+3. **Phase C (later):** the single-thread detail page (drill-in from a row).
+4. Older open items still standing: surface ripples on the **dashboard** (today
+   they render only on the krant view); optional source-citation UI for Tavily;
+   finish the **Daily Paper PRD**; broader **block-slice** re-architecture.
+
+### Reference image for the archive (Phase B target)
+Header "**All stories** · N live timelines", subtitle "BAR LENGTH = TIME SPAN
+FROM FIRST → LATEST EVENT", and sort tabs **Latest / Longest / Most active** top-
+right. Each story is a full-width row: a colored category dot + category tag
+(e.g. GEOPOLITICS) + a status badge (LIVE / MARKETS / POLICY…) + a region label
+(Middle East, Technology…); a bold title; "UPD Xh ago"; a horizontal timeline
+bar with event dots running first-date → latest-date; and on the right
+"**N**d · **M** events" with the end date. Selected row is highlighted in the
+`#2f6df0` interaction blue.
 
 ## Known issues / things to keep in mind
 
-- **Ripples only render on the krant view** — see "What's open". If ripples seem
-  "missing", check you're on `/editie/<date>/krant` (and that the dev server is
-  actually up — a down server serves stale browser cache).
-- **Phase 5 knobs are env-tunable** — `TAVILY_GROUNDING` (on), `TAVILY_MAX_RESULTS`
-  (5), `TAVILY_SEARCH_DEPTH` (basic), `TAVILY_SNIPPET_CHARS` (1200). The
-  `TAVILY_API_KEY` lives in `.env.local` (gitignored; `.env*` is fully ignored,
-  so `.env.example` is NOT tracked either — its Tavily placeholder is local only).
-- **Phase 4 select/deep knobs** — `GENERATE_MAX_DEEP` (10), `GENERATE_DEEP_FLOOR`
-  (0.35), `GENERATE_MAX_DEEP_PER_CAT` (2), `GENERATE_MAX_RIPPLES` (5),
-  `SELECT_TOPIC_SUMMARY_FLOOR` (0.90). Phase C knobs unchanged (`SELECT_FRESH_POOL`
-  400 / `_WINDOW_H` 48 / `_MAX_PER_CATEGORY` 24 / `_MAX_SUMMARIES` 6).
+- **`/archive` is temporarily wrong until Phase B.** `getThreadArchive`
+  (`app/lib/queries.ts`) selects threads where `anchor_entity is not null` and
+  treats them as mega-parents with child dots. In the new model **every** thread
+  has an `anchor_entity` and **none** has a `parent_thread_id`, so once new-model
+  threads exist the page would render every thread as an empty-volume "mega"
+  card. It still **compiles/builds** — Part B replaces this query + component.
+  (Moot right now: no new-model threads exist in live DB yet.)
+- **Entity-only coverage is ~22% by design** (Siem's call — see decisions). The
+  volume floor does NOT drop **high-volume datelines** (`US`, `UK`, `France`,
+  `Russia`): they pass on sheer volume. A small **geo-guard** stoplist is the
+  available lever if they clutter the archive — but keep `Israel`/`Ukraine`/etc.
+  allowed. Not implemented; flag to Siem if it bothers him in the UI.
+- **Thread knobs (env-tunable):** `THREADS_ANCHOR_MIN_DAYS` (3),
+  `THREADS_ANCHOR_MIN_ITEMS` (5), `THREADS_ANCHOR_WINDOW_DAYS` (14),
+  `THREADS_CLUSTER_OVERLAP` (0.3), `THREADS_BIG_TOPIC_MIN` (5).
 - **Budget guard is cumulative per edition per day.** Regenerating the same
-  edition multiple times in a day stacks `usage_log` spend and trips the throttle
+  edition multiple times stacks `usage_log` spend and trips the throttle
   (`zuinig` 0.09 → `minimaal` 0.1275 → `stop` 0.15); in `minimaal`/`stop`,
-  `deepDivesPerSectie = 0` so deep articles silently stop being produced. This bit
-  us this session (Siem's edition regressed to 2 ripples after 3× regen). To
-  rebuild without throttle, run with `BUDGET_EDITION_EUR` raised on the command
-  (env-only, not committed), or clear the day's `usage_log` rows for that edition.
+  `deepDivesPerSectie = 0` so deep articles silently stop. To rebuild without
+  throttle, raise `BUDGET_EDITION_EUR` on the command (env-only), or clear the
+  day's `usage_log` rows. A clean single edition costs ~€0.07 (ceiling 0.15).
 - **Regenerating an edition:** today's `pipeline_steps` are all `done`, so a
-  re-run does nothing. To force it, dedupe the requeue duplicates then reset the
-  rows you want to `pending`: full rebuild = positions 22–27 (`select`→`finalize`,
-  `select` wipes+reinserts `edition_items`; feedback lives in `topic_scores`, not
-  lost); deep bodies only = null `summary_text`+`article` on the deep items and
-  reset `generate`→down (positions 25–27). `claim_next_step` enforces position
-  order, and steps run only when no earlier position is unfinished. Then run
-  `npm run pipeline` (identical code to the `/api/pipeline/tick` endpoint).
-- **xAI web search is via `/v1/responses`** (Agent Tools API), NOT
-  chat/completions; legacy `search_parameters` Live Search is deprecated (410).
-  We chose Tavily over this for Phase 5 (~5× cheaper). Kept for reference.
+  re-run does nothing. Force it by resetting the rows to `pending` (full rebuild =
+  positions for `select`→`finalize`; `select` wipes+reinserts `edition_items`,
+  feedback lives in `topic_scores`). `claim_next_step` enforces position order.
+  Then `npm run pipeline` (identical code to `/api/pipeline/tick`).
+- **Tavily grounding (Phase 5)** is live and unchanged: `TAVILY_GROUNDING` (on),
+  `TAVILY_MAX_RESULTS` (5), `TAVILY_SEARCH_DEPTH` (basic), `TAVILY_SNIPPET_CHARS`
+  (1200); `TAVILY_API_KEY` in `.env.local` (gitignored). Ripples render only on
+  the **krant** view (`/editie/<date>/krant`).
 - **Pipeline runs are sleep-sensitive.** A live `npm run pipeline` aborts
-  in-flight AI fetches if the laptop sleeps; the step machine's retries absorb it,
-  but keep the machine awake.
+  in-flight AI fetches if the laptop sleeps; retries absorb it, but keep awake.
 - **`content` only flows forward** — items ingested before 27 Jun have
   `content = null`; full bodies appear only on newer items.
-- **Dev server:** runs on `localhost:3000` (`npm run dev`). Siem checks localhost
-  himself — don't screenshot (text-based curl/snapshot is fine for verification).
+- **Dev server:** `localhost:3000` (`npm run dev`). Siem checks localhost himself
+  — don't screenshot (text-based curl/snapshot is fine for verification).
 - **Throwaway dev scripts** (untracked, NOT committed): `scripts/verify-{threads,
-  phase4,phase5,phase5a}.ts`, `scripts/regen-phase5.ts`, `scripts/backfill-threads.ts`.
-  `.claude/` + `Morning Report design/` stay untracked; `CLAUDE.md` is gitignored.
+  anchor-threads,phase4,phase5,phase5a}.ts`, `scripts/regen-phase5.ts`,
+  `scripts/backfill-threads.ts`. `.claude/` + `Morning Report design/` stay
+  untracked; `CLAUDE.md` is gitignored.
 - **403 feeds**, **Open-Meteo** flaky, **Postgres `current_date` is UTC** (use
   `todayLocal()`) — unchanged, non-blocking.
 - **AI provider = Grok (xAI)** via `askAI()`; Anthropic switchable. Supabase live

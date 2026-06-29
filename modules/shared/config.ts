@@ -120,32 +120,34 @@ export const config = {
   },
 
   threads: {
-    // News threads (axis B): how items attach to persistent storylines and when
-    // a new storyline is born. Matching/clustering is free (entity-set overlap,
-    // no LLM). New threads only open for what the reader follows or for a
-    // genuinely big story — never for every headline.
-    /** Jaccard entity-overlap to attach an item to an existing thread */
-    matchMinOverlap: Number(process.env.THREADS_MATCH_OVERLAP ?? "0.34"),
+    // News threads (axis B): every thread is one self-contained story anchored
+    // on a single entity. Matching/clustering is free (entity-set overlap, no
+    // LLM). A thread is born when its anchor recurs across days, breaks as a big
+    // cross-source story, or is followed/tracked — never one per headline.
     /** Looser overlap used to cluster same-day items into one "big topic" */
     bigTopicMinOverlap: Number(process.env.THREADS_CLUSTER_OVERLAP ?? "0.3"),
     /**
      * Cross-source coverage gate: a same-day entity cluster of at least this
-     * many items counts as a major story and gets its own thread even when the
-     * reader follows neither its topic nor category. Deliberately high so only
-     * genuinely broad coverage (an Iran war, a tariffs story) trips it.
+     * many items counts as a major story and spawns an instant-on thread even
+     * when the reader follows neither its topic nor category — so a breaking
+     * story appears the day it breaks. Deliberately high (an Iran war, a tariffs
+     * story) so only genuinely broad coverage trips it.
      */
     bigTopicMinCluster: Number(process.env.THREADS_BIG_TOPIC_MIN ?? "5"),
 
-    // Mega-threads: a genuinely big, recurring story becomes a PARENT thread
-    // that absorbs the smaller threads about it (its timeline dots). The signal
-    // is recurrence-across-days (not same-day breadth) plus spanning multiple
-    // angles — so a one-day blip or a single-thread topic never graduates.
+    // Recurrence — the main, conservative birth signal: an anchor entity that
+    // keeps coming back over several distinct days earns its own thread.
     /** an anchor entity must appear on at least this many distinct days (rolling window) */
     anchorMinDays: Number(process.env.THREADS_ANCHOR_MIN_DAYS ?? "3"),
+    /**
+     * Volume floor: on top of the distinct-day bar, an anchor must be mentioned
+     * in at least this many items across the window. Keeps thin one-offs (an
+     * entity named once on three separate days) and most stray datelines from
+     * spawning a thread — only stories with real coverage qualify.
+     */
+    anchorMinItems: Number(process.env.THREADS_ANCHOR_MIN_ITEMS ?? "5"),
     /** how far back to look for recurrence, in days */
     anchorWindowDays: Number(process.env.THREADS_ANCHOR_WINDOW_DAYS ?? "14"),
-    /** only form a mega-thread if the anchor spans at least this many child threads */
-    anchorMinChildren: Number(process.env.THREADS_ANCHOR_MIN_CHILDREN ?? "3"),
   },
 
   generate: {

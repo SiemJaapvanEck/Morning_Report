@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   normalizeEntity,
   entityOverlap,
-  matchThread,
   computeDelta,
   dedupeEntities,
   mergeEntities,
@@ -10,20 +9,18 @@ import {
   dominantLens,
   orderThreads,
   clusterByEntities,
-  planThreadActions,
+  primaryEntity,
+  dominantEntity,
+  bigTopicAnchors,
+  personalAnchors,
+  mergeAnchors,
+  matchByAnchor,
+  resolveThreadMeta,
   detectAnchors,
-  assignMegaThreads,
   type ThreadCandidate,
+  type AnchorSpec,
   type EntityDays,
 } from "./index";
-import type { Thread } from "../shared/types";
-
-// Minimal thread factory for matchThread (only the picked fields matter).
-const thread = (
-  id: string,
-  entities: string[],
-  topic_id: string | null = null,
-): Pick<Thread, "id" | "entities" | "topic_id"> => ({ id, entities, topic_id });
 
 describe("normalizeEntity", () => {
   it("lowercases, trims and folds punctuation to spaces", () => {
@@ -58,41 +55,6 @@ describe("entityOverlap", () => {
   it("empty either side → 0", () => {
     expect(entityOverlap([], ["a"])).toBe(0);
     expect(entityOverlap(["a"], [])).toBe(0);
-  });
-});
-
-describe("matchThread", () => {
-  const threads = [
-    thread("t1", ["spacex", "ipo", "nasdaq"], "tech"),
-    thread("t2", ["fed", "rente", "inflatie"], "finance"),
-  ];
-
-  it("matches the thread with highest entity overlap", () => {
-    const m = matchThread(["spacex", "ipo"], "tech", threads);
-    expect(m?.threadId).toBe("t1");
-    expect(m?.score).toBeGreaterThan(0.34);
-  });
-
-  it("returns null below the overlap threshold", () => {
-    expect(matchThread(["tesla"], null, threads)).toBeNull();
-  });
-
-  it("returns null when the item has no entities", () => {
-    expect(matchThread([], "tech", threads)).toBeNull();
-  });
-
-  it("normalizes before comparing (case/diacritics)", () => {
-    const m = matchThread(["SpaceX", "IPO"], "tech", threads);
-    expect(m?.threadId).toBe("t1");
-  });
-
-  it("same-topic bonus breaks a tie toward the matching topic", () => {
-    const tied = [
-      thread("a", ["x", "y"], "topicA"),
-      thread("b", ["x", "y"], "topicB"),
-    ];
-    // identical entity overlap on both; topic bonus should pick b
-    expect(matchThread(["x", "y"], "topicB", tied)?.threadId).toBe("b");
   });
 });
 
@@ -252,199 +214,171 @@ describe("clusterByEntities", () => {
   });
 });
 
-describe("planThreadActions", () => {
-  const cand = (
-    itemId: string,
-    entities: string[],
-    extra: Partial<ThreadCandidate> = {},
-  ): ThreadCandidate => ({
-    itemId,
-    title: `Item ${itemId}`,
-    topicId: null,
-    categoryId: null,
-    entities,
-    importance: null,
-    deep: false,
-    ...extra,
+const cand = (
+  itemId: string,
+  entities: string[],
+  extra: Partial<ThreadCandidate> = {},
+): ThreadCandidate => ({
+  itemId,
+  title: `Item ${itemId}`,
+  topicId: null,
+  categoryId: null,
+  entities,
+  importance: null,
+  deep: false,
+  ...extra,
+});
+
+describe("primaryEntity", () => {
+  it("returns the first usable entity, normalized + display", () => {
+    expect(primaryEntity(["SpaceX", "NASA"])).toEqual({ entity: "spacex", display: "SpaceX" });
   });
 
-  const cfg = { matchMinOverlap: 0.34, bigTopicMinOverlap: 0.3, bigTopicMinCluster: 3 };
-  const noFollow = new Set<string>();
-  const noTrack = new Set<string>();
+  it("skips blank entries and returns null when none are usable", () => {
+    expect(primaryEntity(["", "  "])).toBeNull();
+    expect(primaryEntity([])).toBeNull();
+  });
+});
 
-  it("links an overlapping item to an existing thread, opens nothing", () => {
-    const threads = [{ id: "t1", entities: ["spacex", "ipo"], topic_id: "tech" }];
-    const out = planThreadActions(
-      [cand("i1", ["SpaceX", "IPO"])],
-      threads,
-      new Set(),
-      noFollow,
-      noFollow,
-      noTrack,
-      cfg,
-    );
-    expect(out.links).toEqual([{ itemId: "i1", threadId: "t1" }]);
-    expect(out.newThreads).toEqual([]);
+describe("dominantEntity", () => {
+  it("picks the most frequent normalized entity with a display form", () => {
+    const out = dominantEntity([
+      { entities: ["Iran", "Israel"] },
+      { entities: ["Iran", "Tehran"] },
+      { entities: ["Israel"] },
+    ]);
+    expect(out).toEqual({ entity: "iran", display: "Iran" });
   });
 
-  it("opens a thread for a followed-topic item that is ALSO deep (significant)", () => {
-    const out = planThreadActions(
-      [cand("i1", ["Tibet"], { topicId: "tibet", deep: true })],
-      [],
-      new Set(),
+  it("ties break toward the entity seen first", () => {
+    expect(dominantEntity([{ entities: ["Ford", "Tesla"] }])).toEqual({ entity: "ford", display: "Ford" });
+  });
+
+  it("no entities → null", () => {
+    expect(dominantEntity([{ entities: [] }])).toBeNull();
+  });
+});
+
+describe("bigTopicAnchors", () => {
+  it("a cross-source cluster yields its dominant entity as a big_topic anchor", () => {
+    const items = ["i1", "i2", "i3"].map((id) => ({ id, entities: ["Iran", "Israel"] }));
+    const out = bigTopicAnchors(items, 0.3, 3);
+    expect(out).toEqual([{ entity: "iran", display: "Iran", reason: "big_topic" }]);
+  });
+
+  it("a cluster below minCluster yields nothing", () => {
+    const items = ["i1", "i2"].map((id) => ({ id, entities: ["Iran", "Israel"] }));
+    expect(bigTopicAnchors(items, 0.3, 3)).toEqual([]);
+  });
+});
+
+describe("personalAnchors", () => {
+  const noset = new Set<string>();
+
+  it("a followed + deep item anchors on its primary entity", () => {
+    const out = personalAnchors(
+      [cand("i1", ["Tibet", "Lhasa"], { topicId: "tibet", deep: true })],
       new Set(["tibet"]),
-      noFollow,
-      noTrack,
-      cfg,
+      noset,
+      noset,
     );
-    expect(out.links).toEqual([]);
-    expect(out.newThreads).toHaveLength(1);
-    expect(out.newThreads[0]).toMatchObject({ reason: "followed", memberItemIds: ["i1"] });
+    expect(out).toEqual([{ entity: "tibet", display: "Tibet", reason: "followed" }]);
   });
 
-  it("leaves a followed but NON-deep item as a plain item (no thread explosion)", () => {
-    const out = planThreadActions(
+  it("a followed but NON-deep item yields no anchor", () => {
+    const out = personalAnchors(
       [cand("i1", ["Tibet"], { topicId: "tibet", deep: false })],
-      [],
-      new Set(),
       new Set(["tibet"]),
-      noFollow,
-      noTrack,
-      cfg,
+      noset,
+      noset,
     );
-    expect(out.links).toEqual([]);
-    expect(out.newThreads).toEqual([]);
+    expect(out).toEqual([]);
   });
 
-  it("opens a thread for a tracked topic even when the item is NOT deep", () => {
-    const out = planThreadActions(
+  it("a tracked topic anchors regardless of follow or deep band", () => {
+    const out = personalAnchors(
       [cand("i1", ["Acme Corp"], { topicId: "ma-deals", deep: false })],
-      [],
-      new Set(),
-      new Set(["ma-deals"]), // followed
-      noFollow,
-      new Set(["ma-deals"]), // and explicitly tracked
-      cfg,
+      noset,
+      noset,
+      new Set(["ma-deals"]),
     );
-    expect(out.links).toEqual([]);
-    expect(out.newThreads).toHaveLength(1);
-    expect(out.newThreads[0]).toMatchObject({ reason: "tracked", memberItemIds: ["i1"] });
+    expect(out).toEqual([{ entity: "acme corp", display: "Acme Corp", reason: "tracked" }]);
+  });
+});
+
+describe("mergeAnchors", () => {
+  it("dedupes by entity, highest-priority reason wins", () => {
+    const recurring: AnchorSpec[] = [{ entity: "iran", display: "Iran", reason: "recurring" }];
+    const big: AnchorSpec[] = [{ entity: "iran", display: "IRAN", reason: "big_topic" }];
+    const tracked: AnchorSpec[] = [{ entity: "ford", display: "Ford", reason: "tracked" }];
+    const out = mergeAnchors(big, recurring, tracked);
+    expect(out).toContainEqual({ entity: "iran", display: "Iran", reason: "recurring" });
+    expect(out).toContainEqual({ entity: "ford", display: "Ford", reason: "tracked" });
+    expect(out).toHaveLength(2);
+  });
+});
+
+describe("matchByAnchor", () => {
+  const threads = [
+    { id: "t-iran", anchor_entity: "iran" },
+    { id: "t-ford", anchor_entity: "ford" },
+    { id: "t-null", anchor_entity: null },
+  ];
+
+  it("links an item to the thread whose anchor it contains", () => {
+    expect(matchByAnchor(["Iran", "Tehran"], threads)).toBe("t-iran");
   });
 
-  it("tracking opens a thread without needing a follow or deep band", () => {
-    const out = planThreadActions(
-      [cand("i1", ["Acme Corp"], { topicId: "ma-deals", deep: false })],
-      [],
-      new Set(),
-      noFollow, // not followed
-      noFollow,
-      new Set(["ma-deals"]), // tracked alone is enough
-      cfg,
-    );
-    expect(out.newThreads).toHaveLength(1);
-    expect(out.newThreads[0].reason).toBe("tracked");
+  it("prefers the anchor that is the more salient (earlier) entity", () => {
+    // Ford comes before Iran in the item's entity list → t-ford wins
+    expect(matchByAnchor(["Ford", "Iran"], threads)).toBe("t-ford");
   });
 
-  it("leaves an ordinary non-followed lone item as a plain item", () => {
-    const out = planThreadActions(
-      [cand("i1", ["Some Company"], { deep: true })],
-      [],
-      new Set(),
-      noFollow,
-      noFollow,
-      noTrack,
-      cfg,
-    );
-    expect(out.links).toEqual([]);
-    expect(out.newThreads).toEqual([]);
+  it("returns null when no anchor is contained", () => {
+    expect(matchByAnchor(["Tesla"], threads)).toBeNull();
   });
 
-  it("opens ONE big-topic thread for a cross-source cluster, even unfollowed", () => {
-    const items = ["i1", "i2", "i3"].map((id, n) =>
-      cand(id, ["Iran", "Israel"], { importance: n === 1 ? 0.9 : 0.4, title: `T${id}` }),
-    );
-    const out = planThreadActions(items, [], new Set(), noFollow, noFollow, noTrack, cfg);
-    expect(out.newThreads).toHaveLength(1);
-    expect(out.newThreads[0].reason).toBe("big_topic");
-    expect(out.newThreads[0].memberItemIds.sort()).toEqual(["i1", "i2", "i3"]);
-    // seeded from the highest-importance member (i2)
-    expect(out.newThreads[0].seedTitle).toBe("Ti2");
+  it("never matches a null-anchor thread", () => {
+    expect(matchByAnchor(["Whatever"], [{ id: "t-null", anchor_entity: null }])).toBeNull();
+  });
+});
+
+describe("resolveThreadMeta", () => {
+  it("picks the most common non-null topic/category among items carrying the anchor", () => {
+    const out = resolveThreadMeta("iran", [
+      cand("i1", ["Iran"], { topicId: "conflict", categoryId: "wereld" }),
+      cand("i2", ["Iran", "Israel"], { topicId: "conflict", categoryId: "wereld" }),
+      cand("i3", ["Tesla"], { topicId: "markten", categoryId: "financieel" }), // no anchor → ignored
+    ]);
+    expect(out).toEqual({ topicId: "conflict", categoryId: "wereld" });
   });
 
-  it("pulls a straggler into a thread opened the same run, and a re-run is a no-op", () => {
-    const items = [
-      cand("a", ["Tibet", "Dalai Lama"], { topicId: "tibet", deep: true }), // opens a thread
-      cand("b", ["Tibet", "Dalai Lama"]), // not followed, not deep — but overlaps a's new thread
-    ];
-    const out = planThreadActions(items, [], new Set(), new Set(["tibet"]), noFollow, noTrack, cfg);
-    expect(out.newThreads).toHaveLength(1);
-    expect(out.newThreads[0].memberItemIds.sort()).toEqual(["a", "b"]);
-
-    // re-run with both already linked → nothing further (idempotent)
-    const rerun = planThreadActions(items, [], new Set(["a", "b"]), new Set(["tibet"]), noFollow, noTrack, cfg);
-    expect(rerun.links).toEqual([]);
-    expect(rerun.newThreads).toEqual([]);
-  });
-
-  it("skips items already linked this edition (idempotency)", () => {
-    const threads = [{ id: "t1", entities: ["spacex"], topic_id: null }];
-    const out = planThreadActions(
-      [cand("i1", ["SpaceX"])],
-      threads,
-      new Set(["i1"]),
-      noFollow,
-      noFollow,
-      noTrack,
-      cfg,
-    );
-    expect(out.links).toEqual([]);
-    expect(out.newThreads).toEqual([]);
+  it("returns nulls when no item carries the anchor", () => {
+    expect(resolveThreadMeta("iran", [cand("i1", ["Tesla"])])).toEqual({ topicId: null, categoryId: null });
   });
 });
 
 describe("detectAnchors", () => {
-  it("flags entities recurring on >= minDays distinct days, with a display form", () => {
+  it("flags entities recurring on >= minDays distinct days AND >= minItems items", () => {
     const ed: EntityDays = new Map([
-      ["iran", { days: new Set(["2026-06-15", "2026-06-16", "2026-06-17"]), display: "Iran" }],
-      ["blip", { days: new Set(["2026-06-17"]), display: "Blip" }],
+      ["iran", { days: new Set(["2026-06-15", "2026-06-16", "2026-06-17"]), count: 6, display: "Iran" }],
+      ["blip", { days: new Set(["2026-06-17"]), count: 1, display: "Blip" }],
     ]);
-    const out = detectAnchors(ed, 3);
+    const out = detectAnchors(ed, 3, 5);
     expect(out).toEqual([{ entity: "iran", display: "Iran" }]);
   });
 
   it("nothing qualifies below the recurrence bar", () => {
-    const ed: EntityDays = new Map([["x", { days: new Set(["d1", "d2"]), display: "X" }]]);
-    expect(detectAnchors(ed, 3)).toEqual([]);
+    const ed: EntityDays = new Map([["x", { days: new Set(["d1", "d2"]), count: 9, display: "X" }]]);
+    expect(detectAnchors(ed, 3, 5)).toEqual([]);
+  });
+
+  it("the volume floor drops a thin one-off that recurs across enough days", () => {
+    // 3 distinct days but only 3 mentions — a stray dateline, not a story.
+    const ed: EntityDays = new Map([
+      ["jena university", { days: new Set(["d1", "d2", "d3"]), count: 3, display: "Jena University" }],
+    ]);
+    expect(detectAnchors(ed, 3, 5)).toEqual([]);
   });
 });
 
-describe("assignMegaThreads", () => {
-  const t = (id: string, entities: string[], anchor: string | null = null) => ({
-    id,
-    entities,
-    anchor_entity: anchor,
-  });
-  const anchors = [
-    { entity: "iran", display: "Iran" },
-    { entity: "us", display: "US" },
-  ];
-
-  it("assigns each child to its biggest matching anchor (not split across megas)", () => {
-    const threads = [
-      t("a", ["Iran", "US"]), // matches both → goes to the bigger (iran)
-      t("b", ["Iran"]),
-      t("c", ["Iran", "nuclear"]),
-      t("d", ["US"]),
-      t("mega", ["iran"], "iran"), // a mega itself is never absorbed
-    ];
-    const out = assignMegaThreads(anchors, threads, 3);
-    expect(out).toHaveLength(1);
-    expect(out[0].entity).toBe("iran");
-    expect(out[0].childIds.sort()).toEqual(["a", "b", "c"]);
-  });
-
-  it("drops anchors below the minChildren bar", () => {
-    const threads = [t("a", ["Iran"]), t("b", ["Iran"])];
-    expect(assignMegaThreads(anchors, threads, 3)).toEqual([]);
-  });
-});

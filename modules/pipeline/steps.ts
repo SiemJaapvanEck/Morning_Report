@@ -25,19 +25,19 @@ import {
   insertThread,
   linkThreadItems,
   touchThread,
-  planThreadActions,
+  normalizeEntity,
   mergeEntities,
   selectLenses,
   orderThreads,
   nextThreadUpdateJob,
   applyThreadUpdate,
   detectAnchors,
-  assignMegaThreads,
+  bigTopicAnchors,
+  personalAnchors,
+  mergeAnchors,
+  matchByAnchor,
+  resolveThreadMeta,
   loadEntityDays,
-  findOrCreateMegaThread,
-  setThreadParent,
-  clearThreadParents,
-  deleteChildlessMegaThreads,
 } from "../threads";
 import type { Edition, Item, PipelineStep, Band, MarktSnapshot, DailyPaperArticle } from "../shared/types";
 
@@ -364,117 +364,106 @@ const selectStep: StepHandler = async ({ edition }) => {
 // threads — koppel editie-items aan blijvende verhaallijnen (geen AI)
 // ============================================================
 //
-// Plaatst tussen select en generate. Matcht elk editie-item op bestaande
-// threads (gratis entity-overlap), opent een nieuwe thread alleen voor wat de
-// lezer volgt of voor een groot cross-bron-verhaal, en mergt entities terug op
-// geraakte threads. Geen AI → ruim binnen 7s, één doorloop (geen vervolgstap).
-// Idempotent: items die deze editie al gekoppeld zijn worden overgeslagen, en
-// thread_items heeft unique(thread_id,item_id) — opnieuw draaien verandert niets.
+// Plaatst tussen select en generate. Elke thread is één zelfstandig verhaal,
+// verankerd op één entiteit (Ford, PlayStation, Israël). Een thread ontstaat
+// als zijn entiteit (a) over meerdere dagen terugkomt, (b) als groot cross-bron
+// verhaal losbarst, of (c) door de lezer wordt gevolgd/gevolgd-als-thread.
+// Items koppelen door simpelweg de anker-entiteit te bevatten. Geen AI → ruim
+// binnen 7s, één doorloop. Idempotent: al gekoppelde items worden overgeslagen
+// en thread_items heeft unique(thread_id,item_id) — opnieuw draaien is een no-op.
 
 const threadsStep: StepHandler = async ({ edition }) => {
-  const [candidates, threads, linked, userCtx] = await Promise.all([
+  const [candidates, threads, linked, userCtx, entityDays] = await Promise.all([
     loadEditionCandidates(edition.id),
     loadActiveThreads(edition.profile_id),
     loadLinkedItemIds(edition.id),
     assembleUserContext(edition.profile_id),
+    loadEntityDays(edition.profile_id, config.threads.anchorWindowDays),
   ]);
-
-  // Items match/link to normal threads only; mega-threads (anchor_entity set)
-  // are containers, never matched directly — their children absorb the news.
-  const matchPool = threads.filter((t) => !t.anchor_entity);
-  const actions = planThreadActions(
-    candidates,
-    matchPool,
-    linked,
-    userCtx.followedTopicIds,
-    userCtx.followedCategoryIds,
-    userCtx.trackedTopicIds,
-    {
-      matchMinOverlap: config.threads.matchMinOverlap,
-      bigTopicMinOverlap: config.threads.bigTopicMinOverlap,
-      bigTopicMinCluster: config.threads.bigTopicMinCluster,
-    },
-  );
 
   const now = new Date().toISOString();
 
-  // Open the new storylines and link their seed items.
+  // Entities that actually have news today — a recurring anchor only spawns or
+  // links on a day it has something to say, so every new thread gets a seed item.
+  const todayEntities = new Set<string>();
+  for (const c of candidates) {
+    for (const e of c.entities) {
+      const n = normalizeEntity(e);
+      if (n) todayEntities.add(n);
+    }
+  }
+
+  // Qualifying anchors from each birth path, merged by entity (priority order).
+  const recurring = detectAnchors(entityDays, config.threads.anchorMinDays, config.threads.anchorMinItems)
+    .filter((a) => todayEntities.has(a.entity))
+    .map((a) => ({ entity: a.entity, display: a.display, reason: "recurring" as const }));
+  const big = bigTopicAnchors(
+    candidates.map((c) => ({ id: c.itemId, entities: c.entities })),
+    config.threads.bigTopicMinOverlap,
+    config.threads.bigTopicMinCluster,
+  );
+  const personal = personalAnchors(
+    candidates,
+    userCtx.followedTopicIds,
+    userCtx.followedCategoryIds,
+    userCtx.trackedTopicIds,
+  );
+  const anchors = mergeAnchors(recurring, big, personal);
+
+  // Existing anchor threads — the only ones items match against (flat model).
+  const existingAnchors = new Set(
+    threads.map((t) => t.anchor_entity).filter((a): a is string => Boolean(a)),
+  );
+
+  // Open a thread for each qualifying anchor that doesn't have one yet; topic/
+  // category come from today's items carrying that anchor (so the archive can
+  // filter it). The seed item is linked in the matching pass below.
   let created = 0;
-  for (const nt of actions.newThreads) {
-    const threadId = await insertThread({
+  for (const a of anchors) {
+    if (existingAnchors.has(a.entity)) continue;
+    const meta = resolveThreadMeta(a.entity, candidates);
+    await insertThread({
       profileId: edition.profile_id,
-      topicId: nt.topicId,
-      categoryId: nt.categoryId,
-      title: nt.seedTitle,
-      entities: mergeEntities(nt.entities, []), // normalize + dedupe + cap
+      topicId: meta.topicId,
+      categoryId: meta.categoryId,
+      title: a.display,
+      entities: mergeEntities([a.entity], []),
       status: "active",
       lastEditionId: edition.id,
       lastSeenAt: now,
+      anchorEntity: a.entity,
     });
-    await linkThreadItems(
-      nt.memberItemIds.map((itemId) => ({ threadId, itemId, editionId: edition.id })),
-    );
     created++;
   }
 
-  // Link items into their existing threads, then merge entities + touch each one.
-  await linkThreadItems(
-    actions.links.map((l) => ({ threadId: l.threadId, itemId: l.itemId, editionId: edition.id })),
-  );
-
-  const candidateById = new Map(candidates.map((c) => [c.itemId, c]));
-  const threadById = new Map(threads.map((t) => [t.id, t]));
+  // Reload so this edition's new anchor threads are included, then link every
+  // fresh candidate to its single best anchor thread (containment) and merge its
+  // entities back. Idempotent: items already linked this edition are skipped and
+  // linkThreadItems upserts-with-ignore.
+  const anchorThreads = (await loadActiveThreads(edition.profile_id)).filter((t) => t.anchor_entity);
+  const links: { threadId: string; itemId: string; editionId: string }[] = [];
   const addedByThread = new Map<string, string[]>();
-  for (const l of actions.links) {
-    const ents = candidateById.get(l.itemId)?.entities ?? [];
-    addedByThread.set(l.threadId, [...(addedByThread.get(l.threadId) ?? []), ...ents]);
+  for (const c of candidates) {
+    if (linked.has(c.itemId)) continue;
+    const threadId = matchByAnchor(c.entities, anchorThreads);
+    if (!threadId) continue;
+    links.push({ threadId, itemId: c.itemId, editionId: edition.id });
+    addedByThread.set(threadId, [...(addedByThread.get(threadId) ?? []), ...c.entities]);
   }
+  await linkThreadItems(links);
+
+  const threadById = new Map(anchorThreads.map((t) => [t.id, t]));
   for (const [threadId, addEnts] of addedByThread) {
     const existing = threadById.get(threadId)?.entities ?? [];
     await touchThread(threadId, mergeEntities(existing, addEnts), edition.id, now);
   }
 
-  // Mega-threads: an anchor entity that recurs across days AND spans several
-  // child threads graduates into a parent that absorbs them (its timeline dots).
-  // The whole structure is re-derived deterministically each run: assign every
-  // child to its single best anchor, detach stragglers, drop orphan parents.
-  // Reload threads so this edition's freshly-created children are included.
-  const entityDays = await loadEntityDays(edition.profile_id, config.threads.anchorWindowDays);
-  const anchors = detectAnchors(entityDays, config.threads.anchorMinDays);
-  const afterThreads = await loadActiveThreads(edition.profile_id);
-  const assignments = assignMegaThreads(anchors, afterThreads, config.threads.anchorMinChildren);
-
-  const keep = new Set<string>();
-  let absorbed = 0;
-  for (const a of assignments) {
-    const megaId = await findOrCreateMegaThread(
-      edition.profile_id,
-      a.entity,
-      a.display,
-      edition.id,
-      now,
-    );
-    const children = a.childIds.filter((id) => id !== megaId);
-    await setThreadParent(children, megaId);
-    for (const id of children) keep.add(id);
-    absorbed += children.length;
-  }
-  // Detach normal threads that are parented to a mega but no longer assigned.
-  const stale = afterThreads
-    .filter((t) => !t.anchor_entity && t.parent_thread_id && !keep.has(t.id))
-    .map((t) => t.id);
-  await clearThreadParents(stale);
-  // Remove mega-threads left without children.
-  const orphansRemoved = await deleteChildlessMegaThreads(edition.profile_id);
-
   return {
     kandidaten: candidates.length,
-    gekoppeld: actions.links.length,
+    gekoppeld: links.length,
     nieuwe_threads: created,
     overgeslagen: linked.size,
-    mega_threads: assignments.length,
-    geabsorbeerd: absorbed,
-    wees_verwijderd: orphansRemoved,
+    ankers: anchors.length,
   };
 };
 

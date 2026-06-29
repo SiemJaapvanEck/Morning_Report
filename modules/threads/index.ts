@@ -36,44 +36,6 @@ export function entityOverlap(a: string[], b: string[]): number {
   return union === 0 ? 0 : inter / union;
 }
 
-export interface ThreadMatch {
-  threadId: string;
-  /** raw entity overlap, 0..1 (excludes the same-topic ranking bonus) */
-  score: number;
-}
-
-/** Small bonus so a same-topic thread wins a tie — never crosses the threshold alone. */
-const SAME_TOPIC_BONUS = 0.1;
-
-/**
- * Find the best existing thread for one scanned item, by entity overlap above
- * `minOverlap`. A same-topic thread gets a small ranking bonus to break ties.
- * Returns null → the item should open a new thread (or stay a plain item).
- */
-export function matchThread(
-  itemEntities: string[],
-  itemTopicId: string | null,
-  threads: Pick<Thread, "id" | "entities" | "topic_id">[],
-  minOverlap = 0.34,
-): ThreadMatch | null {
-  const itemNorm = itemEntities.map(normalizeEntity).filter(Boolean);
-  if (itemNorm.length === 0) return null;
-
-  let best: ThreadMatch | null = null;
-  let bestRank = -1;
-  for (const t of threads) {
-    const base = entityOverlap(itemNorm, t.entities.map(normalizeEntity));
-    if (base < minOverlap) continue;
-    const sameTopic = itemTopicId != null && t.topic_id === itemTopicId;
-    const rank = base + (sameTopic ? SAME_TOPIC_BONUS : 0);
-    if (rank > bestRank) {
-      bestRank = rank;
-      best = { threadId: t.id, score: base };
-    }
-  }
-  return best;
-}
-
 export interface DeltaItem {
   id: string;
   title: string;
@@ -284,7 +246,10 @@ export function clusterByEntities(
 }
 
 // ============================================================
-// Thread action planner — pure decision over today's edition items
+// Entity-anchored thread planning — every thread is one self-contained story
+// anchored on a single entity (Ford, PlayStation, Israel). A thread is born
+// when its entity recurs across days, breaks as a big cross-source story, or is
+// followed/tracked by the reader; items attach by simply containing the anchor.
 // ============================================================
 
 /** One edition item as the thread planner sees it. */
@@ -299,240 +264,223 @@ export interface ThreadCandidate {
   deep: boolean;
 }
 
-/** A storyline to create this edition, with the items that seed it. */
-export interface NewThreadPlan {
-  seedTitle: string;
-  topicId: string | null;
-  categoryId: string | null;
-  /** display-form entities of the members (normalized on store) */
-  entities: string[];
-  memberItemIds: string[];
-  reason: "followed" | "big_topic" | "tracked";
+/** Why an entity earned its own standalone thread this edition. */
+export type AnchorReason = "recurring" | "big_topic" | "tracked" | "followed";
+
+/** A normalized anchor entity that qualifies for its own flat (self-contained) thread. */
+export interface AnchorSpec {
+  /** normalized anchor entity — the thread's identity and its item-match key */
+  entity: string;
+  /** human display form, used as the thread's seed title */
+  display: string;
+  reason: AnchorReason;
 }
 
-export interface ThreadActions {
-  /** attach an existing item to an existing thread */
-  links: { itemId: string; threadId: string }[];
-  /** storylines to open this edition */
-  newThreads: NewThreadPlan[];
-}
-
-export interface ThreadPlanConfig {
-  matchMinOverlap: number;
-  bigTopicMinOverlap: number;
-  bigTopicMinCluster: number;
+/** The first usable entity of an item (its most salient), display + normalized; null if none. */
+export function primaryEntity(entities: string[]): { entity: string; display: string } | null {
+  for (const raw of entities) {
+    const display = raw.trim();
+    const entity = normalizeEntity(display);
+    if (entity) return { entity, display };
+  }
+  return null;
 }
 
 /**
- * Decide, for today's edition items, what links into existing threads and what
- * opens a new one.
- *
- * - **Linking is universal:** any item whose entities overlap an active thread
- *   joins it, followed or not — that is how a storyline keeps absorbing news.
- * - **A NEW thread is born only for** (a) a big cross-source cluster (a major
- *   story), (b) a *followed* item that is also **significant** (`deep` band)
- *   this edition, or (c) any item whose topic the reader **explicitly tracks**
- *   as a thread (`trackedTopicIds`) — that selection lowers the bar so even an
- *   ordinary headline keeps the storyline going. Otherwise an ordinary or
- *   non-deep followed headline stays a plain item — that is what keeps threads
- *   to real storylines instead of one per headline.
- *
- * Idempotency: items already linked this edition are skipped, and matching runs
- * to a **fixed point** — because attaching an item grows a thread's entity set,
- * a straggler that only matches *after* that growth is pulled in within this
- * same run. So a re-run (which sees the persisted, grown threads) links nothing
- * further: the result is a pure, re-run-safe function of (items, threads, links).
+ * The most frequent normalized entity across a set of items, with a display
+ * form. Ties break toward the entity seen first (stable order). Null when no
+ * item carries any entity.
  */
-export function planThreadActions(
-  candidates: ThreadCandidate[],
-  threads: Pick<Thread, "id" | "entities" | "topic_id">[],
-  alreadyLinked: Set<string>,
-  followedTopicIds: Set<string>,
-  followedCategoryIds: Set<string>,
-  trackedTopicIds: Set<string>,
-  cfg: ThreadPlanConfig,
-): ThreadActions {
-  const fresh = candidates.filter((c) => !alreadyLinked.has(c.itemId));
-  const candById = new Map(fresh.map((c) => [c.itemId, c]));
-
-  // Working threads: existing ones (key "e:<id>") plus any we open ("n:<index>").
-  // Entities are kept normalized + capped exactly as they will be persisted, so
-  // the matching landscape here equals what a re-run would see on disk.
-  type Work = { key: string; entities: string[]; topicId: string | null };
-  const work: Work[] = threads.map((t) => ({
-    key: `e:${t.id}`,
-    entities: mergeEntities(t.entities, []),
-    topicId: t.topic_id,
-  }));
-  const workByKey = new Map(work.map((w) => [w.key, w]));
-  const newThreads: NewThreadPlan[] = [];
-  const assign = new Map<string, string>(); // itemId -> work key
-
-  const attach = (itemId: string, key: string) => {
-    assign.set(itemId, key);
-    const w = workByKey.get(key)!;
-    w.entities = mergeEntities(w.entities, candById.get(itemId)?.entities ?? []);
-  };
-  const matchOpen = (c: ThreadCandidate): string | null =>
-    matchThread(
-      c.entities,
-      c.topicId,
-      work.map((w) => ({ id: w.key, entities: w.entities, topic_id: w.topicId })),
-      cfg.matchMinOverlap,
-    )?.threadId ?? null;
-  const unassigned = () => fresh.filter((c) => !assign.has(c.itemId));
-
-  const sweep = () => {
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (const c of unassigned()) {
-        const key = matchOpen(c);
-        if (key) {
-          attach(c.itemId, key);
-          changed = true;
-        }
+export function dominantEntity(
+  items: { entities: string[] }[],
+): { entity: string; display: string } | null {
+  const count = new Map<string, number>();
+  const display = new Map<string, string>();
+  const order: string[] = [];
+  for (const it of items) {
+    for (const raw of it.entities) {
+      const d = raw.trim();
+      const norm = normalizeEntity(d);
+      if (!norm) continue;
+      if (!count.has(norm)) {
+        count.set(norm, 0);
+        display.set(norm, d);
+        order.push(norm);
       }
+      count.set(norm, count.get(norm)! + 1);
     }
-  };
-
-  const openThread = (seed: ThreadCandidate, reason: NewThreadPlan["reason"]): string => {
-    const idx = newThreads.length;
-    const key = `n:${idx}`;
-    newThreads.push({
-      seedTitle: seed.title,
-      topicId: seed.topicId,
-      categoryId: seed.categoryId,
-      entities: [],
-      memberItemIds: [],
-      reason,
-    });
-    const w: Work = { key, entities: [], topicId: seed.topicId };
-    work.push(w);
-    workByKey.set(key, w);
-    return key;
-  };
-
-  // 1. Link to existing threads (fixed point — attaching grows entities).
-  sweep();
-
-  // 2. Big topic: cross-source clusters among the still-unassigned items.
-  const clusters = clusterByEntities(
-    unassigned().map((c) => ({ id: c.itemId, entities: c.entities })),
-    cfg.bigTopicMinOverlap,
-    cfg.bigTopicMinCluster,
-  );
-  for (const cluster of clusters) {
-    const members = cluster.map((id) => candById.get(id)!);
-    const seed = members.reduce(
-      (best, c) => ((c.importance ?? 0) > (best.importance ?? 0) ? c : best),
-      members[0],
-    );
-    const key = openThread(seed, "big_topic");
-    for (const id of cluster) attach(id, key);
   }
-
-  // 3. Open a thread for each remaining item that either (a) is on a topic the
-  //    reader explicitly tracks (any significance), or (b) is followed AND
-  //    significant (deep band). Tracking is the stronger, explicit signal, so it
-  //    needs neither deep nor a separate follow.
-  for (const c of unassigned()) {
-    const tracked = c.topicId != null && trackedTopicIds.has(c.topicId);
-    if (tracked) {
-      attach(c.itemId, openThread(c, "tracked"));
-      continue;
+  let best: string | null = null;
+  let bestN = 0;
+  for (const e of order) {
+    const n = count.get(e)!;
+    if (n > bestN) {
+      bestN = n;
+      best = e;
     }
-    if (!c.deep) continue;
-    const followed =
-      (c.topicId != null && followedTopicIds.has(c.topicId)) ||
-      (c.categoryId != null && followedCategoryIds.has(c.categoryId));
-    if (!followed) continue;
-    attach(c.itemId, openThread(c, "followed"));
   }
-
-  // 4. Final fixed point: pull stragglers into any thread we touched or opened.
-  sweep();
-
-  // Build the action plan from the assignments.
-  const links: { itemId: string; threadId: string }[] = [];
-  for (const [itemId, key] of assign) {
-    if (key.startsWith("e:")) links.push({ itemId, threadId: key.slice(2) });
-    else newThreads[Number(key.slice(2))].memberItemIds.push(itemId);
-  }
-  for (const nt of newThreads) {
-    nt.entities = nt.memberItemIds.flatMap((id) => candById.get(id)?.entities ?? []);
-  }
-  return { links, newThreads };
+  return best ? { entity: best, display: display.get(best)! } : null;
 }
 
-// ============================================================
-// Mega-threads — anchor-entity detection + absorption (Phase 5c-1)
-// ============================================================
-
-/** Per normalized entity: the distinct days it appeared + a display form. */
-export type EntityDays = Map<string, { days: Set<string>; display: string }>;
-
 /**
- * Anchor entities = those that recur across at least `minDays` distinct days in
- * the window. Recurrence (not same-day breadth) is what marks a story that
- * "keeps coming back" — the seed of a mega-thread. Returns the normalized
- * entity plus a display form for the thread title.
+ * Big-topic anchors: cluster same-day items by entity overlap; each cluster of
+ * at least `minCluster` items contributes its dominant entity as an instant-on
+ * anchor. This is how a breaking story gets a thread the day it breaks, before
+ * it has had time to recur across the days `detectAnchors` needs.
  */
-export function detectAnchors(
-  entityDays: EntityDays,
-  minDays: number,
-): { entity: string; display: string }[] {
-  const out: { entity: string; display: string }[] = [];
-  for (const [norm, info] of entityDays) {
-    if (info.days.size >= minDays) out.push({ entity: norm, display: info.display });
+export function bigTopicAnchors(
+  items: { id: string; entities: string[] }[],
+  minOverlap: number,
+  minCluster: number,
+): AnchorSpec[] {
+  const byId = new Map(items.map((it) => [it.id, it]));
+  const out: AnchorSpec[] = [];
+  for (const cluster of clusterByEntities(items, minOverlap, minCluster)) {
+    const members = cluster.map((id) => byId.get(id)!).filter(Boolean);
+    const dom = dominantEntity(members);
+    if (dom) out.push({ entity: dom.entity, display: dom.display, reason: "big_topic" });
   }
   return out;
 }
 
-/** A mega-thread to maintain this run, with the children it should absorb. */
-export interface MegaAssignment {
-  entity: string;
-  display: string;
-  childIds: string[];
+/**
+ * Personal anchors: an item on a tracked topic (any significance) or a followed
+ * + deep item turns its primary entity into an anchor. Tracking is the stronger,
+ * explicit signal and needs neither a follow nor the deep band; a follow needs
+ * the deep band so an ordinary followed headline does not spawn a thread.
+ */
+export function personalAnchors(
+  candidates: ThreadCandidate[],
+  followedTopicIds: Set<string>,
+  followedCategoryIds: Set<string>,
+  trackedTopicIds: Set<string>,
+): AnchorSpec[] {
+  const out: AnchorSpec[] = [];
+  for (const c of candidates) {
+    const tracked = c.topicId != null && trackedTopicIds.has(c.topicId);
+    const followed =
+      c.deep &&
+      ((c.topicId != null && followedTopicIds.has(c.topicId)) ||
+        (c.categoryId != null && followedCategoryIds.has(c.categoryId)));
+    if (!tracked && !followed) continue;
+    const p = primaryEntity(c.entities);
+    if (p) out.push({ entity: p.entity, display: p.display, reason: tracked ? "tracked" : "followed" });
+  }
+  return out;
+}
+
+const ANCHOR_PRIORITY: Record<AnchorReason, number> = {
+  recurring: 0,
+  big_topic: 1,
+  tracked: 2,
+  followed: 3,
+};
+
+/**
+ * Merge anchor specs from the different birth paths, keyed by normalized entity.
+ * When several paths propose the same entity, the highest-priority reason wins
+ * (recurring > big_topic > tracked > followed) and keeps its display form.
+ */
+export function mergeAnchors(...lists: AnchorSpec[][]): AnchorSpec[] {
+  const best = new Map<string, AnchorSpec>();
+  for (const list of lists) {
+    for (const a of list) {
+      if (!a.entity) continue;
+      const cur = best.get(a.entity);
+      if (!cur || ANCHOR_PRIORITY[a.reason] < ANCHOR_PRIORITY[cur.reason]) best.set(a.entity, a);
+    }
+  }
+  return [...best.values()];
 }
 
 /**
- * Assign normal threads to mega-threads, one parent each. A thread whose
- * entities include several anchors goes to its **best** anchor — the biggest
- * story (most candidate threads), ties broken alphabetically for determinism —
- * so children never split across megas and common entities don't steal them.
- * Only anchors that end up with ≥ `minChildren` children survive (the rest
- * aren't real mega-stories). Mega-threads themselves are never absorbed.
+ * The single best existing anchor thread for an item: the thread whose anchor
+ * entity is contained in the item's entities and appears earliest in the item's
+ * (salience-ordered) entity list. Ties break by thread id for determinism. Null
+ * → the item joins no existing thread. One item links to at most one thread, so
+ * the downstream deep-article path stays one-update-per-thread.
  */
-export function assignMegaThreads(
-  anchors: { entity: string; display: string }[],
-  threads: { id: string; entities: string[]; anchor_entity: string | null }[],
-  minChildren: number,
-): MegaAssignment[] {
-  const normal = threads.filter((t) => !t.anchor_entity);
-  const candidates = new Map<string, string[]>(anchors.map((a) => [a.entity, []]));
-  const matchesByThread = new Map<string, string[]>();
-  for (const t of normal) {
-    const ents = new Set(t.entities.map(normalizeEntity));
-    const matched = anchors.filter((a) => ents.has(a.entity)).map((a) => a.entity);
-    if (matched.length === 0) continue;
-    matchesByThread.set(t.id, matched);
-    for (const e of matched) candidates.get(e)!.push(t.id);
+export function matchByAnchor(
+  itemEntities: string[],
+  anchorThreads: { id: string; anchor_entity: string | null }[],
+): string | null {
+  const norm = itemEntities.map(normalizeEntity);
+  let best: { id: string; rank: number } | null = null;
+  for (const t of anchorThreads) {
+    if (!t.anchor_entity) continue;
+    const rank = norm.indexOf(t.anchor_entity);
+    if (rank < 0) continue;
+    if (!best || rank < best.rank || (rank === best.rank && t.id < best.id)) {
+      best = { id: t.id, rank };
+    }
   }
-  const size = (e: string) => candidates.get(e)?.length ?? 0;
+  return best?.id ?? null;
+}
 
-  const assigned = new Map<string, string[]>();
-  for (const [threadId, matched] of matchesByThread) {
-    const best = [...matched].sort((a, b) => size(b) - size(a) || a.localeCompare(b))[0];
-    const arr = assigned.get(best) ?? [];
-    arr.push(threadId);
-    assigned.set(best, arr);
+/**
+ * Resolve a new thread's topic/category from today's items that carry its anchor
+ * entity: the most common non-null topic_id / category_id among them (mode, ties
+ * toward the first item seen). This lets the archive filter the thread by one of
+ * the seven content categories even though its identity is just an entity.
+ */
+export function resolveThreadMeta(
+  anchorEntity: string,
+  candidates: ThreadCandidate[],
+): { topicId: string | null; categoryId: string | null } {
+  const members = candidates.filter((c) => c.entities.map(normalizeEntity).includes(anchorEntity));
+  const mode = (vals: (string | null)[]): string | null => {
+    const count = new Map<string, number>();
+    const order: string[] = [];
+    for (const v of vals) {
+      if (!v) continue;
+      if (!count.has(v)) {
+        count.set(v, 0);
+        order.push(v);
+      }
+      count.set(v, count.get(v)! + 1);
+    }
+    let best: string | null = null;
+    let bestN = 0;
+    for (const v of order) {
+      if (count.get(v)! > bestN) {
+        bestN = count.get(v)!;
+        best = v;
+      }
+    }
+    return best;
+  };
+  return {
+    topicId: mode(members.map((m) => m.topicId)),
+    categoryId: mode(members.map((m) => m.categoryId)),
+  };
+}
+
+// ============================================================
+// Recurrence detection — the main thread-birth signal
+// ============================================================
+
+/** Per normalized entity: the distinct days it appeared, total item mentions, and a display form. */
+export type EntityDays = Map<string, { days: Set<string>; count: number; display: string }>;
+
+/**
+ * Recurring anchor entities = those that appear across at least `minDays`
+ * distinct days AND in at least `minItems` items in the window. Recurrence marks
+ * a story that "keeps coming back"; the volume floor (`minItems`) is what keeps
+ * a thin one-off — an entity named once on three separate days — from becoming a
+ * thread. Returns the normalized entity plus a display form for the thread title.
+ */
+export function detectAnchors(
+  entityDays: EntityDays,
+  minDays: number,
+  minItems: number,
+): { entity: string; display: string }[] {
+  const out: { entity: string; display: string }[] = [];
+  for (const [norm, info] of entityDays) {
+    if (info.days.size >= minDays && info.count >= minItems) {
+      out.push({ entity: norm, display: info.display });
+    }
   }
-
-  const display = new Map(anchors.map((a) => [a.entity, a.display]));
-  return [...assigned.entries()]
-    .filter(([, ids]) => ids.length >= minChildren)
-    .map(([entity, childIds]) => ({ entity, display: display.get(entity) as string, childIds }));
+  return out;
 }
 
 // ============================================================
@@ -629,9 +577,10 @@ export async function insertThread(input: {
 }
 
 /**
- * Per-entity distinct-day map over the profile's recent edition items — the
- * input to detectAnchors. Entities live on items.scan_meta.entities (display
- * form); the edition date supplies the "day".
+ * Per-entity recurrence map over the profile's recent edition items — the input
+ * to detectAnchors. Tracks the distinct days an entity appeared and how many
+ * items mentioned it (the volume floor). Entities live on
+ * items.scan_meta.entities (display form); the edition date supplies the "day".
  */
 export async function loadEntityDays(profileId: string, windowDays: number): Promise<EntityDays> {
   const cutoff = new Date(Date.now() - windowDays * 86_400_000).toISOString().slice(0, 10);
@@ -650,87 +599,19 @@ export async function loadEntityDays(profileId: string, windowDays: number): Pro
   for (const r of rows) {
     const date = r.editions?.date;
     if (!date) continue;
+    // Dedupe within one item so a single article counts once toward volume.
+    const seen = new Set<string>();
     for (const raw of r.items?.scan_meta?.entities ?? []) {
       const norm = normalizeEntity(raw);
-      if (!norm) continue;
-      const e = map.get(norm) ?? { days: new Set<string>(), display: raw };
+      if (!norm || seen.has(norm)) continue;
+      seen.add(norm);
+      const e = map.get(norm) ?? { days: new Set<string>(), count: 0, display: raw };
       e.days.add(date);
+      e.count += 1;
       map.set(norm, e);
     }
   }
   return map;
-}
-
-/** Find the profile's mega-thread for an anchor entity, creating it if absent. */
-export async function findOrCreateMegaThread(
-  profileId: string,
-  anchorNorm: string,
-  displayTitle: string,
-  editionId: string,
-  now: string,
-): Promise<string> {
-  const existing = (await db()
-    .from("threads")
-    .select("id")
-    .eq("profile_id", profileId)
-    .eq("anchor_entity", anchorNorm)
-    .maybeSingle()).data as { id: string } | null;
-  if (existing) {
-    await db()
-      .from("threads")
-      .update({ status: "active", last_edition_id: editionId, last_seen_at: now })
-      .eq("id", existing.id);
-    return existing.id;
-  }
-  return insertThread({
-    profileId,
-    topicId: null,
-    categoryId: null,
-    title: displayTitle,
-    entities: [anchorNorm],
-    status: "active",
-    lastEditionId: editionId,
-    lastSeenAt: now,
-    anchorEntity: anchorNorm,
-  });
-}
-
-/** Re-parent child threads under a mega-thread (absorb them). */
-export async function setThreadParent(childIds: string[], parentId: string): Promise<void> {
-  if (childIds.length === 0) return;
-  const { error } = await db()
-    .from("threads")
-    .update({ parent_thread_id: parentId })
-    .in("id", childIds);
-  if (error) throw new Error(`setThreadParent: ${error.message}`);
-}
-
-/** Detach threads from their mega-parent (when they're no longer assigned to one). */
-export async function clearThreadParents(childIds: string[]): Promise<void> {
-  if (childIds.length === 0) return;
-  const { error } = await db()
-    .from("threads")
-    .update({ parent_thread_id: null })
-    .in("id", childIds);
-  if (error) throw new Error(`clearThreadParents: ${error.message}`);
-}
-
-/** Delete mega-threads (anchor_entity set) that ended up with no children. Returns the count. */
-export async function deleteChildlessMegaThreads(profileId: string): Promise<number> {
-  const megas = unwrap(
-    await db().from("threads").select("id").eq("profile_id", profileId).not("anchor_entity", "is", null),
-  ) as { id: string }[];
-  let deleted = 0;
-  for (const m of megas) {
-    const kids = unwrap(
-      await db().from("threads").select("id").eq("parent_thread_id", m.id).limit(1),
-    ) as { id: string }[];
-    if (kids.length === 0) {
-      await db().from("threads").delete().eq("id", m.id);
-      deleted++;
-    }
-  }
-  return deleted;
 }
 
 /** Upsert thread↔item links; unique(thread_id,item_id) + ignore makes it re-run safe. */

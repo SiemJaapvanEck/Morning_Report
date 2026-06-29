@@ -352,3 +352,20 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   Siem's deep articles — rebuilt Siem-only with BUDGET_EDITION_EUR raised (env-only).
   Also confirmed ripples render only on the krant view; a down dev server was serving
   stale browser cache. Clean edition cost measured ~EUR0.07 (ceiling 0.15).
+
+- **29 June 2026 — Threads re-architected to an entity-anchored, flat model
+  (Phase A of a thread/Daily-Paper rework).** Every thread is now one self-
+  contained story anchored on a single entity (Ford, PlayStation, Israel); the
+  old fuzzy-overlap planner and the mega/parent-child layer are gone. Birth =
+  recurring (>=3 days AND >=5 items volume floor) U big same-day cluster
+  (instant-on) U followed/tracked; linking = anchor containment, single best
+  thread per item. modules/threads rewritten (removed matchThread/
+  planThreadActions/assignMegaThreads + mega DB helpers; added primaryEntity/
+  dominantEntity/bigTopicAnchors/personalAnchors/mergeAnchors/matchByAnchor/
+  resolveThreadMeta; EntityDays gained a count, detectAnchors gained minItems),
+  threadsStep rewritten, config tidied. Decisions (Siem): entity-anchored flat,
+  conservative + volume floor, filter by the 7 categories, and KEEP entity-only
+  despite ~22% item coverage (curated over comprehensive — topic-backbone hybrid
+  explicitly declined). 166 tests green; verified read-only on real data, no live
+  data mutated. Next: Phase B — live rebuild script + rebuild the /archive page
+  into a flat list of story timelines (reference image in HANDOFF).

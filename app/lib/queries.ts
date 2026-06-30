@@ -292,6 +292,17 @@ export interface Story {
 export const MIN_STORY_EVENTS = 3;
 
 /**
+ * Run an `in (...)` lookup in batches so a long id list can't blow the PostgREST
+ * URL-length limit (a busy profile has hundreds of linked items). Concatenates
+ * the rows from each batch.
+ */
+async function fetchInChunks<T>(ids: string[], run: (batch: string[]) => Promise<T[]>, size = 150): Promise<T[]> {
+  const out: T[] = [];
+  for (let i = 0; i < ids.length; i += size) out.push(...(await run(ids.slice(i, i + size))));
+  return out;
+}
+
+/**
  * Every non-closed anchor thread with at least {@link MIN_STORY_EVENTS} events as a
  * self-contained story timeline. One row per thread: category, status, first/last
  * event date, event count, last-updated, and the event dots. The list page sorts
@@ -316,9 +327,11 @@ export async function listStories(profileId: string): Promise<Story[]> {
   // Each linked item is an event; its edition's date places it on the timeline,
   // and its own category feeds the story's (multi-)category set.
   const threadIds = threads.map((t) => t.id);
-  const links = unwrap(
-    await db().from("thread_items").select("thread_id, item_id, edition_id").in("thread_id", threadIds),
-  ) as { thread_id: string; item_id: string; edition_id: string | null }[];
+  const links = await fetchInChunks(threadIds, async (batch) =>
+    unwrap(
+      await db().from("thread_items").select("thread_id, item_id, edition_id").in("thread_id", batch),
+    ) as { thread_id: string; item_id: string; edition_id: string | null }[],
+  );
 
   const editionIds = [...new Set(links.map((l) => l.edition_id).filter(Boolean))] as string[];
   const eds = editionIds.length
@@ -328,12 +341,12 @@ export async function listStories(profileId: string): Promise<Story[]> {
 
   // Item → its category, so a story's categories come from where its items landed.
   const itemIds = [...new Set(links.map((l) => l.item_id))];
-  const items = itemIds.length
-    ? (unwrap(await db().from("items").select("id, category_id").in("id", itemIds)) as {
-        id: string;
-        category_id: string | null;
-      }[])
-    : [];
+  const items = await fetchInChunks(itemIds, async (batch) =>
+    unwrap(await db().from("items").select("id, category_id").in("id", batch)) as {
+      id: string;
+      category_id: string | null;
+    }[],
+  );
   const catByItem = new Map(items.map((i) => [i.id, i.category_id]));
   const categoryIds = [...new Set(items.map((i) => i.category_id).filter(Boolean))] as string[];
   const cats = categoryIds.length

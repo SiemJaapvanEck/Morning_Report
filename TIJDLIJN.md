@@ -385,3 +385,9 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   dev "blank HTML/no CSS" by unregistering the PWA service worker in development.
   179 tests green. Kicked off the 2026-06-30 live pipeline at end of session (was
   still in the generate phase). Next: Phase C — the single-thread detail page.
+- **30 June 2026 (continued) — pipeline run + listStories crash fix.** Ran the
+  live pipeline to completion (06-29 + 06-30 editions, 0 errors, ~19 min for both;
+  ~8–10 min/edition, generate dominates); today's stories are now the Live set
+  (archive shows 35, 26 Live). Verifying surfaced a crash: `listStories` loaded
+  ~400 linked items in one `in()` that blew the PostgREST URL limit — fixed with
+  `fetchInChunks` (batched thread_items + items lookups). Pushed.

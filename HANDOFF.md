@@ -8,9 +8,11 @@
 **Phase B is shipped: the `/archive` page is now the flat "Alle verhalen" list of
 self-contained story timelines, and the thread model gained entity dedup +
 multi-category + recency/category filters.** Gate green (lint / tsc / **179
-tests** / build). Live threads were re-derived from history (89 threads, 27 shown
-at the ≥3-event floor). The code is committed; **the live pipeline for 2026-06-30
-was kicked off at end of session and may still be running** (see Known issues).
+tests** / build), pushed to `main`. The **2026-06-30 live pipeline ran to
+completion** (it also finished the half-done 06-29 edition; both `done`, 0
+errors), so today's stories are now the **Live** set — the archive shows 35
+stories (26 Live). Live threads had first been re-derived from history with
+`scripts/rebuild-threads.ts`.
 
 Pipeline shape unchanged (scan → select → threads → agenda → generate →
 daily_paper → finalize). No schema migration this session.
@@ -65,7 +67,14 @@ Shipped two that partition cleanly:
   C**: a "volg deze verhaallijn" button → `thread_tracking` (currently empty) →
   a real "mine" set. Fully reverted (no dead `followed` field).
 
-### 4. Service worker dev fix
+### 4. listStories batched lookups (crash fix)
+After the pipeline grew the archive to ~400 linked items, `listStories` crashed
+("fetch failed") because it loaded every linked item in a single `in (id, …)`
+that blew the PostgREST URL-length limit. Added `fetchInChunks` (150/batch) and
+batched the `thread_items` (by thread) and `items` (by id) lookups. The archive
+now scales with a busy profile.
+
+### 5. Service worker dev fix
 `app/components/ServiceWorkerRegistratie.tsx`: in production it registers the PWA
 SW as before; in **development** it now actively **unregisters any leftover SW
 and clears its caches**. This was the cause of "blank HTML, no CSS" pages — the
@@ -89,12 +98,11 @@ always loads fresh; prod PWA behavior unchanged.
 
 ## Known issues / things to keep in mind
 
-- **The 2026-06-30 pipeline run was started at end of session and may not have
-  finished.** It was in the long `generate` phase when the session closed (also
-  completing a half-finished 06-29 edition). All steps were green (no errors).
-  Check `pipeline_steps` for `done` and re-run `npm run pipeline` if anything is
-  still pending. Once today's edition finishes, today's stories get a fresh
-  `last_seen_at` and become the **Live** set on the archive.
+- **A full `npm run pipeline` is ~8–10 min per edition back-to-back** (this
+  session's run was ~19 min because it did two editions). `generate` (deep
+  research) dominates by far (~700 s / 79 units this run), then scan_rank and
+  ingest. In production the `/api/pipeline/tick` endpoint runs one step per call
+  (~7 s), spread across cron ticks — not one continuous block.
 - **"Live" is relative, not calendar-based.** `recencyTier` buckets against the
   newest event in the dataset (Live = within ~2 days of it), so before today's
   pipeline completes, "Live" reflects the most recent *completed* edition.

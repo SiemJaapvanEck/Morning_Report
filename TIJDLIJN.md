@@ -369,3 +369,19 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   explicitly declined). 166 tests green; verified read-only on real data, no live
   data mutated. Next: Phase B — live rebuild script + rebuild the /archive page
   into a flat list of story timelines (reference image in HANDOFF).
+- **30 June 2026 — Phase B shipped: /archive is the flat "Alle verhalen" list +
+  entity dedup, multi-category, recency/category filters.** Replaced the mega
+  StorylineChart with `listStories` + `StoriesList` (sort tabs, ≥3-event floor,
+  inline timeline bars, row → `[threadId]` detail stub). Threads now fold entity
+  variants (`ENTITY_ALIASES`: Trump/Donald Trump, US/U.S./United States,
+  Oekraïne/Ukraine…) and drop bare datelines via a geo-guard
+  (`DATELINE_STOPLIST`/`isAnchorableEntity`). Category became a derived
+  multi-value display tag; the sharp filters are **recency** (Live/Deze
+  week/Sluimerend, relative to the newest event) + **category-by-dominant**.
+  "Mijn verhalen" (followed) was tried and **dropped** — Siem's 25 topic-follows
+  already personalize the whole edition, so it can't discriminate; it returns in
+  Phase C via a thread-tracking button. Live threads re-derived from history with
+  the throwaway `scripts/rebuild-threads.ts` (89 threads, 27 shown). Also fixed
+  dev "blank HTML/no CSS" by unregistering the PWA service worker in development.
+  179 tests green. Kicked off the 2026-06-30 live pipeline at end of session (was
+  still in the generate phase). Next: Phase C — the single-thread detail page.

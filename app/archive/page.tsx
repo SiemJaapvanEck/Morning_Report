@@ -1,12 +1,13 @@
-// Archive — the storylines view (Phase 5c). Coexists with the calendar /archief
-// (saved Daily Papers by date); this page shows the mega-threads as timelines:
-// a topic's news-volume line with its child storylines as clickable dots.
+// Archive — "Alle verhalen" (Phase B). A flat list of every anchor thread as a
+// self-contained story timeline. Coexists with the calendar /archief (saved Daily
+// Papers by date); this page is the storylines index. A row links to its detail
+// page (/archive/[threadId], Phase C).
 
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { hasDbConfig } from "@/modules/shared/db";
-import { getThreadArchive } from "@/app/lib/queries";
-import { StorylineChart } from "@/app/components/StorylineChart";
+import { listStories } from "@/app/lib/queries";
+import { StoriesList } from "@/app/components/StoriesList";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ export default async function ArchivePagina() {
     );
   }
 
-  const megas = await getThreadArchive(profileId);
+  const stories = await listStories(profileId);
 
   return (
     <div>
@@ -36,23 +37,15 @@ export default async function ArchivePagina() {
         ← Terug naar het dashboard
       </Link>
 
-      <header className="mt-5">
-        <h1 className="text-2xl font-extrabold tracking-tight">Archive — Storylines</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-stone-500">
-          De grote verhaallijnen door de tijd. Elke lijn is één verhaallijn — de hoogte toont hoeveel
-          nieuws er die dag was, de kleur de sector. Kies een lijn om hem open te klappen.
-        </p>
-      </header>
-
-      {megas.length === 0 ? (
-        <p className="mt-10 rounded-2xl border border-dashed border-stone-300 p-8 text-center text-sm text-stone-400 dark:border-stone-700">
-          Nog geen grote verhaallijnen. Zodra een onderwerp meerdere dagen terugkomt, verschijnt het hier.
-        </p>
-      ) : (
-        <div className="mt-6">
-          <StorylineChart megas={megas} />
-        </div>
-      )}
+      <div className="mt-5">
+        {stories.length === 0 ? (
+          <p className="mt-10 rounded-2xl border border-dashed border-stone-300 p-8 text-center text-sm text-stone-400 dark:border-stone-700">
+            Nog geen verhaallijnen. Zodra een onderwerp meerdere dagen terugkomt of groot wordt, verschijnt het hier.
+          </p>
+        ) : (
+          <StoriesList stories={stories} />
+        )}
+      </div>
     </div>
   );
 }

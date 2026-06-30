@@ -3,18 +3,18 @@
 
 import { db, unwrap } from "@/modules/shared/db";
 import { todayLocal } from "@/modules/shared/config";
-import { dominantLens, selectLenses } from "@/modules/threads";
+import { updatedAgo, recencyTier, type Recency } from "@/app/lib/stories";
 import type {
   CalendarEventCertainty,
   CalendarEventKind,
   DeepArticle,
-  DestepLens,
   Edition,
   EditionSection,
   EditionStatus,
   FrontPage,
   Profile,
   ThreadPrediction,
+  ThreadStatus,
   WeatherSnapshot,
 } from "@/modules/shared/types";
 
@@ -255,100 +255,69 @@ export async function listEditionSummaries(profileId: string): Promise<EditionSu
 }
 
 // ============================================================
-// Thread archive (Phase 5c-2): mega-threads as timelines of dots
+// Story archive (Phase B): every anchor thread as one flat timeline row
 // ============================================================
 
-/** One dot on a mega-thread's timeline: a child storyline at the date it ran. */
-export interface ArchiveDot {
-  date: string;
-  headline: string;
-  body: string | null;
-  lenses: string[];
-  childId: string;
-}
-
-/** An upcoming agenda event the storyline reaches toward (dotted projection). */
-export interface ArchiveProjection {
-  id: string;
-  date: string;
-  title: string;
-  kind: CalendarEventKind;
-  certainty: CalendarEventCertainty;
-  /** url of the source it was extracted from (for "read about it") */
-  source: string | null;
-  /** title + summary of the source article, when an item is linked */
-  sourceTitle: string | null;
-  sourceBody: string | null;
-}
-
-/** A mega-thread for the archive: its daily news volume + the child-story dots. */
-export interface ArchiveMega {
+/** One anchor thread for the "Alle verhalen" list — a self-contained storyline. */
+export interface Story {
   id: string;
   title: string;
-  /** the topic's own daily item count — the volume line the dots sit on */
-  volume: { date: string; count: number }[];
-  dots: ArchiveDot[];
-  /** the mega's main DESTEP sector — drives its line color in the chart */
-  primarySector: DestepLens;
-  /** upcoming dated events (this mega or its children) the line projects toward */
-  projections: ArchiveProjection[];
+  /** dominant category of the linked items — drives the colored dot */
+  category: { slug: string; label: string } | null;
+  /** every category the story's items span, most-frequent first — tags + filter */
+  categories: { slug: string; label: string }[];
+  /** how alive the story is (last-event age) — the recency filter axis */
+  recency: Recency;
+  status: ThreadStatus;
+  /** ISO date of the earliest linked event; null when the thread has no items yet */
+  firstDate: string | null;
+  /** ISO date of the latest linked event */
+  lastDate: string | null;
+  /** number of linked items — the "M gebeurtenissen" count */
+  eventCount: number;
+  /** when the pipeline last touched the thread — drives "UPD … geleden" */
+  lastSeenAt: string | null;
+  /** precomputed compact age of lastSeenAt (e.g. "2u"), so the UI stays pure */
+  updatedLabel: string;
+  /** one dot per linked event, by date ascending — the row's mini timeline bar */
+  events: { date: string }[];
 }
 
 /**
- * The profile's mega-threads as timelines. Each is a parent storyline (an anchor
- * entity that recurred across days); its child threads become dots placed on the
- * date they last ran, sitting on the topic's daily-volume line. Click a dot in
- * the UI to read that child's latest article.
+ * Display floor for the archive list: only stories that recurred across at least
+ * this many linked events are listed. Keeps the page curated (cuts the one-day
+ * singleton tail) without dropping the threads themselves — a thread climbs into
+ * view once it accumulates enough events. Purely a presentation cut.
  */
-export async function getThreadArchive(profileId: string): Promise<ArchiveMega[]> {
-  const megas = unwrap(
-    await db()
-      .from("threads")
-      .select("id, title")
-      .eq("profile_id", profileId)
-      .not("anchor_entity", "is", null),
-  ) as { id: string; title: string }[];
-  if (megas.length === 0) return [];
+export const MIN_STORY_EVENTS = 3;
 
-  const children = unwrap(
+/**
+ * Every non-closed anchor thread with at least {@link MIN_STORY_EVENTS} events as a
+ * self-contained story timeline. One row per thread: category, status, first/last
+ * event date, event count, last-updated, and the event dots. The list page sorts
+ * (latest / longest / most-active) and filters by category client-side; a row links
+ * to its detail page (Phase C).
+ */
+export async function listStories(profileId: string): Promise<Story[]> {
+  const threads = unwrap(
     await db()
       .from("threads")
-      .select("id, parent_thread_id, title, entities, topic_id, category_id")
-      .in("parent_thread_id", megas.map((m) => m.id)),
+      .select("id, title, status, last_seen_at")
+      .eq("profile_id", profileId)
+      .neq("status", "closed"),
   ) as {
     id: string;
-    parent_thread_id: string;
     title: string;
-    entities: string[];
-    topic_id: string | null;
-    category_id: string | null;
+    status: ThreadStatus;
+    last_seen_at: string | null;
   }[];
-  if (children.length === 0) {
-    return megas.map((m) => ({ id: m.id, title: m.title, volume: [], dots: [], primarySector: "sociaal" as DestepLens, projections: [] }));
-  }
+  if (threads.length === 0) return [];
 
-  // Topic/category context so selectLenses gets more than bare entities — this
-  // is what fixes the "SOCIAAL instead of ECONOMISCH" mislabeling.
-  const topicIds = [...new Set(children.map((c) => c.topic_id).filter(Boolean))] as string[];
-  const categoryIds = [...new Set(children.map((c) => c.category_id).filter(Boolean))] as string[];
-  const topics = topicIds.length
-    ? (unwrap(await db().from("topics").select("id, name").in("id", topicIds)) as { id: string; name: string }[])
-    : [];
-  const categories = categoryIds.length
-    ? (unwrap(await db().from("categories").select("id, slug").in("id", categoryIds)) as { id: string; slug: string }[])
-    : [];
-  const topicName = new Map(topics.map((t) => [t.id, t.name]));
-  const categorySlug = new Map(categories.map((c) => [c.id, c.slug]));
-  const lensesOf = (c: (typeof children)[number]) =>
-    selectLenses(
-      c.category_id ? categorySlug.get(c.category_id) ?? null : null,
-      c.topic_id ? topicName.get(c.topic_id) ?? null : null,
-      c.entities,
-    );
-
-  const childIds = children.map((c) => c.id);
+  // Each linked item is an event; its edition's date places it on the timeline,
+  // and its own category feeds the story's (multi-)category set.
+  const threadIds = threads.map((t) => t.id);
   const links = unwrap(
-    await db().from("thread_items").select("thread_id, item_id, edition_id").in("thread_id", childIds),
+    await db().from("thread_items").select("thread_id, item_id, edition_id").in("thread_id", threadIds),
   ) as { thread_id: string; item_id: string; edition_id: string | null }[];
 
   const editionIds = [...new Set(links.map((l) => l.edition_id).filter(Boolean))] as string[];
@@ -357,119 +326,166 @@ export async function getThreadArchive(profileId: string): Promise<ArchiveMega[]
     : [];
   const dateByEdition = new Map(eds.map((e) => [e.id, e.date]));
 
+  // Item → its category, so a story's categories come from where its items landed.
   const itemIds = [...new Set(links.map((l) => l.item_id))];
+  const items = itemIds.length
+    ? (unwrap(await db().from("items").select("id, category_id").in("id", itemIds)) as {
+        id: string;
+        category_id: string | null;
+      }[])
+    : [];
+  const catByItem = new Map(items.map((i) => [i.id, i.category_id]));
+  const categoryIds = [...new Set(items.map((i) => i.category_id).filter(Boolean))] as string[];
+  const cats = categoryIds.length
+    ? (unwrap(await db().from("categories").select("id, slug, name").in("id", categoryIds)) as {
+        id: string;
+        slug: string;
+        name: string;
+      }[])
+    : [];
+  const categoryById = new Map(cats.map((c) => [c.id, { slug: c.slug, label: c.name }]));
+
+  const datesByThread = new Map<string, string[]>();
+  const catCountByThread = new Map<string, Map<string, number>>();
+  for (const l of links) {
+    const date = l.edition_id ? dateByEdition.get(l.edition_id) : undefined;
+    if (date) {
+      const arr = datesByThread.get(l.thread_id) ?? [];
+      arr.push(date);
+      datesByThread.set(l.thread_id, arr);
+    }
+    const catId = catByItem.get(l.item_id);
+    if (catId) {
+      const m = catCountByThread.get(l.thread_id) ?? new Map<string, number>();
+      m.set(catId, (m.get(catId) ?? 0) + 1);
+      catCountByThread.set(l.thread_id, m);
+    }
+  }
+
+  // Recency is measured against the newest event in the set, so "live" means
+  // "moved in the most recent edition(s)" even if this snapshot is a few days old.
+  const latestSeen = threads.reduce(
+    (max, t) => (t.last_seen_at && Date.parse(t.last_seen_at) > max ? Date.parse(t.last_seen_at) : max),
+    0,
+  );
+
+  const now = Date.now();
+  return threads
+    .map((t) => {
+      const dates = (datesByThread.get(t.id) ?? []).sort((a, b) => a.localeCompare(b));
+      // Categories present, most-frequent first; the leader drives the dot color.
+      const ranked = [...(catCountByThread.get(t.id) ?? new Map()).entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([id]) => categoryById.get(id))
+        .filter((c): c is { slug: string; label: string } => Boolean(c));
+      return {
+        id: t.id,
+        title: t.title,
+        category: ranked[0] ?? null,
+        categories: ranked,
+        recency: recencyTier(t.last_seen_at, latestSeen),
+        status: t.status,
+        firstDate: dates[0] ?? null,
+        lastDate: dates.at(-1) ?? null,
+        eventCount: dates.length,
+        lastSeenAt: t.last_seen_at,
+        updatedLabel: updatedAgo(t.last_seen_at, now),
+        events: dates.map((date) => ({ date })),
+      };
+    })
+    .filter((s) => s.eventCount >= MIN_STORY_EVENTS);
+}
+
+/** One event on a story's detail timeline: the source item + its written update. */
+export interface StoryEvent {
+  date: string | null;
+  title: string;
+  body: string | null;
+}
+
+/** A single story for the detail page (Phase C drill-in target). */
+export interface StoryDetail {
+  id: string;
+  title: string;
+  status: ThreadStatus;
+  category: { slug: string; label: string } | null;
+  /** accumulated storyline prose the editions build on */
+  state: string | null;
+  firstDate: string | null;
+  lastDate: string | null;
+  eventCount: number;
+  /** the linked events, newest first */
+  events: StoryEvent[];
+}
+
+/**
+ * One story by thread id, scoped to the profile. Minimal Phase B stub: the
+ * thread's meta, its accumulated state prose, and the linked events (source title
+ * + the written update). Phase C builds the full detail page on top of this.
+ */
+export async function getStoryDetail(profileId: string, threadId: string): Promise<StoryDetail | null> {
+  const rows = unwrap(
+    await db()
+      .from("threads")
+      .select("id, title, status, category_id, state")
+      .eq("profile_id", profileId)
+      .eq("id", threadId)
+      .limit(1),
+  ) as { id: string; title: string; status: ThreadStatus; category_id: string | null; state: string | null }[];
+  const thread = rows[0];
+  if (!thread) return null;
+
+  const category =
+    thread.category_id != null
+      ? ((unwrap(await db().from("categories").select("slug, name").eq("id", thread.category_id).limit(1)) as {
+          slug: string;
+          name: string;
+        }[])[0] ?? null)
+      : null;
+
+  const links = unwrap(
+    await db().from("thread_items").select("item_id, edition_id").eq("thread_id", threadId),
+  ) as { item_id: string; edition_id: string | null }[];
+
+  const editionIds = [...new Set(links.map((l) => l.edition_id).filter(Boolean))] as string[];
+  const eds = editionIds.length
+    ? (unwrap(await db().from("editions").select("id, date").in("id", editionIds)) as { id: string; date: string }[])
+    : [];
+  const dateByEdition = new Map(eds.map((e) => [e.id, e.date]));
+
+  const itemIds = [...new Set(links.map((l) => l.item_id))];
+  const items = itemIds.length
+    ? (unwrap(await db().from("items").select("id, title").in("id", itemIds)) as { id: string; title: string }[])
+    : [];
+  const titleByItem = new Map(items.map((i) => [i.id, i.title]));
   const eis = itemIds.length
     ? (unwrap(
-        await db()
-          .from("edition_items")
-          .select("item_id, summary_text")
-          .in("item_id", itemIds)
-          .not("summary_text", "is", null),
+        await db().from("edition_items").select("item_id, summary_text").in("item_id", itemIds),
       ) as { item_id: string; summary_text: string | null }[])
     : [];
-  const bodyByItem = new Map<string, string>();
-  for (const ei of eis) if (ei.summary_text) bodyByItem.set(ei.item_id, ei.summary_text);
+  const bodyByItem = new Map(eis.map((e) => [e.item_id, e.summary_text]));
 
-  const linksByChild = new Map<string, typeof links>();
-  for (const l of links) {
-    const arr = linksByChild.get(l.thread_id) ?? [];
-    arr.push(l);
-    linksByChild.set(l.thread_id, arr);
-  }
+  const events: StoryEvent[] = links
+    .map((l) => ({
+      date: l.edition_id ? dateByEdition.get(l.edition_id) ?? null : null,
+      title: titleByItem.get(l.item_id) ?? "Onbekend bericht",
+      body: bodyByItem.get(l.item_id) ?? null,
+    }))
+    .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
 
-  // Upcoming dated events (Phase B agenda) the storylines project toward. An
-  // event linked to a child thread belongs to that child's mega; one linked to
-  // the mega directly stays there. Only today-or-later events.
-  const childToMega = new Map<string, string>();
-  for (const m of megas) childToMega.set(m.id, m.id);
-  for (const c of children) childToMega.set(c.id, c.parent_thread_id);
-  const eventRows = unwrap(
-    await db()
-      .from("calendar_events")
-      .select("id, title, kind, date, certainty, thread_id, item_id, source")
-      .eq("profile_id", profileId)
-      .gte("date", todayLocal())
-      .in("thread_id", [...megas.map((m) => m.id), ...childIds]),
-  ) as {
-    id: string;
-    title: string;
-    kind: CalendarEventKind;
-    date: string;
-    certainty: CalendarEventCertainty;
-    thread_id: string | null;
-    item_id: string | null;
-    source: string | null;
-  }[];
+  const dates = events.map((e) => e.date).filter((d): d is string => Boolean(d)).sort((a, b) => a.localeCompare(b));
 
-  // Source article (where the event was mentioned) so the projection is readable.
-  const evItemIds = [...new Set(eventRows.map((e) => e.item_id).filter(Boolean))] as string[];
-  const evItems = evItemIds.length
-    ? (unwrap(await db().from("items").select("id, title").in("id", evItemIds)) as { id: string; title: string }[])
-    : [];
-  const evSummaries = evItemIds.length
-    ? (unwrap(
-        await db()
-          .from("edition_items")
-          .select("item_id, summary_text")
-          .in("item_id", evItemIds)
-          .not("summary_text", "is", null),
-      ) as { item_id: string; summary_text: string | null }[])
-    : [];
-  const evTitleByItem = new Map(evItems.map((i) => [i.id, i.title]));
-  const evBodyByItem = new Map<string, string>();
-  for (const s of evSummaries) if (s.summary_text) evBodyByItem.set(s.item_id, s.summary_text);
-
-  const projByMega = new Map<string, ArchiveProjection[]>();
-  for (const e of eventRows) {
-    const megaId = e.thread_id ? childToMega.get(e.thread_id) : undefined;
-    if (!megaId) continue;
-    const arr = projByMega.get(megaId) ?? [];
-    arr.push({
-      id: e.id,
-      date: e.date,
-      title: e.title,
-      kind: e.kind,
-      certainty: e.certainty,
-      source: e.source,
-      sourceTitle: e.item_id ? evTitleByItem.get(e.item_id) ?? null : null,
-      sourceBody: e.item_id ? evBodyByItem.get(e.item_id) ?? null : null,
-    });
-    projByMega.set(megaId, arr);
-  }
-
-  return megas.map((m) => {
-    const kids = children.filter((c) => c.parent_thread_id === m.id);
-    const dots: ArchiveDot[] = [];
-    const volume = new Map<string, number>();
-    const kidLenses: DestepLens[][] = [];
-    for (const kid of kids) {
-      const kl = linksByChild.get(kid.id) ?? [];
-      const dates = kl
-        .map((l) => (l.edition_id ? dateByEdition.get(l.edition_id) : undefined))
-        .filter((d): d is string => Boolean(d));
-      for (const d of dates) volume.set(d, (volume.get(d) ?? 0) + 1);
-      const lenses = lensesOf(kid);
-      kidLenses.push(lenses);
-      const latest = [...dates].sort().at(-1);
-      if (!latest) continue;
-      const body = kl.map((l) => bodyByItem.get(l.item_id)).find(Boolean) ?? null;
-      dots.push({
-        date: latest,
-        headline: kid.title,
-        body,
-        lenses,
-        childId: kid.id,
-      });
-    }
-    return {
-      id: m.id,
-      title: m.title,
-      volume: [...volume.entries()].map(([date, count]) => ({ date, count })).sort((a, b) => a.date.localeCompare(b.date)),
-      dots: dots.sort((a, b) => a.date.localeCompare(b.date)),
-      primarySector: dominantLens(kidLenses),
-      projections: (projByMega.get(m.id) ?? []).sort((a, b) => a.date.localeCompare(b.date)),
-    };
-  });
+  return {
+    id: thread.id,
+    title: thread.title,
+    status: thread.status,
+    category: category ? { slug: category.slug, label: category.name } : null,
+    state: thread.state,
+    firstDate: dates[0] ?? null,
+    lastDate: dates.at(-1) ?? null,
+    eventCount: events.length,
+    events,
+  };
 }
 
 // ── Agenda: aankomende gedateerde gebeurtenissen (Phase B) ───────────────────

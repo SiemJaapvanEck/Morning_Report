@@ -12,17 +12,74 @@ import { db, unwrap } from "../shared/db";
 import type { DestepLens, Thread, ThreadStatus, ThreadUpdate } from "../shared/types";
 
 /**
+ * Curated alias map: surface-string variants of the SAME real-world entity that
+ * the raw normalizer can't fold on its own (given names, legal suffixes, language
+ * variants, abbreviations). Keys and values are already base-normalized (the
+ * output of the diacritic/punctuation/case pass). Kept small and deliberate to
+ * avoid false merges — extend only for variants seen in real data.
+ */
+export const ENTITY_ALIASES: Record<string, string> = {
+  "donald trump": "trump",
+  "trump administration": "trump",
+  "united states": "us",
+  "united states of america": "us",
+  "u s": "us",
+  "u s a": "us",
+  "verenigde staten": "us",
+  oekraine: "ukraine",
+  rusland: "russia",
+  "us federal reserve": "federal reserve",
+  "u s federal reserve": "federal reserve",
+  "the federal reserve": "federal reserve",
+  fed: "federal reserve",
+  "warner bros discovery": "warner bros",
+  "verenigd koninkrijk": "uk",
+  "united kingdom": "uk",
+  "europese unie": "eu",
+  "european union": "eu",
+};
+
+/**
  * Normalize an entity string for set comparison: strip diacritics, lowercase,
- * fold punctuation to spaces, collapse whitespace. "São Paulo!" → "sao paulo".
+ * fold punctuation to spaces, collapse whitespace, then fold known aliases to a
+ * single canonical form. "São Paulo!" → "sao paulo"; "Donald Trump" → "trump".
  */
 export function normalizeEntity(raw: string): string {
-  return raw
+  const base = raw
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "") // strip diacritics
     .toLowerCase()
     .replace(/[^a-z0-9 ]+/g, " ") // punctuation → space
     .replace(/\s+/g, " ")
     .trim();
+  return ENTITY_ALIASES[base] ?? base;
+}
+
+/**
+ * Bare country/city datelines that touch every kind of news — too generic to be
+ * a single "storyline", so they never open a thread (they'd become catch-all
+ * buckets). Coherent place-stories (Israel, Ukraine, Iran, Gaza, Venezuela) are
+ * deliberately NOT here. Values are canonical normalized forms.
+ */
+export const DATELINE_STOPLIST = new Set<string>([
+  "us",
+  "uk",
+  "eu",
+  "france",
+  "germany",
+  "china",
+  "kyiv",
+  "moscow",
+  "washington",
+  "brussels",
+  "nederland",
+  "netherlands",
+  "europe",
+]);
+
+/** Whether a (normalized) entity is allowed to anchor a thread — false for datelines. */
+export function isAnchorableEntity(norm: string): boolean {
+  return norm.length > 0 && !DATELINE_STOPLIST.has(norm);
 }
 
 /** Jaccard overlap between two entity sets, 0..1. Empty either side → 0. */

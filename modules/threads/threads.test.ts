@@ -17,6 +17,7 @@ import {
   matchByAnchor,
   resolveThreadMeta,
   detectAnchors,
+  isAnchorableEntity,
   type ThreadCandidate,
   type AnchorSpec,
   type EntityDays,
@@ -25,7 +26,7 @@ import {
 describe("normalizeEntity", () => {
   it("lowercases, trims and folds punctuation to spaces", () => {
     expect(normalizeEntity("  SpaceX!! ")).toBe("spacex");
-    expect(normalizeEntity("U.S. Federal Reserve")).toBe("u s federal reserve");
+    expect(normalizeEntity("AT&T")).toBe("at t");
   });
 
   it("strips diacritics", () => {
@@ -35,6 +36,27 @@ describe("normalizeEntity", () => {
 
   it("collapses whitespace", () => {
     expect(normalizeEntity("OpenAI   Inc")).toBe("openai inc");
+  });
+
+  it("folds known aliases to one canonical entity", () => {
+    expect(normalizeEntity("Donald Trump")).toBe("trump");
+    expect(normalizeEntity("Trump administration")).toBe("trump");
+    expect(normalizeEntity("United States")).toBe("us");
+    expect(normalizeEntity("U.S.")).toBe("us");
+    expect(normalizeEntity("Oekraïne")).toBe("ukraine");
+    expect(normalizeEntity("US Federal Reserve")).toBe("federal reserve");
+  });
+});
+
+describe("isAnchorableEntity", () => {
+  it("rejects bare datelines but keeps coherent place-stories", () => {
+    expect(isAnchorableEntity("us")).toBe(false);
+    expect(isAnchorableEntity("france")).toBe(false);
+    expect(isAnchorableEntity("moscow")).toBe(false);
+    expect(isAnchorableEntity("")).toBe(false);
+    expect(isAnchorableEntity("israel")).toBe(true);
+    expect(isAnchorableEntity("ukraine")).toBe(true);
+    expect(isAnchorableEntity("trump")).toBe(true);
   });
 });
 

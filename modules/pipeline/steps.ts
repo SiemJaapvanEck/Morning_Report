@@ -37,6 +37,7 @@ import {
   mergeAnchors,
   matchByAnchor,
   resolveThreadMeta,
+  isAnchorableEntity,
   loadEntityDays,
 } from "../threads";
 import type { Edition, Item, PipelineStep, Band, MarktSnapshot, DailyPaperArticle } from "../shared/types";
@@ -408,7 +409,8 @@ const threadsStep: StepHandler = async ({ edition }) => {
     userCtx.followedCategoryIds,
     userCtx.trackedTopicIds,
   );
-  const anchors = mergeAnchors(recurring, big, personal);
+  // Drop bare datelines (US, France…) so they don't open catch-all threads.
+  const anchors = mergeAnchors(recurring, big, personal).filter((a) => isAnchorableEntity(a.entity));
 
   // Existing anchor threads — the only ones items match against (flat model).
   const existingAnchors = new Set(

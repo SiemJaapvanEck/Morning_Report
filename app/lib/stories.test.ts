@@ -33,6 +33,7 @@ function story(p: Partial<Story> & { id: string }): Story {
     updatedLabel: p.updatedLabel ?? "—",
     followed: p.followed ?? false,
     isUmbrella: p.isUmbrella ?? false,
+    storylineCount: p.storylineCount ?? 0,
     events: p.events ?? [],
   };
 }

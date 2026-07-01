@@ -292,6 +292,8 @@ export interface Story {
   followed: boolean;
   /** this thread bundles child storylines — its row opens the umbrella page (Phase E) */
   isUmbrella: boolean;
+  /** number of child storylines under this umbrella (0 for a flat thread) */
+  storylineCount: number;
   /** one dot per linked event, by date ascending — the row's mini timeline bar */
   events: { date: string }[];
 }
@@ -454,6 +456,7 @@ export async function listStories(profileId: string): Promise<Story[]> {
         updatedLabel: updatedAgo(t.last_seen_at, now),
         followed: followedThreads.has(t.id),
         isUmbrella,
+        storylineCount: isUmbrella ? (childrenByParent.get(t.id)?.length ?? 0) : 0,
         events: dates.map((date) => ({ date })),
       };
     })

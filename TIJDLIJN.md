@@ -455,3 +455,15 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   ("Nasdaq 100", "Cursor") derived from entities. Both follow tiers reuse
   `/api/threads/follow` — no schema, no migration, no pipeline change. Verified live
   on the SpaceX/Anthropic umbrellas. Tests 208 → **220**, gate green.
+
+- **1 July 2026 — Reader polish, from live use.** Small follow-up session, no
+  schema/pipeline changes. Resolved two open calls from the Phase E handoff:
+  the `/archive` "▨ verhaallijnen" badge now shows an actual child count
+  (added `Story.storylineCount` in `listStories`); the right-side storyline
+  list stays single-column (Siem's call, no 2-up grid). Then Siem hit a real
+  bug reading the umbrella pages live: `EventDots` gave "has a deep article"
+  and "is selected" the same solid fill, so has-article dots looked like
+  leftover/auto-selected state when switching dots or storylines. Fixed by
+  making has-article-not-selected dots a hollow outline instead of a fill —
+  only the truly selected dot fills solid now. Gate green, tests stayed at
+  **220** (one fixture updated for the new `storylineCount` field).

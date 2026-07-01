@@ -6,28 +6,53 @@
 
 ## Where we stand
 
-**Phase E shipped** — the umbrella (big-thread) page is now a **master–detail
-reader**. Open an umbrella from `/archive` and you read all its storylines in
-place instead of clicking through each one:
+**Phase E (umbrella master–detail reader) is shipped and stable.** Open an
+umbrella from `/archive` and you read all its storylines in place instead of
+clicking through each one:
 
 - **Left (2/3), sticky** — an article panel: the storyline's accumulated "Stand
   van zaken", the selected moment's deep article (lead + ripples + Sol's note),
   an "in deze verhaallijn" event list, sources, and an "Open volledige
   verhaallijn →" link to the full leaf page.
-- **Right (1/3)** — the storylines as a single-column bento list. Each block:
-  category-colored **facet eyebrow** (e.g. "Nasdaq 100", "Cursor"), the
-  headline, a pressable **event-dot strip**, LIVE · upd · N delen, and a follow
-  bell. Selecting a block swaps the left panel.
-- **The dots are event pickers** — 13px (16px selected), filled = that moment
-  has a deep article. Hover pops the event title; pressing opens that exact
-  moment ("Gekozen moment") in the panel. The event list rows do the same.
+- **Right (1/3)** — the storylines as a single-column bento list (Siem's call:
+  stays single-column, no 2-up grid). Each block: category-colored **facet
+  eyebrow** (e.g. "Nasdaq 100", "Cursor"), the headline, a pressable
+  **event-dot strip**, LIVE · upd · N delen, and a follow bell. Selecting a
+  block swaps the left panel.
+- **The dots are event pickers**, 13px (16px selected). Three distinct looks
+  since this session's fix: **selected** = solid fill + ring; **has a deep
+  article, not selected** = full-opacity hollow outline; **no article, not
+  selected** = faint hollow outline. Hover pops the event title; pressing opens
+  that exact moment ("Gekozen moment") in the panel.
 
-Gate is green (lint / tsc / **220 tests** / build). **No migration, no pipeline
-change, no schema change** — both follow tiers reuse the existing
-`/api/threads/follow` + `follow_marks`. The pipeline shape is unchanged
-(scan → select → threads → agenda → generate → daily_paper → finalize).
+This session was small live-usage polish reacting to Siem actually reading the
+umbrella pages (see below) — no migration, no pipeline change, no schema
+change. Gate is green (lint / tsc / **220 tests** / build). The pipeline shape
+is unchanged (scan → select → threads → agenda → generate → daily_paper →
+finalize).
 
-## What was done this session — Phase E (E1 + E2 + iterations)
+## What was done this session — reader polish
+
+Two of last session's open follow-ups plus a bug Siem hit while reading live:
+
+1. **Archive badge → child count.** The "▨ verhaallijnen" tag on `/archive`
+   rows was a plain label, redundant now every row is an umbrella. Added
+   `Story.storylineCount` (`app/lib/queries.ts`), computed from the existing
+   children-per-parent map in `listStories`, so the badge now reads e.g.
+   "▨ 4 verhaallijnen" (`StoriesList.tsx`).
+2. **Right-side layout: kept single-column** — Siem's call, no `grid-cols-2`
+   change needed.
+3. **Dot fill/selection bug** (`UmbrellaReader.tsx`'s `EventDots`) — Siem
+   noticed dots "stay filled" when moving to another dot/block, and that
+   selecting a new storyline seemed to "auto-fill" its last dot. Root cause:
+   the dot's fill color was `on || hasArticle ? color : transparent` — "has an
+   article" and "is selected" shared the same solid-fill look, so an
+   always-filled has-article dot read as leftover/auto selection state. Fixed
+   by giving has-article dots a hollow outline instead of a fill; only the
+   truly selected dot gets solid fill now. See the three-state description
+   above.
+
+## Phase E build (prior session — E1 + E2 + iterations)
 
 The build diverged from the plan's "multi-line timeline + legend" spec because
 Siem iterated on the read-side design live. The final shape (master–detail
@@ -63,7 +88,8 @@ then removed.
   `EventDots` strip and `FollowBell`).
 - `/archive` (`listStories`) now lists **umbrellas only**; flat threads are
   hidden. Umbrella rows roll their children's events into their own
-  timeline/count and show a "▨ verhaallijnen" badge (`StoriesList.tsx`).
+  timeline/count and show a "▨ N verhaallijnen" badge (`StoriesList.tsx`;
+  child count added this session, see above).
 
 **Decisions made this session (Siem, 1 Jul 2026):**
 - Line/tile color = **category color** (reuse `categoryColor`), not the DESTEP lens.
@@ -80,12 +106,7 @@ then removed.
    real fix for the storyline fragmentation now visible in the reader (e.g. under
    Anthropic: "Claude" vs "Claude Science" vs "Claude Sonnet 5" as separate
    storylines; Fable vs Claude Fable 5).
-2. **Small reader polish, pending Siem's call:**
-   - The "▨ verhaallijnen" badge on `/archive` rows is redundant now every row is
-     an umbrella — offered to drop it or swap for a child count.
-   - The right-side blocks are single-column at 1/3 width — offered a 2-up
-     `grid-cols-2` variant.
-3. Daily-paper krant redesign — **still parked** (Siem's call).
+2. Daily-paper krant redesign — **still parked** (Siem's call).
 
 ## Known issues / things to keep in mind
 
@@ -105,7 +126,8 @@ then removed.
   `target_type`/`target_id`/`active`) — works for umbrellas and storylines.
 - **Verify on localhost, not the headless preview** — the preview harness reports
   a 0-width viewport, so the `lg:` two-column split can't be measured there; it
-  renders correctly in a real desktop browser.
+  renders correctly in a real desktop browser. This session's dot-fill fix was
+  verified the same way (Siem checked `localhost:3000` directly).
 - **Budget:** ceiling `BUDGET_EDITION_EUR` = €0.15 (aim €0.10); guard degrades
   vol → zuinig → minimaal → stop. Thread knobs (env): `THREADS_ANCHOR_MIN_DAYS`
   (3), `THREADS_ANCHOR_MIN_ITEMS` (5), `THREADS_ANCHOR_WINDOW_DAYS` (14),

@@ -48,7 +48,7 @@ export function FollowBell({ on, pending }: { on: boolean; pending?: boolean }) 
 /**
  * The event strip: one pressable dot per event, positioned by date across the
  * storyline's span. Hovering pops the event's title; pressing opens that exact
- * moment in the article panel. Filled = has a deep article, ring = selected.
+ * moment in the article panel. Outline = has a deep article, solid fill = selected.
  */
 function EventDots({
   events,
@@ -101,8 +101,8 @@ function EventDots({
               style={{
                 width: on ? 16 : 13,
                 height: on ? 16 : 13,
-                backgroundColor: on || d.hasArticle ? color : "transparent",
-                border: `2px solid ${color}`,
+                backgroundColor: on ? color : "transparent",
+                border: on || d.hasArticle ? `2px solid ${color}` : `1.5px solid ${color}66`,
                 boxShadow: on ? `0 0 0 4px ${color}22` : "none",
               }}
             />

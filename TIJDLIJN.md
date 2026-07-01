@@ -422,3 +422,20 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   multi-line timeline chart** per umbrella (x=time, one line per storyline,
   color=lens), mockup `umbrella_thread_multiline_timeline_mockup` — a first
   hub-and-spoke mockup was rejected.
+- **1 July 2026 — Storyline generation (Phase D3).** Thread-aware generation went
+  per-storyline: each storyline advances its own accumulated `state` each edition,
+  framed to its facet ("names each storyline"), bounded by a per-edition budget cap.
+  Migration `0016` adds `threads.state_edition_id` (the per-thread idempotency guard
+  the per-item `summary_text` flag could no longer provide under multi-link).
+  `nextThreadUpdateJob` reworked many-to-many/storyline aware with **primary-wins**
+  dedupe on shared item bodies; pure `selectNextThreadJob` (activity priority:
+  followed → new-item count → id, cap `GENERATE_MAX_THREAD_UPDATES`=8); pure
+  `storylineFraming`; `fillBlankThreadDeepItems` no-AI overflow (runs in every budget
+  mode); pure `aggregateUmbrellaState` for the Phase E hero. Tests 197 → 208.
+  **Verified live**, which caught + fixed two bugs (wrong `follow_marks` column;
+  overflow fill gated behind budget) and one design miss (the planned
+  umbrella-before-storyline priority starved storylines — 7 one-item flat threads ate
+  the cap, 0 storylines advanced → switched to activity-based; all 3 storylines then
+  advanced at the same cost). Clean-run cost ≈ €0.10 (< €0.15 cap). A related-title
+  display tweak was considered and dropped. Gate green. Next: Phase E (umbrella
+  multi-line timeline UI, consumes `aggregateUmbrellaState`).

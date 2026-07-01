@@ -568,6 +568,60 @@ export function shouldPromote(facets: StorylineFacet[], minFacets = 2): boolean 
   return facets.length >= minFacets;
 }
 
+/** A thread eligible for a generation update this edition (pure selection input). */
+export interface ThreadJobCandidate {
+  threadId: string;
+  /** the reader follows this thread (drives priority under the cap) */
+  followed: boolean;
+  /** genuinely new items on this thread this edition */
+  newItemCount: number;
+}
+
+/**
+ * Phase D3 — pick the next thread to advance this edition, or null when the
+ * per-edition cap is spent or nothing is left. Under the storyline model many
+ * threads can each earn an update, so a cap bounds AI cost; within it, priority
+ * is ACTIVITY-based: followed-first, then busier threads (more new items today),
+ * then a stable id tiebreak so the requeue loop is deterministic. Deliberately
+ * type-neutral (no umbrella/storyline/flat preference): storylines accumulate the
+ * day's items so they naturally win over trivial one-item flat threads — an
+ * earlier umbrella-before-storyline rule starved them (verified 1 Jul 2026).
+ */
+export function selectNextThreadJob(
+  candidates: ThreadJobCandidate[],
+  opts: { cap: number; advancedCount: number },
+): string | null {
+  if (opts.advancedCount >= opts.cap) return null;
+  const ordered = [...candidates].sort((a, b) => {
+    if (a.followed !== b.followed) return a.followed ? -1 : 1;
+    if (a.newItemCount !== b.newItemCount) return b.newItemCount - a.newItemCount;
+    return a.threadId < b.threadId ? -1 : a.threadId > b.threadId ? 1 : 0;
+  });
+  return ordered[0]?.threadId ?? null;
+}
+
+/**
+ * Phase D3 — compose an umbrella's read-side rollup from its own general-bucket
+ * ("Algemeen") state plus each storyline's state. Compute-on-read for the Phase E
+ * hero: it does NOT overwrite the umbrella's own `state`. Child states that are
+ * blank are skipped; the anchor is capitalized as a short label.
+ */
+export function aggregateUmbrellaState(
+  umbrellaState: string | null,
+  children: { anchor: string; state: string | null }[],
+): string {
+  const parts: string[] = [];
+  const general = umbrellaState?.trim();
+  if (general) parts.push(`Algemeen: ${general}`);
+  for (const c of children) {
+    const s = c.state?.trim();
+    if (!s) continue;
+    const label = c.anchor.trim() || "Verhaallijn";
+    parts.push(`${label.charAt(0).toUpperCase()}${label.slice(1)}: ${s}`);
+  }
+  return parts.join("\n\n");
+}
+
 /**
  * Resolve a new thread's topic/category from today's items that carry its anchor
  * entity: the most common non-null topic_id / category_id among them (mode, ties
@@ -849,7 +903,16 @@ export interface ThreadUpdateJob {
   categorySlug: string | null;
   topicName: string | null;
   threadEntities: string[];
-  /** this edition's deep edition_item ids of this thread — where the update body lands */
+  /** storyline facet label (this thread's anchor) when it's a child; null for umbrellas/flat threads */
+  facet: string | null;
+  /** the parent umbrella's short label (anchor/title) when this is a storyline; null otherwise */
+  umbrellaTitle: string | null;
+  /**
+   * this edition's deep edition_item ids of this thread where the update body lands —
+   * only those still blank (Phase D3 primary-wins dedupe: a shared item already written
+   * by an earlier storyline is excluded here, but stays in newItems so this thread's
+   * state still advances).
+   */
   deepEditionItemIds: string[];
   /** today's items linked to this thread — all genuinely new (unique(thread_id,item_id)) */
   newItems: {
@@ -864,12 +927,20 @@ export interface ThreadUpdateJob {
 }
 
 /**
- * The next thread still needing an update this edition: one with a `deep`
- * edition_item linked this edition whose summary_text is empty. Null when every
- * such thread is done — that empty-summary gate is the per-edition idempotency
- * guard (state advances ≤ once). One job per call fits the requeue model.
+ * The next thread to advance this edition, or null when the per-edition cap is
+ * spent or nothing is left. Storyline-aware (Phase D3): items are multi-linked, so
+ * we group this edition's links per thread and pick one thread per call (the
+ * requeue model), advancing each thread's state at most once via the
+ * `state_edition_id` guard. `deepEditionItemIds` carries only the still-blank deep
+ * items (primary-wins: a shared item already written by an earlier storyline is
+ * left out of the write set but stays in `newItems`, so this thread's state still
+ * advances). Priority + cap live in the pure `selectNextThreadJob`.
  */
-export async function nextThreadUpdateJob(editionId: string): Promise<ThreadUpdateJob | null> {
+export async function nextThreadUpdateJob(
+  editionId: string,
+  profileId: string,
+  cap: number,
+): Promise<ThreadUpdateJob | null> {
   const deepRows = unwrap(
     await db()
       .from("edition_items")
@@ -878,46 +949,79 @@ export async function nextThreadUpdateJob(editionId: string): Promise<ThreadUpda
       .eq("band", "deep"),
   ) as { id: string; item_id: string; summary_text: string | null }[];
   if (deepRows.length === 0) return null;
+  const deepByItem = new Map(deepRows.map((d) => [d.item_id, { id: d.id, summaryText: d.summary_text }]));
 
   const links = unwrap(
     await db().from("thread_items").select("thread_id, item_id").eq("edition_id", editionId),
   ) as { thread_id: string; item_id: string }[];
-  const threadByItem = new Map(links.map((l) => [l.item_id, l.thread_id]));
+  if (links.length === 0) return null;
 
-  // group this edition's deep items by thread; pending = any deep item still blank
-  const deepByThread = new Map<string, { ids: string[]; pending: boolean }>();
-  for (const d of deepRows) {
-    const threadId = threadByItem.get(d.item_id);
-    if (!threadId) continue;
-    const g = deepByThread.get(threadId) ?? { ids: [], pending: false };
-    g.ids.push(d.id);
-    if (!d.summary_text) g.pending = true;
-    deepByThread.set(threadId, g);
+  // Group this edition's items by thread (many-to-many: one item may feed several storylines).
+  const itemsByThread = new Map<string, Set<string>>();
+  for (const l of links) {
+    const s = itemsByThread.get(l.thread_id) ?? new Set<string>();
+    s.add(l.item_id);
+    itemsByThread.set(l.thread_id, s);
   }
 
-  let chosen: string | null = null;
-  for (const [threadId, g] of deepByThread) {
-    if (g.pending) {
-      chosen = threadId;
-      break;
-    }
-  }
-  if (!chosen) return null;
-  const deepEditionItemIds = deepByThread.get(chosen)!.ids;
-
-  const thread = unwrap(
+  // Load each touched thread's meta + the per-thread state guard.
+  const threadRows = unwrap(
     await db()
       .from("threads")
-      .select("id, title, state, topic_id, category_id, entities")
-      .eq("id", chosen)
-      .single(),
+      .select("id, title, state, state_edition_id, topic_id, category_id, entities, parent_thread_id, anchor_entity")
+      .in("id", [...itemsByThread.keys()]),
   ) as {
+    id: string;
     title: string;
     state: string | null;
+    state_edition_id: string | null;
     topic_id: string | null;
     category_id: string | null;
     entities: string[];
-  };
+    parent_thread_id: string | null;
+    anchor_entity: string | null;
+  }[];
+  const threadById = new Map(threadRows.map((t) => [t.id, t]));
+
+  // Followed threads get priority under the cap.
+  const followRows = unwrap(
+    await db()
+      .from("follow_marks")
+      .select("target_id")
+      .eq("profile_id", profileId)
+      .eq("target_type", "thread")
+      .eq("active", true),
+  ) as { target_id: string }[];
+  const followed = new Set(followRows.map((f) => f.target_id));
+
+  // Candidate = has ≥1 deep item this edition and not yet advanced this edition.
+  const candidates: ThreadJobCandidate[] = [];
+  for (const [threadId, itemSet] of itemsByThread) {
+    const t = threadById.get(threadId);
+    if (!t || t.state_edition_id === editionId) continue;
+    if (![...itemSet].some((id) => deepByItem.has(id))) continue;
+    candidates.push({
+      threadId,
+      followed: followed.has(threadId),
+      newItemCount: itemSet.size,
+    });
+  }
+  if (candidates.length === 0) return null;
+
+  // Cap on AI thread-updates per edition: how many threads already advanced?
+  const advancedRows = unwrap(
+    await db().from("threads").select("id").eq("state_edition_id", editionId),
+  ) as { id: string }[];
+  const chosen = selectNextThreadJob(candidates, { cap, advancedCount: advancedRows.length });
+  if (!chosen) return null;
+
+  const thread = threadById.get(chosen)!;
+  const todayItemIds = [...itemsByThread.get(chosen)!];
+  // Primary-wins: write body only to this thread's still-blank deep items.
+  const deepEditionItemIds = todayItemIds
+    .map((id) => deepByItem.get(id))
+    .filter((d): d is { id: string; summaryText: string | null } => !!d && !d.summaryText)
+    .map((d) => d.id);
 
   let categorySlug: string | null = null;
   let topicName: string | null = null;
@@ -934,19 +1038,27 @@ export async function nextThreadUpdateJob(editionId: string): Promise<ThreadUpda
     topicName = t?.name ?? null;
   }
 
-  const todayItemIds = links.filter((l) => l.thread_id === chosen).map((l) => l.item_id);
-  const items = todayItemIds.length
-    ? (unwrap(
-        await db().from("items").select("id, title, raw_summary, content, url, scan_meta").in("id", todayItemIds),
-      ) as {
-        id: string;
-        title: string;
-        raw_summary: string | null;
-        content: string | null;
-        url: string | null;
-        scan_meta: { entities?: string[] } | null;
-      }[])
-    : [];
+  // Storyline framing: this thread's anchor is the facet; the parent umbrella's
+  // anchor (preferred over its possibly-headline title) is the umbrella label.
+  const facet = thread.parent_thread_id ? thread.anchor_entity : null;
+  let umbrellaTitle: string | null = null;
+  if (thread.parent_thread_id) {
+    const parent = unwrap(
+      await db().from("threads").select("title, anchor_entity").eq("id", thread.parent_thread_id).maybeSingle(),
+    ) as { title: string; anchor_entity: string | null } | null;
+    umbrellaTitle = parent?.anchor_entity ?? parent?.title ?? null;
+  }
+
+  const items = unwrap(
+    await db().from("items").select("id, title, raw_summary, content, url, scan_meta").in("id", todayItemIds),
+  ) as {
+    id: string;
+    title: string;
+    raw_summary: string | null;
+    content: string | null;
+    url: string | null;
+    scan_meta: { entities?: string[] } | null;
+  }[];
   const newItems = items.map((i) => ({
     id: i.id,
     title: i.title,
@@ -965,9 +1077,54 @@ export async function nextThreadUpdateJob(editionId: string): Promise<ThreadUpda
     categorySlug,
     topicName,
     threadEntities: thread.entities,
+    facet,
+    umbrellaTitle,
     deepEditionItemIds,
     newItems,
   };
+}
+
+/**
+ * Phase D3 overflow fill: any `deep` edition_item this edition that is still blank
+ * AND linked to a thread this edition gets a no-AI fallback body (the item's
+ * raw_summary, else its title). Covers storylines past the per-edition update cap
+ * and shared items no storyline claimed, so no deep card stays blank and the
+ * generate requeue loop terminates. Returns the number filled; idempotent (a
+ * second run finds nothing blank).
+ */
+export async function fillBlankThreadDeepItems(editionId: string): Promise<number> {
+  const deepRows = unwrap(
+    await db()
+      .from("edition_items")
+      .select("id, item_id, summary_text")
+      .eq("edition_id", editionId)
+      .eq("band", "deep"),
+  ) as { id: string; item_id: string; summary_text: string | null }[];
+  const blank = deepRows.filter((d) => !d.summary_text);
+  if (blank.length === 0) return 0;
+
+  const links = unwrap(
+    await db().from("thread_items").select("item_id").eq("edition_id", editionId),
+  ) as { item_id: string }[];
+  const linked = new Set(links.map((l) => l.item_id));
+  const targets = blank.filter((d) => linked.has(d.item_id));
+  if (targets.length === 0) return 0;
+
+  const items = unwrap(
+    await db().from("items").select("id, title, raw_summary").in("id", targets.map((t) => t.item_id)),
+  ) as { id: string; title: string; raw_summary: string | null }[];
+  const byId = new Map(items.map((i) => [i.id, i]));
+
+  let filled = 0;
+  for (const t of targets) {
+    const it = byId.get(t.item_id);
+    const body = (it?.raw_summary?.trim() || it?.title?.trim() || "").trim();
+    if (!body) continue;
+    const { error } = await db().from("edition_items").update({ summary_text: body }).eq("id", t.id);
+    if (error) throw new Error(`fillBlankThreadDeepItems: ${error.message}`);
+    filled++;
+  }
+  return filled;
 }
 
 /**
@@ -982,6 +1139,7 @@ export async function applyThreadUpdate(
   deepEditionItemIds: string[],
   threadId: string,
   profileId: string,
+  editionId: string,
   update: Pick<ThreadUpdate, "headline" | "lead" | "ripples" | "newState" | "prediction">,
 ): Promise<void> {
   // Flat text for the dashboard card + pre-Phase-1 readers; structured article
@@ -1000,7 +1158,12 @@ export async function applyThreadUpdate(
   }
   const { error } = await db()
     .from("threads")
-    .update({ state: update.newState, title: update.headline, prediction: update.prediction })
+    .update({
+      state: update.newState,
+      title: update.headline,
+      prediction: update.prediction,
+      state_edition_id: editionId, // Phase D3 per-thread idempotency guard
+    })
     .eq("id", threadId);
   if (error) throw new Error(`applyThreadUpdate thread: ${error.message}`);
 

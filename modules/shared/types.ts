@@ -330,6 +330,8 @@ export interface Thread {
   /** current source-grounded forecast (Phase C); null when none */
   prediction: ThreadPrediction | null;
   last_edition_id: string | null;
+  /** the edition whose update produced the current `state` (Phase D3 idempotency guard); null = never generated */
+  state_edition_id: string | null;
   last_seen_at: string | null;
   created_at: string;
 }

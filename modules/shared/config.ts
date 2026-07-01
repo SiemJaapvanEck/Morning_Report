@@ -192,6 +192,13 @@ export const config = {
     maxRipples: Number(process.env.GENERATE_MAX_RIPPLES ?? "5"),
     /** token budget for one thread-update deep article (longer lead + more ripples) */
     threadUpdateMaxTokens: Number(process.env.GENERATE_THREAD_TOKENS ?? "2200"),
+    // Phase D3 — under the storyline model many child threads can each earn an
+    // update in one edition. This caps the AI thread-updates per edition (followed
+    // threads first); storylines beyond the cap fall back to a no-AI body. Safety
+    // belt on cost — the natural "has new items today" gate usually bounds it well
+    // below this.
+    /** max AI thread-updates written per edition (storyline safety cap) */
+    maxThreadUpdates: Number(process.env.GENERATE_MAX_THREAD_UPDATES ?? "8"),
     /** token budget for one non-thread deep-dive paragraph */
     deepDiveMaxTokens: Number(process.env.GENERATE_DEEPDIVE_TOKENS ?? "900"),
   },

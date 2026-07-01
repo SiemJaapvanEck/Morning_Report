@@ -20,8 +20,11 @@ import {
   storylineFacets,
   matchStorylines,
   shouldPromote,
+  selectNextThreadJob,
+  aggregateUmbrellaState,
   isAnchorableEntity,
   type ThreadCandidate,
+  type ThreadJobCandidate,
   type AnchorSpec,
   type EntityDays,
 } from "./index";
@@ -482,6 +485,75 @@ describe("shouldPromote", () => {
   it("stays flat below the bar", () => {
     expect(shouldPromote([facet("fable")])).toBe(false);
     expect(shouldPromote([])).toBe(false);
+  });
+});
+
+describe("selectNextThreadJob (Phase D3 activity priority + cap)", () => {
+  const cand = (over: Partial<ThreadJobCandidate> & { threadId: string }): ThreadJobCandidate => ({
+    followed: false,
+    newItemCount: 1,
+    ...over,
+  });
+
+  it("returns null once the per-edition cap is spent", () => {
+    const c = [cand({ threadId: "a" })];
+    expect(selectNextThreadJob(c, { cap: 3, advancedCount: 3 })).toBeNull();
+    expect(selectNextThreadJob(c, { cap: 3, advancedCount: 4 })).toBeNull();
+  });
+
+  it("returns null when there are no candidates", () => {
+    expect(selectNextThreadJob([], { cap: 8, advancedCount: 0 })).toBeNull();
+  });
+
+  it("prefers a followed thread over a busier unfollowed one", () => {
+    const c = [
+      cand({ threadId: "busy", newItemCount: 9 }),
+      cand({ threadId: "followed", followed: true, newItemCount: 1 }),
+    ];
+    expect(selectNextThreadJob(c, { cap: 8, advancedCount: 0 })).toBe("followed");
+  });
+
+  it("is type-neutral: a busier storyline beats a one-item flat thread", () => {
+    // regression: an earlier umbrella-before-storyline rule starved storylines.
+    const c = [
+      cand({ threadId: "flat-thread" }), // 1 item
+      cand({ threadId: "busy-storyline", newItemCount: 4 }),
+    ];
+    expect(selectNextThreadJob(c, { cap: 8, advancedCount: 0 })).toBe("busy-storyline");
+  });
+
+  it("breaks ties by new-item count, then stable id", () => {
+    const c = [
+      cand({ threadId: "z", newItemCount: 2 }),
+      cand({ threadId: "a", newItemCount: 5 }),
+      cand({ threadId: "b", newItemCount: 5 }),
+    ];
+    expect(selectNextThreadJob(c, { cap: 8, advancedCount: 0 })).toBe("a"); // busiest, id tiebreak a<b
+  });
+});
+
+describe("aggregateUmbrellaState (Phase D3 read-side rollup)", () => {
+  it("composes the general bucket + each storyline's state", () => {
+    const out = aggregateUmbrellaState("De brede context.", [
+      { anchor: "fable", state: "Fable groeit." },
+      { anchor: "ipo", state: "Beursgang nadert." },
+    ]);
+    expect(out).toBe("Algemeen: De brede context.\n\nFable: Fable groeit.\n\nIpo: Beursgang nadert.");
+  });
+
+  it("skips blank child states and a blank general bucket", () => {
+    expect(
+      aggregateUmbrellaState(null, [
+        { anchor: "fable", state: "Alleen dit." },
+        { anchor: "ipo", state: null },
+        { anchor: "science", state: "   " },
+      ]),
+    ).toBe("Fable: Alleen dit.");
+  });
+
+  it("returns an empty string when nothing has state", () => {
+    expect(aggregateUmbrellaState(null, [{ anchor: "fable", state: null }])).toBe("");
+    expect(aggregateUmbrellaState("  ", [])).toBe("");
   });
 });
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cleanPrediction, excerptForPrompt, cleanArticle, flattenArticle } from "./index";
+import { cleanPrediction, excerptForPrompt, cleanArticle, flattenArticle, storylineFraming } from "./index";
 
 const TODAY = "2026-06-19";
 
@@ -130,5 +130,22 @@ describe("flattenArticle (structured → plain text)", () => {
 
   it("returns just the lead when there are no ripples", () => {
     expect(flattenArticle({ lead: "Alleen de feiten.", ripples: [] })).toBe("Alleen de feiten.");
+  });
+});
+
+describe("storylineFraming (Phase D3 — name the storyline)", () => {
+  it("names the facet within its umbrella", () => {
+    expect(storylineFraming({ umbrella: "Anthropic", facet: "fable" })).toBe(
+      "Dit is de verhaallijn 'fable' binnen het grote verhaal 'Anthropic'; schrijf de update toegespitst op deze facet.\n",
+    );
+  });
+
+  it("is empty for a flat thread / umbrella (no storyline context)", () => {
+    expect(storylineFraming(undefined)).toBe("");
+  });
+
+  it("is empty when facet or umbrella is blank", () => {
+    expect(storylineFraming({ umbrella: "Anthropic", facet: "  " })).toBe("");
+    expect(storylineFraming({ umbrella: "", facet: "fable" })).toBe("");
   });
 });

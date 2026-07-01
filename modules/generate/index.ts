@@ -191,6 +191,21 @@ export interface ThreadUpdateInput {
   scheduledEvents: { title: string; date: string; certainty: string }[];
   /** Phase 5 — web-search snippets to ground the article; omit/empty = none */
   grounding?: Grounding;
+  /** Phase D3 — when this thread is a storyline, its facet + parent umbrella, so the update is framed to the facet ("names each storyline"); omit for flat threads/umbrellas */
+  storyline?: { umbrella: string; facet: string };
+}
+
+/**
+ * Pure (Phase D3): the one-line prompt frame that names a storyline within its
+ * umbrella, or "" for a flat thread/umbrella. Keeps generateThreadUpdate's prompt
+ * assembly testable without an AI call.
+ */
+export function storylineFraming(storyline?: { umbrella: string; facet: string }): string {
+  if (!storyline) return "";
+  const facet = storyline.facet.trim();
+  const umbrella = storyline.umbrella.trim();
+  if (!facet || !umbrella) return "";
+  return `Dit is de verhaallijn '${facet}' binnen het grote verhaal '${umbrella}'; schrijf de update toegespitst op deze facet.\n`;
 }
 
 /**
@@ -256,6 +271,7 @@ export async function generateThreadUpdate(
       "Heb je geen concrete grond of geen datum? Laat 'text', 'target_date' en 'source_basis' dan LEEG ('')." +
       (groundingBlock ? GROUNDING_RULE : ""),
     prompt:
+      storylineFraming(input.storyline) +
       `Verhaallijn: ${input.thread.title}\n` +
       `Stand tot nu toe: ${input.thread.state ?? "(nieuw verhaal — nog geen eerdere stand)"}\n` +
       `Aangeboden lenzen: ${lensList}\n` +

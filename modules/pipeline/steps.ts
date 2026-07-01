@@ -31,6 +31,7 @@ import {
   orderThreads,
   nextThreadUpdateJob,
   applyThreadUpdate,
+  fillBlankThreadDeepItems,
   detectAnchors,
   bigTopicAnchors,
   personalAnchors,
@@ -577,7 +578,7 @@ const generateStep: StepHandler = async ({ edition, step }) => {
   let didWork = false;
 
   if (allowDeep) {
-    const job = await nextThreadUpdateJob(edition.id);
+    const job = await nextThreadUpdateJob(edition.id, edition.profile_id, config.generate.maxThreadUpdates);
     if (job) {
       const lenses = selectLenses(job.categorySlug, job.topicName, job.threadEntities);
       const primer = await archivePrimer(edition.profile_id, job.topicId, job.categoryId);
@@ -606,13 +607,14 @@ const generateStep: StepHandler = async ({ edition, step }) => {
           archivePrimer: primer,
           scheduledEvents,
           grounding,
+          storyline: job.facet && job.umbrellaTitle ? { umbrella: job.umbrellaTitle, facet: job.facet } : undefined,
         },
         mode,
         edition.id,
         step.id,
       );
       if (update) {
-        await applyThreadUpdate(job.deepEditionItemIds, job.threadId, edition.profile_id, update);
+        await applyThreadUpdate(job.deepEditionItemIds, job.threadId, edition.profile_id, edition.id, update);
       } else {
         // defensive (unreachable while allowDeep): never loop on a blank gate
         const fallback = job.newItems[0]?.summary || job.title;
@@ -621,6 +623,19 @@ const generateStep: StepHandler = async ({ edition, step }) => {
         }
       }
       generated++;
+      didWork = true;
+    }
+  }
+
+  if (!didWork) {
+    // Phase D3 overflow: no deep thread-update ran this tick — threads past the
+    // per-edition cap, shared deep items no storyline claimed, or a degraded
+    // budget (minimaal/stop) that skips deep AI. Give any blank thread-linked
+    // deep card a no-AI fallback body so it's never blank and this loop
+    // terminates. Runs in every budget mode (it costs nothing); idempotent.
+    const filled = await fillBlankThreadDeepItems(edition.id);
+    if (filled > 0) {
+      generated += filled;
       didWork = true;
     }
   }

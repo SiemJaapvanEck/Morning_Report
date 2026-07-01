@@ -148,6 +148,24 @@ export const config = {
     anchorMinItems: Number(process.env.THREADS_ANCHOR_MIN_ITEMS ?? "5"),
     /** how far back to look for recurrence, in days */
     anchorWindowDays: Number(process.env.THREADS_ANCHOR_WINDOW_DAYS ?? "14"),
+
+    // Storyline hierarchy (Phase D): a big thread (umbrella, anchored on a
+    // recurring entity like "Anthropic") branches into storylines — child
+    // threads each anchored on a secondary facet entity ("Fable", "IPO") that
+    // co-occurs with the big anchor. Splitting/matching is free (entity overlap).
+    /**
+     * Facet floor: a secondary entity must co-occur with the big anchor in at
+     * least this many of the thread's items to become its own storyline.
+     * Deliberately LOW so storylines appear quickly (a facet seen twice already
+     * splits out).
+     */
+    facetMinItems: Number(process.env.THREADS_FACET_MIN_ITEMS ?? "2"),
+    /**
+     * Promotion gate: a big thread only splits into storylines once at least
+     * this many recurring facets emerge under it. Below the bar it stays a
+     * single flat storyline (today's behaviour), so small threads never fragment.
+     */
+    promoteMinFacets: Number(process.env.THREADS_PROMOTE_MIN_FACETS ?? "2"),
   },
 
   generate: {

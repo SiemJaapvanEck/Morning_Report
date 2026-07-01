@@ -17,6 +17,9 @@ import {
   matchByAnchor,
   resolveThreadMeta,
   detectAnchors,
+  storylineFacets,
+  matchStorylines,
+  shouldPromote,
   isAnchorableEntity,
   type ThreadCandidate,
   type AnchorSpec,
@@ -401,6 +404,84 @@ describe("detectAnchors", () => {
       ["jena university", { days: new Set(["d1", "d2", "d3"]), count: 3, display: "Jena University" }],
     ]);
     expect(detectAnchors(ed, 3, 5)).toEqual([]);
+  });
+});
+
+describe("storylineFacets", () => {
+  const items = [
+    { entities: ["Anthropic", "Fable"] },
+    { entities: ["Anthropic", "Fable", "IPO"] },
+    { entities: ["Anthropic", "IPO"] },
+    { entities: ["Anthropic", "Microsoft"] }, // a one-off facet
+  ];
+
+  it("returns co-occurring facets meeting the item floor, big anchor excluded", () => {
+    const out = storylineFacets("anthropic", items, 2);
+    expect(out).toEqual([
+      { entity: "fable", display: "Fable", count: 2 },
+      { entity: "ipo", display: "IPO", count: 2 },
+    ]);
+  });
+
+  it("keeps the display form and sorts by recurrence, ties by first-seen", () => {
+    const out = storylineFacets("anthropic", items, 1);
+    expect(out.map((f) => f.entity)).toEqual(["fable", "ipo", "microsoft"]);
+    expect(out.find((f) => f.entity === "microsoft")).toEqual({
+      entity: "microsoft",
+      display: "Microsoft",
+      count: 1,
+    });
+  });
+
+  it("excludes other big anchors (sibling umbrellas, not sub-storylines)", () => {
+    const conflict = [
+      { entities: ["Iran", "Israel", "Strait of Hormuz"] },
+      { entities: ["Iran", "Israel", "Strait of Hormuz"] },
+    ];
+    const out = storylineFacets("iran", conflict, 2, new Set(["israel"]));
+    expect(out.map((f) => f.entity)).toEqual(["strait of hormuz"]);
+  });
+
+  it("dedupes a facet within one item and drops bare datelines", () => {
+    const dup = [
+      { entities: ["Anthropic", "Fable", "fable", "US"] },
+      { entities: ["Anthropic", "Fable"] },
+    ];
+    const out = storylineFacets("anthropic", dup, 2);
+    expect(out).toEqual([{ entity: "fable", display: "Fable", count: 2 }]);
+  });
+});
+
+describe("matchStorylines", () => {
+  const storylines = [
+    { id: "s-fable", anchor_entity: "fable" },
+    { id: "s-ipo", anchor_entity: "ipo" },
+    { id: "s-null", anchor_entity: null },
+  ];
+
+  it("fans out to every facet the item carries (many-to-many)", () => {
+    expect(matchStorylines(["Anthropic", "Fable", "IPO"], storylines)).toEqual(["s-fable", "s-ipo"]);
+  });
+
+  it("links only the facets present", () => {
+    expect(matchStorylines(["Anthropic", "Fable"], storylines)).toEqual(["s-fable"]);
+  });
+
+  it("no facet match → no storyline links", () => {
+    expect(matchStorylines(["Anthropic", "Microsoft"], storylines)).toEqual([]);
+  });
+});
+
+describe("shouldPromote", () => {
+  const facet = (entity: string) => ({ entity, display: entity, count: 2 });
+
+  it("splits once >= minFacets facets emerge", () => {
+    expect(shouldPromote([facet("fable"), facet("ipo")])).toBe(true);
+  });
+
+  it("stays flat below the bar", () => {
+    expect(shouldPromote([facet("fable")])).toBe(false);
+    expect(shouldPromote([])).toBe(false);
   });
 });
 

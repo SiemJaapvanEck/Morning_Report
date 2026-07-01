@@ -33,6 +33,7 @@ export const ENTITY_ALIASES: Record<string, string> = {
   "the federal reserve": "federal reserve",
   fed: "federal reserve",
   "warner bros discovery": "warner bros",
+  libanon: "lebanon",
   "verenigd koninkrijk": "uk",
   "united kingdom": "uk",
   "europese unie": "eu",
@@ -474,6 +475,99 @@ export function matchByAnchor(
   return best?.id ?? null;
 }
 
+// ============================================================
+// Storyline hierarchy — a big thread (umbrella, anchored on a recurring entity
+// like "anthropic") branches into storylines: child threads each anchored on a
+// SECONDARY facet entity ("fable", "ipo") that co-occurs with the big anchor.
+// Storylines are threads (parent_thread_id → big thread), so thread_items carries
+// item↔storyline links. Linking is many-to-many: an item about several facets
+// links to every matching storyline. All pure; the pipeline step (Phase D2) is
+// the only caller.
+// ============================================================
+
+/** A candidate storyline: a secondary facet entity recurring under a big anchor. */
+export interface StorylineFacet {
+  /** normalized facet entity — the storyline's anchor and its item-match key */
+  entity: string;
+  /** human display form, used as the storyline's seed title */
+  display: string;
+  /** how many of the big thread's items carry this facet (its recurrence) */
+  count: number;
+}
+
+/**
+ * The secondary facet entities that qualify as storylines under a big-thread
+ * anchor. Over the items linked to the big thread, count every OTHER anchorable
+ * entity that co-occurs with the big anchor (deduped within an item so one
+ * article counts once), and keep those meeting `minItems`. The big anchor itself,
+ * bare datelines, and any entity in `exclude` (used to skip other big anchors —
+ * they're sibling umbrellas, not sub-storylines) are dropped. Sorted by recurrence
+ * desc, ties by first-seen for stability.
+ */
+export function storylineFacets(
+  bigAnchor: string,
+  items: { entities: string[] }[],
+  minItems: number,
+  exclude?: Set<string>,
+): StorylineFacet[] {
+  const count = new Map<string, number>();
+  const display = new Map<string, string>();
+  const order: string[] = [];
+  for (const it of items) {
+    const seen = new Set<string>();
+    for (const raw of it.entities) {
+      const d = raw.trim();
+      const norm = normalizeEntity(d);
+      if (!norm || norm === bigAnchor || seen.has(norm) || !isAnchorableEntity(norm)) continue;
+      // Another actor that is itself a big-thread anchor is a sibling umbrella,
+      // not a sub-storyline of this one — skip it (avoids circular nesting).
+      if (exclude?.has(norm)) continue;
+      seen.add(norm);
+      if (!count.has(norm)) {
+        count.set(norm, 0);
+        display.set(norm, d);
+        order.push(norm);
+      }
+      count.set(norm, count.get(norm)! + 1);
+    }
+  }
+  const rank = new Map(order.map((e, i) => [e, i]));
+  const out: StorylineFacet[] = [];
+  for (const e of order) {
+    if (count.get(e)! >= minItems) out.push({ entity: e, display: display.get(e)!, count: count.get(e)! });
+  }
+  out.sort((a, b) => b.count - a.count || rank.get(a.entity)! - rank.get(b.entity)!);
+  return out;
+}
+
+/**
+ * Every storyline an item belongs to under its big thread: the child threads
+ * whose facet (anchor_entity) is present in the item's entities. The caller has
+ * already matched the item to the big thread, so containment of the big anchor is
+ * assumed; here we fan out to ALL matching facets (many-to-many) — an item about
+ * both Fable and the IPO links to both storylines.
+ */
+export function matchStorylines(
+  itemEntities: string[],
+  storylineThreads: { id: string; anchor_entity: string | null }[],
+): string[] {
+  const norm = new Set(itemEntities.map(normalizeEntity).filter(Boolean));
+  const out: string[] = [];
+  for (const t of storylineThreads) {
+    if (t.anchor_entity && norm.has(t.anchor_entity)) out.push(t.id);
+  }
+  return out;
+}
+
+/**
+ * Whether a big thread should split into storylines: only once at least
+ * `minFacets` recurring facets have emerged under it. Below the bar it stays a
+ * single flat storyline (today's behaviour), so small threads never fragment.
+ */
+export function shouldPromote(facets: StorylineFacet[], minFacets = 2): boolean {
+  return facets.length >= minFacets;
+}
+
 /**
  * Resolve a new thread's topic/category from today's items that carry its anchor
  * entity: the most common non-null topic_id / category_id among them (mode, ties
@@ -608,10 +702,13 @@ export async function insertThread(input: {
   title: string;
   entities: string[];
   status: ThreadStatus;
-  lastEditionId: string;
+  /** null for a thread created out-of-band (e.g. the split script) before any edition touch */
+  lastEditionId: string | null;
   lastSeenAt: string;
-  /** set for a mega-thread (the normalized anchor entity); omit for a normal thread */
+  /** the normalized anchor entity — the big anchor for an umbrella, the facet for a storyline */
   anchorEntity?: string;
+  /** set for a storyline (child) thread: the id of its big (umbrella) thread */
+  parentThreadId?: string;
 }): Promise<string> {
   const row = unwrap(
     await db()
@@ -624,6 +721,7 @@ export async function insertThread(input: {
         entities: input.entities,
         status: input.status,
         anchor_entity: input.anchorEntity ?? null,
+        parent_thread_id: input.parentThreadId ?? null,
         last_edition_id: input.lastEditionId,
         last_seen_at: input.lastSeenAt,
       })
@@ -671,9 +769,42 @@ export async function loadEntityDays(profileId: string, windowDays: number): Pro
   return map;
 }
 
+/**
+ * Per-item entity lists for each of the given threads (their full linked
+ * history), keyed by thread id — the input to storyline-facet detection. Item-id
+ * lookups are chunked to stay under the URL length limit (same guard that bit
+ * listStories). A thread with no linked items simply doesn't appear in the map.
+ */
+export async function loadThreadItemEntities(threadIds: string[]): Promise<Map<string, string[][]>> {
+  const out = new Map<string, string[][]>();
+  if (threadIds.length === 0) return out;
+  const links = unwrap(
+    await db().from("thread_items").select("thread_id, item_id").in("thread_id", threadIds),
+  ) as { thread_id: string; item_id: string }[];
+  if (links.length === 0) return out;
+
+  const itemIds = [...new Set(links.map((l) => l.item_id))];
+  const entitiesByItem = new Map<string, string[]>();
+  const chunk = 200;
+  for (let i = 0; i < itemIds.length; i += chunk) {
+    const rows = unwrap(
+      await db().from("items").select("id, scan_meta").in("id", itemIds.slice(i, i + chunk)),
+    ) as { id: string; scan_meta: { entities?: string[] } | null }[];
+    for (const r of rows) entitiesByItem.set(r.id, r.scan_meta?.entities ?? []);
+  }
+  for (const l of links) {
+    const ents = entitiesByItem.get(l.item_id);
+    if (!ents) continue;
+    const arr = out.get(l.thread_id) ?? [];
+    arr.push(ents);
+    out.set(l.thread_id, arr);
+  }
+  return out;
+}
+
 /** Upsert thread↔item links; unique(thread_id,item_id) + ignore makes it re-run safe. */
 export async function linkThreadItems(
-  links: { threadId: string; itemId: string; editionId: string }[],
+  links: { threadId: string; itemId: string; editionId: string | null }[],
 ): Promise<void> {
   if (links.length === 0) return;
   const { error } = await db()

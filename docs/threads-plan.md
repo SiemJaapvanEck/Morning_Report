@@ -18,6 +18,93 @@
 - [ ] **Phase 5c-3** — Archive rework: ONE big multi-line chart ← **next sprint** (see HANDOFF "What's open")
 - [ ] **Phase 6** — Optional: og:image fallback + embeddings upgrade
 
+### Phase D — Storyline hierarchy (big thread → storylines)
+
+Turn today's flat, single-entity thread into a **two-level model**: a **big
+thread** (umbrella, anchored on a recurring entity like *Anthropic*, `parent_thread_id
+= null`) that branches into **storylines** — child threads (`parent_thread_id →
+big thread`) each anchored on a *secondary facet* entity (*Fable*, *IPO*,
+*Contracts*). Storylines **are threads**, so `thread_items` + `parent_thread_id`
+(0009, live) carry the whole model — no new tables.
+
+Linking is **per-storyline and many-to-many**: an item links to a storyline when
+it carries the big anchor **and** that storyline's facet. `{anthropic, fable, ipo}`
+→ Fable **and** IPO; `{anthropic, fable}` → only Fable. This relaxes today's
+"one item → at most one thread" ([matchByAnchor]) to multi-link at the child level.
+A thread only **promotes** (splits) once ≥2 recurring facets emerge under it;
+below that it stays a single flat storyline, so today's behaviour is preserved.
+
+Decisions (Siem, 1 Jul 2026): **hybrid** split (free secondary-entity clustering
+forms storylines, the generate call names them); daily-paper krant redesign is
+**parked** — Phase D only makes the hierarchy visible in the archive. Facet floor
+is **low** (storylines appear fast); auto-archive/delete of stale storylines is a
+**later** concern. Ship a **rebuild script** (dry-run + `--apply`) to re-derive
+storylines from history.
+
+- [x] **Phase D1** — Foundation: pure `storylineFacets` / `matchStorylines` /
+  `shouldPromote` + 8 vitest cases (188 → 196). No pipeline wiring, no migration
+  (reuse `parent_thread_id`). Gate green. *(done)*
+- [x] **Phase D2** — Pipeline: `threadsStep` promotes big threads, spawns
+  storyline children, **multi-links** items to their facets (general-bucket
+  fallback on the umbrella). `THREADS_FACET_MIN_ITEMS`=2 / `THREADS_PROMOTE_MIN_FACETS`=2
+  knobs. **Suppress rule:** a facet that is itself a big anchor stays a sibling
+  umbrella (no circular nesting) — Siem's actor-model. `Libanon→Lebanon` alias.
+  `scripts/split-storylines.ts` (dry-run + `--apply`, additive). Applied live: 9
+  umbrellas → 24 storylines, 48 items moved. Gate green (197 tests). *(done)*
+  **Known gap → entity typing (next):** recurring *products* that independently
+  threaded (Mythos) get suppressed as siblings; product-version forms still
+  fragment (Fable vs Claude Fable 5). Fix = tag entities actor/product/event in
+  the scan so umbrellas=actors, storylines=product/event facets.
+- [ ] **Phase D3** — Generation (hybrid): updates run **per storyline**; generate
+  names each storyline; big thread aggregates its storylines' state.
+- [ ] **Phase D4** — ~~Archive/detail UI stub~~ **superseded by Phase E** (the
+  full visualization pass below). Skip D4; do D3 then E.
+
+### Phase E — Visualization UX/UI (umbrella hub-and-spoke graph)
+
+The read-side, done properly. Confirmed with Siem (1 Jul 2026) via the approved
+mockup `umbrella_thread_multiline_bell_follow_mockup`:
+
+- **Each storyline (child)** keeps its **own** graph — the existing Phase C
+  detail page (`StoryDetailView`: timeline scrubber + intensity). Unchanged.
+- **The umbrella (big thread)** gets one **big multi-line timeline chart**: x-axis
+  = time (the anchor window), **one line per storyline**, y = daily activity
+  (items/day). Line **color = dominant category / DESTEP lens** (reuse
+  `dominantLens`), **live lines drawn thicker with a pulse on the latest point**
+  (reuse `recencyTier`), the **"Algemeen"** general-bucket line dashed/neutral.
+  Clicking a line routes to that storyline's own page. (NOT hub-and-spoke — the
+  first mockup was wrong; Siem wants the timeline-as-lines chart, the same
+  "one big multi-line chart" idea from the old 5c-3 note, applied per umbrella.)
+- **Umbrella page** = a **hero** (aggregated state + meta + follow) above the chart;
+  a **left-side legend** maps each line → storyline (lens + item total + live).
+- **Two follow granularities** (appearing in the archive ≠ followed; follow drives
+  "Mijn verhalen" + daily-paper priority): the hero's **"Volg heel verhaal"** follows
+  the umbrella + all its storylines incl. future ones (broad); a **★ per legend row**
+  follows just that one storyline (narrow). Both write `follow_marks` type `thread`
+  (umbrella id vs storyline id) — no new schema. Follow affordance = a **bell**
+  (filled accent = followed, outline = not), not a star. Open question for D3/E: should an
+  umbrella follow *imply* its children in "Mijn verhalen", or stay a distinct mark?
+- **`/archive`** restructures to list **big threads (umbrellas)**; storylines are
+  reached through the umbrella chart rather than as top-level flat cards.
+
+Routing: `/archive/[threadId]` branches — a thread **with children** renders the
+umbrella page (hero + `UmbrellaChart`); a **leaf** thread renders the existing
+`StoryDetailView`. No schema change (parent/child + `thread_items` already carry it).
+
+- [ ] **Phase E1** — Data + pure helpers: `getUmbrella(profileId, threadId)`
+  (umbrella + per-child daily activity series over the window, dominant lens,
+  recency, item totals + the Algemeen bucket). Pure, tested helpers:
+  `dailyActivitySeries(events, window)`, time→x / activity→y scales, lens→color,
+  recency→line-weight. No UI yet.
+- [ ] **Phase E2** — UI: `UmbrellaChart.tsx` (client SVG multi-line timeline,
+  clickable lines → `router.push`, legend) + `UmbrellaHero`;
+  `/archive/[threadId]` branch; `/archive` list restructured to umbrellas.
+  Verify on localhost:3000.
+
+Depends on **D3** for the hero's aggregated state (start with a simple
+concatenation/fallback; D3 enriches it). Mockup reference:
+`umbrella_thread_hub_and_spoke_mockup` (this session).
+
 Gate after every phase: `npm run lint && npx tsc --noEmit && npm test && npm run build`.
 Hard budget cap **€0.10/edition** (aim lower). Until Phase 3 the running pipeline
 behaves exactly as today.

@@ -403,3 +403,22 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   `eventHeat`, `rankRelated` with tests (179 → 188). Form locked first via an
   interactive mockup approved by Siem. Gate green, pushed. Next: dashboard ripples,
   Tavily citation UI, Daily Paper PRD.
+- **1 July 2026 — Storyline hierarchy (Phase D1+D2) + Phase E designed.** Threads
+  become a two-level model: a **big thread (umbrella, e.g. Anthropic)** branches
+  into **storylines (children, e.g. Fable/IPO/Contracts)** anchored on secondary
+  facet entities. **D1:** pure `storylineFacets`/`matchStorylines`/`shouldPromote`
+  + 9 tests (188 → 197). **D2:** `threadsStep` reworked to promote umbrellas, spawn
+  storyline children, and **multi-link** items to the specific storyline(s) they're
+  about (many-to-many); `facetMinItems`/`promoteMinFacets` knobs (both default 2);
+  suppress rule so a facet that's itself a big anchor stays a sibling umbrella (no
+  circular Iran↔Israel nesting); `libanon→lebanon` alias. `scripts/split-storylines.ts`
+  applied to live data: **9 umbrellas → 24 storylines**. **Phase E designed** (mockup
+  `umbrella_thread_hub_and_spoke_mockup`, approved): umbrella page = hero + a
+  hub-and-spoke graph (storylines radiate as nodes, size=activity, color=lens,
+  +Algemeen restbak), children keep their own Phase C graph. Gate green; **not yet
+  committed/pushed**. Next: D3 (per-storyline generation + naming + umbrella
+  aggregation), then Phase E build. Entity typing (actor/product/event) noted as the
+  later clean-up for product-version fragmentation. **Phase E graph = a big
+  multi-line timeline chart** per umbrella (x=time, one line per storyline,
+  color=lens), mockup `umbrella_thread_multiline_timeline_mockup` — a first
+  hub-and-spoke mockup was rejected.

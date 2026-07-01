@@ -39,6 +39,10 @@ import {
   resolveThreadMeta,
   isAnchorableEntity,
   loadEntityDays,
+  storylineFacets,
+  matchStorylines,
+  shouldPromote,
+  loadThreadItemEntities,
 } from "../threads";
 import type { Edition, Item, PipelineStep, Band, MarktSnapshot, DailyPaperArticle } from "../shared/types";
 
@@ -412,14 +416,16 @@ const threadsStep: StepHandler = async ({ edition }) => {
   // Drop bare datelines (US, France…) so they don't open catch-all threads.
   const anchors = mergeAnchors(recurring, big, personal).filter((a) => isAnchorableEntity(a.entity));
 
-  // Existing anchor threads — the only ones items match against (flat model).
+  // Existing BIG-thread anchors (umbrellas, parent_thread_id null) — the only
+  // threads items match against as an anchor. Storyline children carry an
+  // anchor_entity too (their facet) but must never be matched as a big anchor.
   const existingAnchors = new Set(
-    threads.map((t) => t.anchor_entity).filter((a): a is string => Boolean(a)),
+    threads.filter((t) => t.anchor_entity && !t.parent_thread_id).map((t) => t.anchor_entity as string),
   );
 
-  // Open a thread for each qualifying anchor that doesn't have one yet; topic/
-  // category come from today's items carrying that anchor (so the archive can
-  // filter it). The seed item is linked in the matching pass below.
+  // Open a big thread for each qualifying anchor that doesn't have one yet;
+  // topic/category come from today's items carrying that anchor (so the archive
+  // can filter it). The seed item is linked in the matching pass below.
   let created = 0;
   for (const a of anchors) {
     if (existingAnchors.has(a.entity)) continue;
@@ -438,25 +444,108 @@ const threadsStep: StepHandler = async ({ edition }) => {
     created++;
   }
 
-  // Reload so this edition's new anchor threads are included, then link every
-  // fresh candidate to its single best anchor thread (containment) and merge its
-  // entities back. Idempotent: items already linked this edition are skipped and
-  // linkThreadItems upserts-with-ignore.
-  const anchorThreads = (await loadActiveThreads(edition.profile_id)).filter((t) => t.anchor_entity);
+  // Reload; big threads (umbrellas) are what candidates match against.
+  const allThreads = await loadActiveThreads(edition.profile_id);
+  const bigThreads = allThreads.filter((t) => t.anchor_entity && !t.parent_thread_id);
+
+  // Assign each candidate to its single best big thread (anchor containment).
+  const bigByItem = new Map<string, string>();
+  for (const c of candidates) {
+    const id = matchByAnchor(c.entities, bigThreads);
+    if (id) bigByItem.set(c.itemId, id);
+  }
+
+  // --- Storyline splitting ------------------------------------------------
+  // For each big thread with news today, detect the recurring secondary facets
+  // over its full linked history plus today's fresh items; once >= promoteMinFacets
+  // emerge, spawn a child storyline per new facet (inheriting the umbrella's
+  // topic/category). Below the bar the thread stays flat, as before.
+  const anchorById = new Map(bigThreads.map((t) => [t.id, t.anchor_entity as string]));
+  // Other big anchors are sibling umbrellas — never a sub-storyline of each other.
+  const bigAnchorSet = new Set(bigThreads.map((t) => t.anchor_entity as string));
+  const touchedBigIds = new Set(bigByItem.values());
+  const history = await loadThreadItemEntities([...touchedBigIds]);
+  const existingFacetsByBig = new Map<string, Set<string>>();
+  for (const t of allThreads) {
+    if (t.parent_thread_id && t.anchor_entity) {
+      const s = existingFacetsByBig.get(t.parent_thread_id) ?? new Set<string>();
+      s.add(t.anchor_entity);
+      existingFacetsByBig.set(t.parent_thread_id, s);
+    }
+  }
+
+  let storylinesCreated = 0;
+  for (const bigId of touchedBigIds) {
+    const anchor = anchorById.get(bigId)!;
+    // Today's contribution counts only unlinked items so a re-run (where today's
+    // items already sit in `history`) doesn't double-count and inflate facets.
+    const todayEnts = candidates
+      .filter((c) => bigByItem.get(c.itemId) === bigId && !linked.has(c.itemId))
+      .map((c) => ({ entities: c.entities }));
+    const histEnts = (history.get(bigId) ?? []).map((entities) => ({ entities }));
+    const facets = storylineFacets(anchor, [...histEnts, ...todayEnts], config.threads.facetMinItems, bigAnchorSet);
+    if (!shouldPromote(facets, config.threads.promoteMinFacets)) continue;
+    const parent = bigThreads.find((t) => t.id === bigId)!;
+    const have = existingFacetsByBig.get(bigId) ?? new Set<string>();
+    for (const f of facets) {
+      if (have.has(f.entity)) continue;
+      await insertThread({
+        profileId: edition.profile_id,
+        topicId: parent.topic_id,
+        categoryId: parent.category_id,
+        title: f.display,
+        entities: mergeEntities([anchor, f.entity], []),
+        status: "active",
+        lastEditionId: edition.id,
+        lastSeenAt: now,
+        anchorEntity: f.entity,
+        parentThreadId: bigId,
+      });
+      storylinesCreated++;
+    }
+  }
+
+  // Reload once more so storylines spawned this edition are linkable now.
+  const finalThreads = storylinesCreated > 0 ? await loadActiveThreads(edition.profile_id) : allThreads;
+  const storylinesByBig = new Map<string, { id: string; anchor_entity: string | null }[]>();
+  for (const t of finalThreads) {
+    if (t.parent_thread_id && t.anchor_entity) {
+      const arr = storylinesByBig.get(t.parent_thread_id) ?? [];
+      arr.push({ id: t.id, anchor_entity: t.anchor_entity });
+      storylinesByBig.set(t.parent_thread_id, arr);
+    }
+  }
+
+  // --- Linking (many-to-many at the storyline level) ----------------------
+  // Each new item links to the specific storyline(s) whose facet it carries. If
+  // its big thread has storylines but the item matches none, it links to the
+  // umbrella (a general bucket); an unpromoted big thread links flat, as before.
+  // Idempotent: items already linked this edition are skipped, and the upsert
+  // ignores duplicates.
   const links: { threadId: string; itemId: string; editionId: string }[] = [];
   const addedByThread = new Map<string, string[]>();
-  for (const c of candidates) {
-    if (linked.has(c.itemId)) continue;
-    const threadId = matchByAnchor(c.entities, anchorThreads);
-    if (!threadId) continue;
+  const addLink = (threadId: string, c: (typeof candidates)[number]) => {
     links.push({ threadId, itemId: c.itemId, editionId: edition.id });
     addedByThread.set(threadId, [...(addedByThread.get(threadId) ?? []), ...c.entities]);
+  };
+  for (const c of candidates) {
+    if (linked.has(c.itemId)) continue;
+    const bigId = bigByItem.get(c.itemId);
+    if (!bigId) continue;
+    const children = storylinesByBig.get(bigId) ?? [];
+    const matched = children.length ? matchStorylines(c.entities, children) : [];
+    if (matched.length) {
+      for (const sid of matched) addLink(sid, c);
+    } else {
+      addLink(bigId, c);
+    }
   }
   await linkThreadItems(links);
 
-  const threadById = new Map(anchorThreads.map((t) => [t.id, t]));
+  // Merge entities + mark seen on every touched thread (big or storyline).
+  const entById = new Map(finalThreads.map((t) => [t.id, t.entities]));
   for (const [threadId, addEnts] of addedByThread) {
-    const existing = threadById.get(threadId)?.entities ?? [];
+    const existing = entById.get(threadId) ?? [];
     await touchThread(threadId, mergeEntities(existing, addEnts), edition.id, now);
   }
 
@@ -464,6 +553,7 @@ const threadsStep: StepHandler = async ({ edition }) => {
     kandidaten: candidates.length,
     gekoppeld: links.length,
     nieuwe_threads: created,
+    nieuwe_verhaallijnen: storylinesCreated,
     overgeslagen: linked.size,
     ankers: anchors.length,
   };

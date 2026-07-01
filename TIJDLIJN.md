@@ -439,3 +439,19 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   advanced at the same cost). Clean-run cost ≈ €0.10 (< €0.15 cap). A related-title
   display tweak was considered and dropped. Gate green. Next: Phase E (umbrella
   multi-line timeline UI, consumes `aggregateUmbrellaState`).
+
+- **1 juli 2026 — Phase E: umbrella master–detail reader.** Built the umbrella
+  read-side and iterated it live with Siem. E1: pure helpers (`dailyActivitySeries`,
+  `seriesPoints`, `lineWeight`, `threadSubject`/`titleCaseEntity`) + `getUmbrella`
+  (per-storyline `UmbrellaLine` with facet, series, and a `detail` payload — state,
+  per-event articles/Sol notes, sources — reusing `getStoryDetail`'s `edition_items`
+  fetch). E2: `/archive/[threadId]` branches umbrella-vs-leaf; `/archive` now lists
+  **umbrellas only**. The umbrella page ended as a **master–detail reader**
+  (`UmbrellaHero` + `UmbrellaReader`): sticky article panel left (2/3), storyline
+  blocks right (1/3); a pressable **event-dot strip** per block (bigger dots, hover
+  tooltip = article title) opens that exact moment in the panel. The planned
+  multi-line graph and an interim bento-tile grid were built then removed at Siem's
+  request. Umbrella titles show as subjects ("Anthropic"); facet eyebrows
+  ("Nasdaq 100", "Cursor") derived from entities. Both follow tiers reuse
+  `/api/threads/follow` — no schema, no migration, no pipeline change. Verified live
+  on the SpaceX/Anthropic umbrellas. Tests 208 → **220**, gate green.

@@ -8,6 +8,11 @@ import {
   timelinePositions,
   eventHeat,
   rankRelated,
+  dailyActivitySeries,
+  seriesPoints,
+  lineWeight,
+  threadSubject,
+  titleCaseEntity,
 } from "./stories";
 import { entityOverlap } from "../../modules/threads";
 import type { Story } from "./queries";
@@ -27,6 +32,7 @@ function story(p: Partial<Story> & { id: string }): Story {
     lastSeenAt: p.lastSeenAt ?? null,
     updatedLabel: p.updatedLabel ?? "—",
     followed: p.followed ?? false,
+    isUmbrella: p.isUmbrella ?? false,
     events: p.events ?? [],
   };
 }
@@ -146,5 +152,69 @@ describe("rankRelated", () => {
   });
   it("honors the limit", () => {
     expect(rankRelated(["trump"], others, entityOverlap, 1).map((r) => r.item.id)).toEqual(["a"]);
+  });
+});
+
+describe("dailyActivitySeries", () => {
+  it("counts events per day across an inclusive window", () => {
+    expect(
+      dailyActivitySeries(["2026-06-01", "2026-06-01", "2026-06-03"], "2026-06-01", "2026-06-03"),
+    ).toEqual([2, 0, 1]);
+  });
+  it("ignores events outside the window and unparseable dates", () => {
+    expect(
+      dailyActivitySeries(["2026-05-30", "2026-06-02", "", "nope"], "2026-06-01", "2026-06-03"),
+    ).toEqual([0, 1, 0]);
+  });
+  it("returns [] for an inverted or invalid window", () => {
+    expect(dailyActivitySeries(["2026-06-02"], "2026-06-03", "2026-06-01")).toEqual([]);
+    expect(dailyActivitySeries(["2026-06-02"], "bad", "2026-06-03")).toEqual([]);
+  });
+  it("length is span + 1", () => {
+    expect(dailyActivitySeries([], "2026-06-01", "2026-06-05")).toHaveLength(5);
+  });
+});
+
+describe("seriesPoints", () => {
+  it("spreads x evenly 0..100 and scales y to the busiest day", () => {
+    const pts = seriesPoints([1, 0, 2], 2);
+    expect(pts.map((p) => p.x)).toEqual([0, 50, 100]);
+    expect(pts.map((p) => p.y)).toEqual([50, 0, 100]);
+    expect(pts.map((p) => p.value)).toEqual([1, 0, 2]);
+  });
+  it("puts a single-day series at x 0", () => {
+    expect(seriesPoints([3], 3)).toEqual([{ x: 0, y: 100, value: 3 }]);
+  });
+  it("flattens y to 0 when maxActivity <= 0", () => {
+    expect(seriesPoints([0, 0], 0).map((p) => p.y)).toEqual([0, 0]);
+  });
+});
+
+describe("lineWeight", () => {
+  it("draws live lines heavier than week, week heavier than dormant", () => {
+    expect(lineWeight("live")).toBeGreaterThan(lineWeight("week"));
+    expect(lineWeight("week")).toBeGreaterThan(lineWeight("dormant"));
+  });
+});
+
+describe("titleCaseEntity", () => {
+  it("capitalizes each word", () => {
+    expect(titleCaseEntity("nasdaq 100")).toBe("Nasdaq 100");
+    expect(titleCaseEntity("anthropic")).toBe("Anthropic");
+  });
+});
+
+describe("threadSubject", () => {
+  it("keeps an already-short subject title with its exact casing", () => {
+    expect(threadSubject("SpaceX", "spacex")).toBe("SpaceX");
+    expect(threadSubject("PlayStation", "playstation")).toBe("PlayStation");
+  });
+  it("shortens a full-sentence title to the title-cased anchor", () => {
+    expect(
+      threadSubject("Anthropic lanceert Claude Science als workflow-tool en krijgt toegang", "anthropic"),
+    ).toBe("Anthropic");
+  });
+  it("falls back to the leading words when there is no anchor", () => {
+    expect(threadSubject("Iran verkoopt olie met 20% premie na einde blokkade", null)).toBe("Iran verkoopt olie");
   });
 });

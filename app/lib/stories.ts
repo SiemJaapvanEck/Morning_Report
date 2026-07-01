@@ -170,3 +170,74 @@ const CATEGORY_COLOR: Record<string, string> = {
 export function categoryColor(slug: string | null | undefined): string {
   return (slug && CATEGORY_COLOR[slug]) || "#78716c";
 }
+
+/** Title-case a lowercase entity/anchor for display: "nasdaq 100" → "Nasdaq 100". */
+export function titleCaseEntity(s: string): string {
+  return s.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * Short display subject for a big thread (umbrella). Once a thread is generated,
+ * its `title` is often a full sentence ("Anthropic lanceert Claude Science als
+ * workflow-tool…") — but the archive wants just the subject. Keep the stored
+ * title when it is already short/subject-like (so good forms like "SpaceX" or
+ * "PlayStation" survive with their exact casing); otherwise fall back to the
+ * title-cased anchor entity, or the leading words when there is no anchor.
+ */
+export function threadSubject(title: string, anchor: string | null): string {
+  const trimmed = title.trim();
+  const words = trimmed.split(/\s+/);
+  if (words.length <= 3 && trimmed.length <= 30) return trimmed;
+  if (anchor && anchor.trim()) return titleCaseEntity(anchor.trim());
+  return words.slice(0, 3).join(" ");
+}
+
+// ── Umbrella multi-line timeline (Phase E) ───────────────────────────────────
+
+/**
+ * Per-day item counts across an inclusive [start, end] date window (both
+ * YYYY-MM-DD) — the y-values for one storyline's line on the umbrella chart.
+ * Each in-window event date increments its day bucket; dates outside the window
+ * or unparseable are ignored. Returns one integer per day from start to end
+ * (length = span + 1). An empty or inverted window yields `[]`.
+ */
+export function dailyActivitySeries(dates: string[], start: string, end: string): number[] {
+  const first = dayIndex(start);
+  const last = dayIndex(end);
+  if (Number.isNaN(first) || Number.isNaN(last) || last < first) return [];
+  const out = new Array(last - first + 1).fill(0) as number[];
+  for (const d of dates) {
+    if (!d) continue;
+    const di = dayIndex(d);
+    if (Number.isNaN(di) || di < first || di > last) continue;
+    out[di - first]++;
+  }
+  return out;
+}
+
+/** One plotted point on a storyline line: x/y in 0..100, plus the raw count. */
+export interface LinePoint {
+  x: number;
+  y: number;
+  value: number;
+}
+
+/**
+ * Map a daily-activity series to chart points in a 0..100 box: x spread evenly
+ * across the window (single-day series sits at x 0), y = the day's share of
+ * `maxActivity` (busiest day → 100, zero → 0). `maxActivity` ≤ 0 flattens y to 0.
+ * Rounded to 0.1 so the emitted SVG path stays compact.
+ */
+export function seriesPoints(series: number[], maxActivity: number): LinePoint[] {
+  const span = Math.max(1, series.length - 1);
+  return series.map((value, i) => ({
+    x: Math.round((i / span) * 1000) / 10,
+    y: maxActivity > 0 ? Math.round((value / maxActivity) * 1000) / 10 : 0,
+    value,
+  }));
+}
+
+/** Stroke width (px) for a storyline line by recency — live lines read heavier. */
+export function lineWeight(recency: Recency): number {
+  return recency === "live" ? 3 : recency === "week" ? 2 : 1.25;
+}

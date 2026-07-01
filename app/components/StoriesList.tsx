@@ -222,6 +222,11 @@ export function StoriesList({ stories }: { stories: Story[] }) {
                     </span>
                   ))}
                   <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${badge.cls}`}>{badge.label}</span>
+                  {s.isUmbrella && (
+                    <span className="rounded px-1.5 py-0.5 text-[10px] font-bold text-[#2f6df0] ring-1 ring-inset ring-[#2f6df0]/40">
+                      ▨ verhaallijnen
+                    </span>
+                  )}
                   <span className="text-stone-300 dark:text-stone-600">·</span>
                   <span className="text-stone-400">upd {s.updatedLabel} geleden</span>
                 </div>

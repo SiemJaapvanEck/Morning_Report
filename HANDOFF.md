@@ -6,122 +6,112 @@
 
 ## Where we stand
 
-The **storyline hierarchy** (Phase D) now generates. A flat entity thread became a
-**big thread (umbrella)** branching into **storylines** (child threads) in D1/D2;
-this session shipped **Phase D3 — thread-aware generation per storyline**. Each
-storyline advances its own accumulated `state` each edition, with the update
-**framed to its facet**, bounded by a per-edition budget cap. Gate is green (lint /
-tsc / **208 tests** / build). Migration `0016` is **applied live**. Verified
-end-to-end on today's editions.
+**Phase E shipped** — the umbrella (big-thread) page is now a **master–detail
+reader**. Open an umbrella from `/archive` and you read all its storylines in
+place instead of clicking through each one:
 
-Pipeline shape unchanged (scan → select → **threads** → agenda → generate →
-daily_paper → finalize). The next visible step is **Phase E** (the umbrella
-multi-line timeline UI), still un-built — it consumes D3's `aggregateUmbrellaState`.
+- **Left (2/3), sticky** — an article panel: the storyline's accumulated "Stand
+  van zaken", the selected moment's deep article (lead + ripples + Sol's note),
+  an "in deze verhaallijn" event list, sources, and an "Open volledige
+  verhaallijn →" link to the full leaf page.
+- **Right (1/3)** — the storylines as a single-column bento list. Each block:
+  category-colored **facet eyebrow** (e.g. "Nasdaq 100", "Cursor"), the
+  headline, a pressable **event-dot strip**, LIVE · upd · N delen, and a follow
+  bell. Selecting a block swaps the left panel.
+- **The dots are event pickers** — 13px (16px selected), filled = that moment
+  has a deep article. Hover pops the event title; pressing opens that exact
+  moment ("Gekozen moment") in the panel. The event list rows do the same.
 
-## What was done this session — Phase D3
+Gate is green (lint / tsc / **220 tests** / build). **No migration, no pipeline
+change, no schema change** — both follow tiers reuse the existing
+`/api/threads/follow` + `follow_marks`. The pipeline shape is unchanged
+(scan → select → threads → agenda → generate → daily_paper → finalize).
 
-**The problem D3 solved:** generation still ran in the flat-thread world. Two
-breakages under multi-link: (a) `nextThreadUpdateJob` collapsed the many-to-many
-links (`Map(item→thread)`), so an item in two storylines only advanced one; (b)
-idempotency was the per-item `summary_text` flag, so once a shared item's body was
-written, every other storyline sharing it looked "done" and never advanced.
+## What was done this session — Phase E (E1 + E2 + iterations)
 
-**Decisions (Siem, 1 Jul 2026):** **capped per-storyline** (facet framing, bounded
-per edition, followed-first) + **first/primary storyline wins** for a shared item's
-single card body (all storylines still advance their own state).
+The build diverged from the plan's "multi-line timeline + legend" spec because
+Siem iterated on the read-side design live. The final shape (master–detail
+reader) is what's in the code; the graph and the interim tile grid were built
+then removed.
 
-- **Migration `0016_thread_state_edition.sql`** — `threads.state_edition_id` (uuid,
-  nullable): the per-thread generation idempotency guard the per-item flag can no
-  longer provide. Applied live via the Supabase connector. `Thread` type synced.
-- **`nextThreadUpdateJob` (`modules/threads`)** reworked: many-to-many/storyline
-  aware — groups this edition's links per thread, advances each thread once via the
-  guard, carries `facet`/`umbrellaTitle` for framing, and **primary-wins dedupe**
-  (a job's `deepEditionItemIds` = only its still-blank deep items; shared items
-  already written by an earlier storyline stay in `newItems` so state still
-  advances). Signature now `(editionId, profileId, cap)`.
-- **Priority + cap** — pure `selectNextThreadJob(candidates, {cap, advancedCount})`:
-  **activity-based** (followed-first → new-item count → stable id), bounded by
-  `config.generate.maxThreadUpdates` (env `GENERATE_MAX_THREAD_UPDATES`, default 8).
-- **`generateThreadUpdate` (`modules/generate`)** — optional `storyline`
-  context + pure `storylineFraming` helper: one Dutch prompt line naming the facet
-  within its umbrella ("names each storyline"). Additive; flat threads unchanged.
-- **`applyThreadUpdate`** gained an `editionId` param; sets `state_edition_id`.
-- **`fillBlankThreadDeepItems`** — no-AI overflow fallback (raw_summary, else title)
-  for deep cards no storyline claimed / past the cap / in a degraded budget. In
-  `generateStep` it runs **outside** the `allowDeep` gate (so `minimaal`/`stop`
-  editions never leave a blank thread card).
-- **`aggregateUmbrellaState`** — pure compute-on-read rollup (umbrella "Algemeen"
-  state + each child's state) for the Phase E hero. Does NOT overwrite umbrella state.
-- Tests 197 → **208** (`selectNextThreadJob`, `aggregateUmbrellaState`,
-  `storylineFraming`).
+**E1 — data + pure helpers** (`app/lib/stories.ts`, tested):
+- `dailyActivitySeries`, `seriesPoints`, `lineWeight` (the last two are now only
+  used by the deleted chart — harmless dead helpers, still tested).
+- `threadSubject(title, anchor)` — short display subject for umbrellas: keeps an
+  already-short title with its exact casing ("SpaceX", "NASA"), else falls back
+  to the title-cased anchor ("Anthropic lanceert Claude Science…" → "Anthropic").
+  `titleCaseEntity` helper alongside it.
 
-### Verification (live, today's editions)
-- **Two bugs caught + fixed during verification:** (1) the follow lookup used
-  `type` instead of `target_type`/`active` — `generate` failed every attempt on the
-  first run; (2) the overflow fill was gated behind `allowDeep`, leaving blank cards
-  in a degraded budget — moved outside the gate.
-- **Priority correction:** the plan's original "umbrellas/parent-null before
-  storylines" ordering let **seven one-item flat threads eat the whole 8-slot cap →
-  zero storylines advanced**. Switched to activity-based (the storylines were the
-  *busiest* threads). Re-verified: **all 3 storyline candidates advanced first**,
-  same cost. `selectNextThreadJob` is type-neutral now — do NOT reintroduce a
-  type-based tiebreak.
-- **Result:** storylines advance their own `state` in one edition; 0 blank deep
-  cards even in `minimaal` mode; clean-run cost ≈ **€0.10** (scan €0.043 + 8 deep
-  updates €0.034 + daily_paper €0.013), under the €0.15 hard cap.
+**E1 — `getUmbrella(profileId, threadId)`** (`app/lib/queries.ts`):
+- Returns `null` for a leaf thread → caller falls back to `getStoryDetail` +
+  `StoryDetailView` (Phase C, unchanged). Otherwise the umbrella meta +
+  `aggregateUmbrellaState` rollup + one `UmbrellaLine` per storyline (+ the
+  "Algemeen" general bucket when the umbrella directly holds items).
+- Each line carries a **facet** (first entity ≠ the umbrella's anchor,
+  title-cased), a rolled-up `series`, and a **`detail`** payload for the reader:
+  `state`, per-event list (each event now carries **its own `article` + Sol
+  note**, so any dot can render its moment), sources — reusing the exact
+  `edition_items` fetch pattern from `getStoryDetail`.
 
-## What's open — the road ahead (order)
+**E2 — UI + routing:**
+- `app/archive/[threadId]/page.tsx` branches: umbrella → `UmbrellaHero` +
+  `UmbrellaReader`; leaf → `StoryDetailView`.
+- `UmbrellaHero.tsx` — hero with the aggregated state and the broad "Volg heel
+  verhaal" bell (follows the umbrella id).
+- `UmbrellaReader.tsx` — the master–detail component (selection + per-storyline
+  follow state; left `ArticlePanel`, right `StorylineBlock` list with the
+  `EventDots` strip and `FollowBell`).
+- `/archive` (`listStories`) now lists **umbrellas only**; flat threads are
+  hidden. Umbrella rows roll their children's events into their own
+  timeline/count and show a "▨ verhaallijnen" badge (`StoriesList.tsx`).
 
-1. **Phase E1 → E2** — the umbrella UI: big multi-line timeline (one line per
-   storyline, color = DESTEP lens, live lines thicker/pulsing, dashed "Algemeen"),
-   left legend with a follow-bell per storyline, two follow tiers. Hero consumes
-   **`aggregateUmbrellaState`** (D3 shipped it). `/archive/[threadId]` branches
-   umbrella-vs-leaf; `/archive` lists umbrellas. Full spec: `docs/threads-plan.md`
-   "Phase E"; approved mockup `umbrella_thread_multiline_bell_follow_mockup`.
-2. **Entity typing (later)** — tag entities actor/product/event in the scan so
-   umbrellas = actors and storylines = product/event facets; the clean fix for the
-   storyline rough edges below. Its own phase.
+**Decisions made this session (Siem, 1 Jul 2026):**
+- Line/tile color = **category color** (reuse `categoryColor`), not the DESTEP lens.
+- `/archive` = **umbrellas only** (flat threads dropped from the index).
+- The **multi-line graph was rejected** → bento tiles → finally the
+  **master–detail reader** (article left 2/3, storylines right 1/3).
+- Umbrella titles display as **subjects** ("Anthropic"), not full headlines.
+- The dots are **event pickers** that drive the sticky panel.
+
+## What's open — the road ahead
+
+1. **Entity typing (its own phase)** — tag entities actor/product/event in the
+   scan so umbrellas = actors and storylines = product/event facets. This is the
+   real fix for the storyline fragmentation now visible in the reader (e.g. under
+   Anthropic: "Claude" vs "Claude Science" vs "Claude Sonnet 5" as separate
+   storylines; Fable vs Claude Fable 5).
+2. **Small reader polish, pending Siem's call:**
+   - The "▨ verhaallijnen" badge on `/archive` rows is redundant now every row is
+     an umbrella — offered to drop it or swap for a child count.
+   - The right-side blocks are single-column at 1/3 width — offered a 2-up
+     `grid-cols-2` variant.
 3. Daily-paper krant redesign — **still parked** (Siem's call).
 
 ## Known issues / things to keep in mind
 
-- **Storyline coverage depends on `select` giving storyline items DEEP band.** On
-  1 Jul only **2 deep items** landed on storylines vs 7 on flat threads, so few
-  storylines could advance regardless of priority. Making storylines more visible is
-  partly an upstream `select`-band tuning concern, not D3.
-- **Cap default 8 ≈ what €0.10–0.15 affords** (~€0.004/deep update). Raising it
-  raises cost; it's a hard reallocation, not free headroom. Env
-  `GENERATE_MAX_THREAD_UPDATES`.
-- **Storyline titles are the bare facet** ("PS5", "Fable", "Starship") until the
-  storyline is generated into a headline — they read short in the "Gerelateerde
-  verhaallijnen" rail. Siem considered a composed display label ("PS5 binnen Sony")
-  this session and **decided against it** — leave as-is.
-- **Today's editions are verification artifacts:** e20ecc87 was regenerated several
-  times (cost inflated to ~€0.138, still < €0.15) and showcases the 3 storylines;
-  e004bad7 completed on the *pre-fix* priority (budget spent, can't cleanly
-  deep-regen) so shows 0 storyline advances. Tomorrow's cron editions run the final
-  code from a clean budget and will showcase storylines naturally.
-- **Storyline rough edges (need entity typing to fully fix):** product-version
-  fragmentation (`Fable` vs `Claude Fable 5`); recurring products suppressed as
-  sibling umbrellas (Mythos); coincidental facets from the low floor of 2. Tuning,
-  not bugs.
-- **Umbrella titles can be a full generated headline** (`generate` overwrites
-  `title`) — the E hero/graph should show `anchor_entity` or a short label, not the
-  raw title. `nextThreadUpdateJob` already prefers the parent's `anchor_entity` for
-  the framing label.
+- **Console "Encountered a script tag while rendering" errors are harmless
+  pre-existing noise** — they come from the anti-flash theme `<script>` in
+  `layout.tsx` (fires on every page), not from the reader.
+- **Storyline facet/label rough edges** (product-version fragmentation, the
+  low facet floor) need **entity typing** to fully fix — tuning, not bugs.
+- **Umbrella/child titles are often full generated headlines** (`generate`
+  overwrites `title`); the reader deliberately shows the short **facet** eyebrow
+  and `threadSubject` handles the archive/hero labels.
+- **Dev server CSS occasionally fails to load** after many HMR cycles / session
+  resumes → `rm -rf .next` and restart (a plain restart isn't always enough).
 - **`.next/types/… 2.*` duplicate files** break `tsc` with bogus "Duplicate
   identifier". Fix: `find .next -name "* 2.*" -delete` then re-run.
 - **Following is thread-level** (`follow_marks` type `thread`, columns
   `target_type`/`target_id`/`active`) — works for umbrellas and storylines.
-- **Thread knobs (env):** `THREADS_ANCHOR_MIN_DAYS` (3), `THREADS_ANCHOR_MIN_ITEMS`
-  (5), `THREADS_ANCHOR_WINDOW_DAYS` (14), `THREADS_CLUSTER_OVERLAP` (0.3),
-  `THREADS_BIG_TOPIC_MIN` (5), `THREADS_FACET_MIN_ITEMS` (2),
-  `THREADS_PROMOTE_MIN_FACETS` (2), `GENERATE_MAX_THREAD_UPDATES` (8).
+- **Verify on localhost, not the headless preview** — the preview harness reports
+  a 0-width viewport, so the `lg:` two-column split can't be measured there; it
+  renders correctly in a real desktop browser.
 - **Budget:** ceiling `BUDGET_EDITION_EUR` = €0.15 (aim €0.10); guard degrades
-  vol → zuinig → minimaal → stop; `minimaal`/`stop` disable deep AI (the overflow
-  fill still runs and keeps cards non-blank).
-- **A full `npm run pipeline` is ~8–10 min/edition** (`generate` dominates); prod
-  runs one step per cron tick (~7 s). Pipeline runs are sleep-sensitive.
+  vol → zuinig → minimaal → stop. Thread knobs (env): `THREADS_ANCHOR_MIN_DAYS`
+  (3), `THREADS_ANCHOR_MIN_ITEMS` (5), `THREADS_ANCHOR_WINDOW_DAYS` (14),
+  `THREADS_CLUSTER_OVERLAP` (0.3), `THREADS_BIG_TOPIC_MIN` (5),
+  `THREADS_FACET_MIN_ITEMS` (2), `THREADS_PROMOTE_MIN_FACETS` (2),
+  `GENERATE_MAX_THREAD_UPDATES` (8).
 - **Throwaway dev scripts (untracked, NOT committed):** `split-storylines.ts`,
   `rebuild-threads.ts`, `verify-*`, `regen-phase5.ts`, `backfill-threads.ts`.
   `.claude/` + `Morning Report design/` stay untracked; `CLAUDE.md` is gitignored.

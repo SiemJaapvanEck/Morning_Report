@@ -81,6 +81,9 @@ export function StoriesList({ stories }: { stories: Story[] }) {
   const [sort, setSort] = useState<StorySort>("latest");
   const [activeCat, setActiveCat] = useState<string | null>(null);
   const [recency, setRecency] = useState<Recency | "all">("all");
+  const [onlyFollowed, setOnlyFollowed] = useState(false);
+
+  const followedCount = useMemo(() => stories.filter((s) => s.followed).length, [stories]);
 
   // Category chips partition on each story's *dominant* category, so a chip is a
   // sharp bucket again (the full multi-category set stays as display tags only).
@@ -92,10 +95,13 @@ export function StoriesList({ stories }: { stories: Story[] }) {
 
   const visible = useMemo(() => {
     const filtered = stories.filter(
-      (s) => (recency === "all" || s.recency === recency) && (!activeCat || s.category?.slug === activeCat),
+      (s) =>
+        (recency === "all" || s.recency === recency) &&
+        (!activeCat || s.category?.slug === activeCat) &&
+        (!onlyFollowed || s.followed),
     );
     return sortStories(filtered, sort);
-  }, [stories, recency, activeCat, sort]);
+  }, [stories, recency, activeCat, sort, onlyFollowed]);
 
   return (
     <div className={`${archivo.variable} ${spaceMono.variable}`}>
@@ -146,6 +152,20 @@ export function StoriesList({ stories }: { stories: Story[] }) {
             </button>
           ))}
         </div>
+
+        {followedCount > 0 && (
+          <button
+            onClick={() => setOnlyFollowed((v) => !v)}
+            className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
+              onlyFollowed
+                ? "border-[#2f6df0] bg-[#2f6df0] text-white"
+                : "border-stone-200 text-[#2f6df0] hover:bg-[#2f6df0]/5 dark:border-stone-700"
+            }`}
+          >
+            ★ Mijn verhalen
+            <span className={onlyFollowed ? "text-white/80" : "text-stone-400"}>{followedCount}</span>
+          </button>
+        )}
       </div>
 
       {/* Category filter chips */}

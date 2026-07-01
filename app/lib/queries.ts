@@ -3,7 +3,8 @@
 
 import { db, unwrap } from "@/modules/shared/db";
 import { todayLocal } from "@/modules/shared/config";
-import { updatedAgo, recencyTier, type Recency } from "@/app/lib/stories";
+import { entityOverlap, normalizeEntity } from "@/modules/threads";
+import { updatedAgo, recencyTier, rankRelated, type Recency } from "@/app/lib/stories";
 import type {
   CalendarEventCertainty,
   CalendarEventKind,
@@ -279,6 +280,8 @@ export interface Story {
   lastSeenAt: string | null;
   /** precomputed compact age of lastSeenAt (e.g. "2u"), so the UI stays pure */
   updatedLabel: string;
+  /** does the reader follow this storyline? — powers the "Mijn verhalen" filter */
+  followed: boolean;
   /** one dot per linked event, by date ascending — the row's mini timeline bar */
   events: { date: string }[];
 }
@@ -323,6 +326,17 @@ export async function listStories(profileId: string): Promise<Story[]> {
     last_seen_at: string | null;
   }[];
   if (threads.length === 0) return [];
+
+  // Which of these threads the reader actively follows (the "Mijn verhalen" axis).
+  const followRows = unwrap(
+    await db()
+      .from("follow_marks")
+      .select("target_id")
+      .eq("profile_id", profileId)
+      .eq("target_type", "thread")
+      .eq("active", true),
+  ) as { target_id: string }[];
+  const followedThreads = new Set(followRows.map((f) => f.target_id));
 
   // Each linked item is an event; its edition's date places it on the timeline,
   // and its own category feeds the story's (multi-)category set.
@@ -403,17 +417,36 @@ export async function listStories(profileId: string): Promise<Story[]> {
         eventCount: dates.length,
         lastSeenAt: t.last_seen_at,
         updatedLabel: updatedAgo(t.last_seen_at, now),
+        followed: followedThreads.has(t.id),
         events: dates.map((date) => ({ date })),
       };
     })
     .filter((s) => s.eventCount >= MIN_STORY_EVENTS);
 }
 
-/** One event on a story's detail timeline: the source item + its written update. */
+/** One event on a story's detail timeline: the source item + its deep article. */
 export interface StoryEvent {
   date: string | null;
+  /** the source item's headline */
   title: string;
+  /** flat fallback text (the dashboard summary) — used when there is no article */
   body: string | null;
+  /** structured two-layer deep article for this event, or null (older/non-deep) */
+  article: DeepArticle | null;
+  /** Sol's note for this event, when present */
+  sol_note: string | null;
+  source_name: string | null;
+  url: string | null;
+}
+
+/** Another storyline related to this one, by shared entities or parent/child. */
+export interface RelatedStory {
+  id: string;
+  title: string;
+  status: ThreadStatus;
+  category: { slug: string; label: string } | null;
+  /** the entities both stories share — drives the "deelt: …" label */
+  shared: string[];
 }
 
 /** A single story for the detail page (Phase C drill-in target). */
@@ -421,40 +454,67 @@ export interface StoryDetail {
   id: string;
   title: string;
   status: ThreadStatus;
+  /** dominant category of the linked items — the dot color */
   category: { slug: string; label: string } | null;
+  /** every category the items span, most-frequent first — display tags */
+  categories: { slug: string; label: string }[];
   /** accumulated storyline prose the editions build on */
   state: string | null;
+  /** the storyline's current source-grounded forecast, or null */
+  prediction: ThreadPrediction | null;
+  /** the thread's normalized entity set */
+  entities: string[];
+  /** does the reader follow this storyline? */
+  followed: boolean;
   firstDate: string | null;
   lastDate: string | null;
   eventCount: number;
   /** the linked events, newest first */
   events: StoryEvent[];
+  /** related storylines, strongest relation first */
+  related: RelatedStory[];
+  /** upcoming dated events on this storyline */
+  agenda: AgendaEvent[];
+  /** the underlying sources, with how many of the events each contributed */
+  sources: { name: string; count: number }[];
 }
 
 /**
- * One story by thread id, scoped to the profile. Minimal Phase B stub: the
- * thread's meta, its accumulated state prose, and the linked events (source title
- * + the written update). Phase C builds the full detail page on top of this.
+ * One story by thread id, scoped to the profile (Phase C). The thread's meta +
+ * accumulated state + forecast, every linked event with its full deep article,
+ * the related storylines (by entity overlap + parent/child), the upcoming agenda,
+ * and the source breakdown. Batched `in(...)` lookups via {@link fetchInChunks}.
  */
 export async function getStoryDetail(profileId: string, threadId: string): Promise<StoryDetail | null> {
   const rows = unwrap(
     await db()
       .from("threads")
-      .select("id, title, status, category_id, state")
+      .select("id, title, status, category_id, state, entities, prediction, parent_thread_id")
       .eq("profile_id", profileId)
       .eq("id", threadId)
       .limit(1),
-  ) as { id: string; title: string; status: ThreadStatus; category_id: string | null; state: string | null }[];
+  ) as {
+    id: string;
+    title: string;
+    status: ThreadStatus;
+    category_id: string | null;
+    state: string | null;
+    entities: string[] | null;
+    prediction: ThreadPrediction | null;
+    parent_thread_id: string | null;
+  }[];
   const thread = rows[0];
   if (!thread) return null;
+  const entities = thread.entities ?? [];
 
-  const category =
-    thread.category_id != null
-      ? ((unwrap(await db().from("categories").select("slug, name").eq("id", thread.category_id).limit(1)) as {
-          slug: string;
-          name: string;
-        }[])[0] ?? null)
-      : null;
+  // Categories are a small table — load once and map by id (used for this story's
+  // dominant/multi categories and for the related storylines' labels).
+  const allCats = unwrap(await db().from("categories").select("id, slug, name")) as {
+    id: string;
+    slug: string;
+    name: string;
+  }[];
+  const catById = new Map(allCats.map((c) => [c.id, { slug: c.slug, label: c.name }]));
 
   const links = unwrap(
     await db().from("thread_items").select("item_id, edition_id").eq("thread_id", threadId),
@@ -467,37 +527,173 @@ export async function getStoryDetail(profileId: string, threadId: string): Promi
   const dateByEdition = new Map(eds.map((e) => [e.id, e.date]));
 
   const itemIds = [...new Set(links.map((l) => l.item_id))];
-  const items = itemIds.length
-    ? (unwrap(await db().from("items").select("id, title").in("id", itemIds)) as { id: string; title: string }[])
-    : [];
-  const titleByItem = new Map(items.map((i) => [i.id, i.title]));
-  const eis = itemIds.length
-    ? (unwrap(
-        await db().from("edition_items").select("item_id, summary_text").in("item_id", itemIds),
-      ) as { item_id: string; summary_text: string | null }[])
-    : [];
-  const bodyByItem = new Map(eis.map((e) => [e.item_id, e.summary_text]));
+  const items = await fetchInChunks(itemIds, async (batch) =>
+    unwrap(
+      await db().from("items").select("id, title, url, category_id, sources(name)").in("id", batch),
+    ) as unknown as {
+      id: string;
+      title: string;
+      url: string | null;
+      category_id: string | null;
+      sources: { name: string } | null;
+    }[],
+  );
+  const itemById = new Map(items.map((i) => [i.id, i]));
+
+  // The deep article + Sol note live on the edition_item for that item in that
+  // edition, so key by item:edition (an item can recur across editions).
+  const eis = await fetchInChunks(itemIds, async (batch) =>
+    unwrap(
+      await db()
+        .from("edition_items")
+        .select("item_id, edition_id, summary_text, article, sol_note")
+        .in("item_id", batch),
+    ) as {
+      item_id: string;
+      edition_id: string | null;
+      summary_text: string | null;
+      article: DeepArticle | null;
+      sol_note: string | null;
+    }[],
+  );
+  const eiByKey = new Map(eis.map((e) => [`${e.item_id}:${e.edition_id ?? ""}`, e]));
 
   const events: StoryEvent[] = links
-    .map((l) => ({
-      date: l.edition_id ? dateByEdition.get(l.edition_id) ?? null : null,
-      title: titleByItem.get(l.item_id) ?? "Onbekend bericht",
-      body: bodyByItem.get(l.item_id) ?? null,
-    }))
+    .map((l) => {
+      const item = itemById.get(l.item_id);
+      const ei = eiByKey.get(`${l.item_id}:${l.edition_id ?? ""}`);
+      return {
+        date: l.edition_id ? dateByEdition.get(l.edition_id) ?? null : null,
+        title: item?.title ?? "Onbekend bericht",
+        body: ei?.summary_text ?? null,
+        article: ei?.article ?? null,
+        sol_note: ei?.sol_note ?? null,
+        source_name: item?.sources?.name ?? null,
+        url: item?.url ?? null,
+      };
+    })
     .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
 
   const dates = events.map((e) => e.date).filter((d): d is string => Boolean(d)).sort((a, b) => a.localeCompare(b));
+
+  // Dominant + multi categories from where the linked items landed.
+  const catCount = new Map<string, number>();
+  for (const id of itemIds) {
+    const cid = itemById.get(id)?.category_id;
+    if (cid) catCount.set(cid, (catCount.get(cid) ?? 0) + 1);
+  }
+  const rankedCats = [...catCount.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([id]) => catById.get(id))
+    .filter((c): c is { slug: string; label: string } => Boolean(c));
+  const category = rankedCats[0] ?? (thread.category_id ? catById.get(thread.category_id) ?? null : null);
+
+  // Source breakdown: count events per source name.
+  const sourceCount = new Map<string, number>();
+  for (const l of links) {
+    const name = itemById.get(l.item_id)?.sources?.name;
+    if (name) sourceCount.set(name, (sourceCount.get(name) ?? 0) + 1);
+  }
+  const sources = [...sourceCount.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+
+  // Related storylines: other open threads ranked by entity overlap, with parent
+  // and children always included (they share the anchor entity by construction).
+  const otherThreads = unwrap(
+    await db()
+      .from("threads")
+      .select("id, title, status, category_id, entities, parent_thread_id")
+      .eq("profile_id", profileId)
+      .neq("status", "closed")
+      .neq("id", threadId),
+  ) as {
+    id: string;
+    title: string;
+    status: ThreadStatus;
+    category_id: string | null;
+    entities: string[] | null;
+    parent_thread_id: string | null;
+  }[];
+  const selfSet = new Set(entities.map(normalizeEntity).filter(Boolean));
+  const toRelated = (t: (typeof otherThreads)[number]): RelatedStory => ({
+    id: t.id,
+    title: t.title,
+    status: t.status,
+    category: t.category_id ? catById.get(t.category_id) ?? null : null,
+    shared: [...new Set((t.entities ?? []).map(normalizeEntity).filter((e) => e && selfSet.has(e)))].slice(0, 3),
+  });
+  const ranked = rankRelated(
+    entities,
+    otherThreads.map((t) => ({ ...t, entities: t.entities ?? [] })),
+    entityOverlap,
+  ).map((r) => toRelated(r.item));
+  const relatedIds = new Set(ranked.map((r) => r.id));
+  for (const t of otherThreads) {
+    if (relatedIds.has(t.id)) continue;
+    if (t.id === thread.parent_thread_id || t.parent_thread_id === threadId) {
+      ranked.push(toRelated(t));
+      relatedIds.add(t.id);
+    }
+  }
+  const related = ranked.slice(0, 4);
+
+  // Upcoming dated events on this storyline.
+  const agendaRows = unwrap(
+    await db()
+      .from("calendar_events")
+      .select("id, title, kind, date, certainty, thread_id, threads(title)")
+      .eq("profile_id", profileId)
+      .eq("thread_id", threadId)
+      .gte("date", todayLocal())
+      .order("date", { ascending: true })
+      .limit(8),
+  ) as unknown as {
+    id: string;
+    title: string;
+    kind: CalendarEventKind;
+    date: string;
+    certainty: CalendarEventCertainty;
+    thread_id: string | null;
+    threads: { title: string } | null;
+  }[];
+  const agenda: AgendaEvent[] = agendaRows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    kind: r.kind,
+    date: r.date,
+    certainty: r.certainty,
+    thread_id: r.thread_id,
+    thread_title: r.threads?.title ?? null,
+  }));
+
+  const followRows = unwrap(
+    await db()
+      .from("follow_marks")
+      .select("target_id")
+      .eq("profile_id", profileId)
+      .eq("target_type", "thread")
+      .eq("target_id", threadId)
+      .eq("active", true),
+  ) as { target_id: string }[];
 
   return {
     id: thread.id,
     title: thread.title,
     status: thread.status,
-    category: category ? { slug: category.slug, label: category.name } : null,
+    category,
+    categories: rankedCats,
     state: thread.state,
+    prediction: thread.prediction,
+    entities,
+    followed: followRows.length > 0,
     firstDate: dates[0] ?? null,
     lastDate: dates.at(-1) ?? null,
     eventCount: events.length,
     events,
+    related,
+    agenda,
+    sources,
   };
 }
 

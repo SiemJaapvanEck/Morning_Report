@@ -280,7 +280,7 @@ export interface FeedbackEvent {
 export interface FollowMark {
   id: string;
   profile_id: string;
-  target_type: "item" | "topic" | "category";
+  target_type: "item" | "topic" | "category" | "thread";
   target_id: string;
   active: boolean;
   created_at: string;

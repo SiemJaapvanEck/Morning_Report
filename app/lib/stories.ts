@@ -91,6 +91,70 @@ export const STATUS_BADGE: Record<ThreadStatus, { label: string; cls: string }> 
   },
 };
 
+// ── Detail page (Phase C): timeline scrubber + intensity ─────────────────────
+
+/** Whole-day index of an ISO date (YYYY-MM-DD), UTC. */
+function dayIndex(iso: string): number {
+  return Math.floor(Date.parse(iso + "T00:00:00Z") / MS_PER_DAY);
+}
+
+/**
+ * Horizontal position (0..100%) of each event on the detail-page scrubber, by its
+ * date between the first and last event — same mapping as the archive TimelineBar.
+ * Input order is preserved; undated/unparseable dates fall back to 0. A single
+ * (or zero-span) story puts every node at 0.
+ */
+export function timelinePositions(dates: string[]): number[] {
+  const days = dates.map((d) => (d ? dayIndex(d) : NaN));
+  const valid = days.filter((d) => !Number.isNaN(d));
+  if (valid.length === 0) return dates.map(() => 0);
+  const first = Math.min(...valid);
+  const last = Math.max(...valid);
+  const span = Math.max(1, last - first);
+  return days.map((d) => (Number.isNaN(d) ? 0 : Math.round(((d - first) / span) * 1000) / 10));
+}
+
+/**
+ * Event density per equal-width time bin across the story's span — the intensity
+ * bars under the scrubber. Returns an array of `bins` integer counts (first → last
+ * event). Empty/undated input yields all-zero bins.
+ */
+export function eventHeat(dates: string[], bins: number): number[] {
+  const out = new Array(Math.max(1, bins)).fill(0) as number[];
+  const days = dates.map((d) => (d ? dayIndex(d) : NaN)).filter((d) => !Number.isNaN(d));
+  if (days.length === 0) return out;
+  const first = Math.min(...days);
+  const last = Math.max(...days);
+  const span = last - first;
+  for (const d of days) {
+    const idx =
+      span === 0
+        ? out.length - 1
+        : Math.min(out.length - 1, Math.floor(((d - first) / (span + 1)) * out.length));
+    out[idx]++;
+  }
+  return out;
+}
+
+/**
+ * Rank candidate storylines by entity-overlap with the current one, strongest
+ * first; drops zero-overlap candidates. Ties break on id so the order is
+ * deterministic. The overlap fn is injected so this stays a pure, testable
+ * wrapper (callers pass `entityOverlap` from modules/threads).
+ */
+export function rankRelated<T extends { id: string; entities: string[] }>(
+  selfEntities: string[],
+  others: T[],
+  overlap: (a: string[], b: string[]) => number,
+  limit = 4,
+): { item: T; score: number }[] {
+  return others
+    .map((item) => ({ item, score: overlap(selfEntities, item.entities) }))
+    .filter((r) => r.score > 0)
+    .sort((a, b) => b.score - a.score || a.item.id.localeCompare(b.item.id))
+    .slice(0, limit);
+}
+
 /** Category slug → dot/timeline color. The #2f6df0 interaction blue is reserved. */
 const CATEGORY_COLOR: Record<string, string> = {
   tech: "#7c3aed", // violet

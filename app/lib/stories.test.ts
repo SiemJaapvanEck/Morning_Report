@@ -1,5 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { spanDays, sortStories, updatedAgo, categoryColor, recencyTier } from "./stories";
+import {
+  spanDays,
+  sortStories,
+  updatedAgo,
+  categoryColor,
+  recencyTier,
+  timelinePositions,
+  eventHeat,
+  rankRelated,
+} from "./stories";
+import { entityOverlap } from "../../modules/threads";
 import type { Story } from "./queries";
 
 // Minimal Story stub — only the fields each helper reads matter.
@@ -16,6 +26,7 @@ function story(p: Partial<Story> & { id: string }): Story {
     eventCount: p.eventCount ?? 0,
     lastSeenAt: p.lastSeenAt ?? null,
     updatedLabel: p.updatedLabel ?? "—",
+    followed: p.followed ?? false,
     events: p.events ?? [],
   };
 }
@@ -86,5 +97,54 @@ describe("recencyTier", () => {
   it("treats missing/invalid dates as dormant", () => {
     expect(recencyTier(null, now)).toBe("dormant");
     expect(recencyTier("not-a-date", now)).toBe("dormant");
+  });
+});
+
+describe("timelinePositions", () => {
+  it("maps dates to 0..100 between first and last", () => {
+    expect(timelinePositions(["2026-06-01", "2026-06-06", "2026-06-11"])).toEqual([0, 50, 100]);
+  });
+  it("preserves input order regardless of chronology", () => {
+    expect(timelinePositions(["2026-06-11", "2026-06-01"])).toEqual([100, 0]);
+  });
+  it("puts a single or zero-span story at 0", () => {
+    expect(timelinePositions(["2026-06-01"])).toEqual([0]);
+    expect(timelinePositions(["2026-06-01", "2026-06-01"])).toEqual([0, 0]);
+  });
+  it("returns all-zero for empty/undated input", () => {
+    expect(timelinePositions([])).toEqual([]);
+    expect(timelinePositions(["", ""])).toEqual([0, 0]);
+  });
+});
+
+describe("eventHeat", () => {
+  it("counts events into equal-width bins across the span", () => {
+    const heat = eventHeat(["2026-06-01", "2026-06-02", "2026-06-10"], 2);
+    expect(heat).toHaveLength(2);
+    expect(heat[0]).toBe(2);
+    expect(heat[1]).toBe(1);
+    expect(heat.reduce((a, b) => a + b, 0)).toBe(3);
+  });
+  it("returns all-zero bins for empty input", () => {
+    expect(eventHeat([], 4)).toEqual([0, 0, 0, 0]);
+  });
+  it("puts a single-day story in the last bin", () => {
+    expect(eventHeat(["2026-06-01", "2026-06-01"], 3)).toEqual([0, 0, 2]);
+  });
+});
+
+describe("rankRelated", () => {
+  const others = [
+    { id: "a", entities: ["trump", "china"] },
+    { id: "b", entities: ["spacex", "nasa"] },
+    { id: "c", entities: ["trump", "eu"] },
+  ];
+  it("ranks by overlap desc and drops zero-overlap candidates", () => {
+    const ranked = rankRelated(["trump", "china"], others, entityOverlap);
+    expect(ranked.map((r) => r.item.id)).toEqual(["a", "c"]);
+    expect(ranked[0].score).toBeGreaterThan(ranked[1].score);
+  });
+  it("honors the limit", () => {
+    expect(rankRelated(["trump"], others, entityOverlap, 1).map((r) => r.item.id)).toEqual(["a"]);
   });
 });

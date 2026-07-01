@@ -276,3 +276,23 @@ export async function applyThreadTracking(
     if (error) throw new Error(`Thread-tracking (verwijderen): ${error.message}`);
   }
 }
+
+/**
+ * Follow / unfollow a single storyline (Phase C). Threads are entity-anchored, so
+ * "following" lives in follow_marks with target_type 'thread' (not the topic-keyed
+ * thread_tracking). Idempotent upsert on (profile, type, target) — the same
+ * conflict key the topic follow-marks use.
+ */
+export async function setThreadFollow(
+  profileId: string,
+  threadId: string,
+  active: boolean,
+): Promise<void> {
+  const { error } = await db()
+    .from("follow_marks")
+    .upsert(
+      { profile_id: profileId, target_type: "thread", target_id: threadId, active },
+      { onConflict: "profile_id,target_type,target_id" },
+    );
+  if (error) throw new Error(`Verhaallijn volgen: ${error.message}`);
+}

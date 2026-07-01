@@ -391,3 +391,15 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   (archive shows 35, 26 Live). Verifying surfaced a crash: `listStories` loaded
   ~400 linked items in one `in()` that blew the PostgREST URL limit — fixed with
   `fetchInChunks` (batched thread_items + items lookups). Pushed.
+- **30 June 2026 (continued) — Phase C shipped: the single-storyline detail page.**
+  `/archive/[threadId]` is now a sticky timeline scrubber + intensity strip on top
+  with the full deep article (lead + ripples + Sol note) swapping underneath on
+  click, plus a fixed context rail (forecast → agenda → related → sources). Added a
+  thread-level **Volg verhaallijn** button (migration `0015`: `follow_marks` now
+  allows `target_type='thread'`; `setThreadFollow` + `/api/threads/follow`) that
+  powers a sharp **Mijn verhalen** filter on the archive. `getStoryDetail` enriched
+  to carry per-event articles, prediction, related threads (entity overlap +
+  parent/child), agenda and sources; new pure helpers `timelinePositions`,
+  `eventHeat`, `rankRelated` with tests (179 → 188). Form locked first via an
+  interactive mockup approved by Siem. Gate green, pushed. Next: dashboard ripples,
+  Tavily citation UI, Daily Paper PRD.

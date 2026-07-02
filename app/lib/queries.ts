@@ -11,7 +11,9 @@ import {
   dailyActivitySeries,
   threadSubject,
   titleCaseEntity,
+  buildStorylineTimeline,
   type Recency,
+  type TimelineLink,
 } from "@/app/lib/stories";
 import type {
   CalendarEventCertainty,
@@ -24,6 +26,7 @@ import type {
   Profile,
   ThreadPrediction,
   ThreadStatus,
+  TimelineNode,
   WeatherSnapshot,
 } from "@/modules/shared/types";
 
@@ -40,6 +43,8 @@ export interface StorylineRef {
   title: string;
   /** "deel N": how many editions this storyline has appeared in, up to this one */
   part: number;
+  /** Ordered timeline nodes for the A3 aside: past instalments + optional future node. */
+  timeline: TimelineNode[];
 }
 
 export interface SectionView {
@@ -133,10 +138,19 @@ export async function getEdition(profileId: string, date: string): Promise<Editi
       const threadById = new Map(threads.map((t) => [t.id, t]));
 
       // "deel N": distinct editions (on or before today's date) this thread has
-      // appeared in. One pass over the thread's items joined to their editions.
+      // appeared in. Also pulls each linked item's title + source so the A3
+      // timeline card can show headline + byline per instalment.
       const partLinks = unwrap(
-        await db().from("thread_items").select("thread_id, edition_id").in("thread_id", threadIds),
-      ) as { thread_id: string; edition_id: string | null }[];
+        await db()
+          .from("thread_items")
+          .select("thread_id, edition_id, item_id, items(title, sources(name))")
+          .in("thread_id", threadIds),
+      ) as unknown as {
+        thread_id: string;
+        edition_id: string | null;
+        item_id: string;
+        items: { title: string; sources: { name: string } | null };
+      }[];
       const editionIds = [...new Set(partLinks.map((l) => l.edition_id).filter(Boolean))] as string[];
       const editionDates = editionIds.length
         ? ((unwrap(
@@ -151,6 +165,23 @@ export async function getEdition(profileId: string, date: string): Promise<Editi
             .map((l) => l.edition_id as string),
         );
         partByThread.set(tid, Math.max(1, eds.size));
+      }
+
+      // Build per-thread raw links for the A3 timeline (date + headline + source).
+      const rawLinksByThread = new Map<string, TimelineLink[]>();
+      for (const l of partLinks) {
+        if (!l.edition_id) continue;
+        const linkDate = editionDates.get(l.edition_id);
+        if (!linkDate) continue;
+        const arr = rawLinksByThread.get(l.thread_id) ?? [];
+        arr.push({
+          edition_id: l.edition_id,
+          date: linkDate,
+          title: l.items.title,
+          source: l.items.sources?.name ?? null,
+          item_id: l.item_id,
+        });
+        rawLinksByThread.set(l.thread_id, arr);
       }
 
       // A deep item can match several threads; pick the most-established storyline
@@ -171,6 +202,7 @@ export async function getEdition(profileId: string, date: string): Promise<Editi
           thread_id: thread.id,
           title: thread.title,
           part: partByThread.get(thread.id) ?? 1,
+          timeline: buildStorylineTimeline(rawLinksByThread.get(thread.id) ?? [], date, thread.prediction ?? null),
         });
         if (thread.prediction) predictionByItem.set(itemId, thread.prediction);
       }

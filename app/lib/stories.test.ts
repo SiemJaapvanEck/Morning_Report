@@ -13,6 +13,8 @@ import {
   lineWeight,
   threadSubject,
   titleCaseEntity,
+  buildStorylineTimeline,
+  type TimelineLink,
 } from "./stories";
 import { entityOverlap } from "../../modules/threads";
 import type { Story } from "./queries";
@@ -217,5 +219,138 @@ describe("threadSubject", () => {
   });
   it("falls back to the leading words when there is no anchor", () => {
     expect(threadSubject("Iran verkoopt olie met 20% premie na einde blokkade", null)).toBe("Iran verkoopt olie");
+  });
+});
+
+// ── buildStorylineTimeline (A3 Phase 2) ──────────────────────────────────────
+
+function link(overrides: Partial<TimelineLink> & { edition_id: string; date: string }): TimelineLink {
+  return {
+    item_id: overrides.edition_id + "-item",
+    title: overrides.title ?? `Artikel ${overrides.edition_id}`,
+    source: overrides.source ?? null,
+    ...overrides,
+  };
+}
+
+const TODAY = "2026-07-02";
+
+describe("buildStorylineTimeline", () => {
+  it("returns [] for empty links", () => {
+    expect(buildStorylineTimeline([], TODAY, null)).toEqual([]);
+  });
+
+  it("returns a single past node for one link", () => {
+    const nodes = buildStorylineTimeline([link({ edition_id: "e1", date: "2026-06-10" })], TODAY, null);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toMatchObject({ kind: "past", deel: 1, isNow: true });
+  });
+
+  it("excludes links after today", () => {
+    const nodes = buildStorylineTimeline(
+      [
+        link({ edition_id: "e1", date: "2026-06-10" }),
+        link({ edition_id: "e2", date: "2026-07-10" }),
+      ],
+      TODAY,
+      null,
+    );
+    expect(nodes).toHaveLength(1);
+    expect((nodes[0] as { date: string }).date).toBe("2026-06-10");
+  });
+
+  it("deduplicates links from the same edition", () => {
+    const nodes = buildStorylineTimeline(
+      [
+        link({ edition_id: "e1", date: "2026-06-10", title: "First" }),
+        link({ edition_id: "e1", date: "2026-06-10", title: "Second" }),
+      ],
+      TODAY,
+      null,
+    );
+    expect(nodes).toHaveLength(1);
+    expect((nodes[0] as { title: string }).title).toBe("First");
+  });
+
+  it("orders past nodes ascending by date", () => {
+    const nodes = buildStorylineTimeline(
+      [
+        link({ edition_id: "e2", date: "2026-06-15" }),
+        link({ edition_id: "e1", date: "2026-06-01" }),
+        link({ edition_id: "e3", date: "2026-06-30" }),
+      ],
+      TODAY,
+      null,
+    );
+    const dates = nodes.map((n) => n.date);
+    expect(dates).toEqual(["2026-06-01", "2026-06-15", "2026-06-30"]);
+  });
+
+  it("numbers deel from 1 in chronological order", () => {
+    const nodes = buildStorylineTimeline(
+      [
+        link({ edition_id: "e2", date: "2026-06-15" }),
+        link({ edition_id: "e1", date: "2026-06-01" }),
+      ],
+      TODAY,
+      null,
+    );
+    expect(nodes[0]).toMatchObject({ kind: "past", deel: 1 });
+    expect(nodes[1]).toMatchObject({ kind: "past", deel: 2 });
+  });
+
+  it("marks only the latest past node as isNow", () => {
+    const nodes = buildStorylineTimeline(
+      [
+        link({ edition_id: "e1", date: "2026-06-01" }),
+        link({ edition_id: "e2", date: "2026-06-15" }),
+        link({ edition_id: "e3", date: "2026-07-01" }),
+      ],
+      TODAY,
+      null,
+    );
+    const pastNodes = nodes.filter((n) => n.kind === "past") as { isNow: boolean }[];
+    expect(pastNodes[0].isNow).toBe(false);
+    expect(pastNodes[1].isNow).toBe(false);
+    expect(pastNodes[2].isNow).toBe(true);
+  });
+
+  it("appends a future node when prediction is given", () => {
+    const prediction = {
+      text: "Dit zal gebeuren",
+      target_date: "2026-08-01",
+      confidence: "verwacht" as const,
+      source_basis: "basis",
+    };
+    const nodes = buildStorylineTimeline(
+      [link({ edition_id: "e1", date: "2026-06-01" })],
+      TODAY,
+      prediction,
+    );
+    expect(nodes).toHaveLength(2);
+    expect(nodes[1]).toMatchObject({
+      kind: "future",
+      date: "2026-08-01",
+      text: "Dit zal gebeuren",
+      certainty: "verwacht",
+    });
+  });
+
+  it("includes no future node when prediction is null", () => {
+    const nodes = buildStorylineTimeline(
+      [link({ edition_id: "e1", date: "2026-06-01" })],
+      TODAY,
+      null,
+    );
+    expect(nodes.every((n) => n.kind === "past")).toBe(true);
+  });
+
+  it("returns [] (no today-only fallback) when all links are after today", () => {
+    const nodes = buildStorylineTimeline(
+      [link({ edition_id: "e1", date: "2026-07-10" })],
+      TODAY,
+      null,
+    );
+    expect(nodes).toEqual([]);
   });
 });

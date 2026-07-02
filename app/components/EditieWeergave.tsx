@@ -13,6 +13,7 @@ import type {
   FrontPage,
   MarktIndex,
   ThreadPrediction,
+  TimelineNode,
   WeatherSnapshot,
 } from "@/modules/shared/types";
 import { ItemRating } from "./ItemRating";
@@ -203,16 +204,121 @@ function Vooruitblik({ prediction }: { prediction: ThreadPrediction }) {
   );
 }
 
-// The aside slot for P2/P3. In P1 it renders VerhaallijnLabel + Vooruitblik.
-// Returns null when a story has no storyline or prediction so the grid
-// collapses to a single column rather than showing empty whitespace.
+// ── Verhaallijn timeline card (P2) ────────────────────────────────────────
+
+function formatShortDate(dateStr: string): string {
+  return new Date(dateStr + "T00:00:00").toLocaleDateString("nl-NL", {
+    day: "numeric",
+    month: "short",
+  });
+}
+
+type PastNode = Extract<TimelineNode, { kind: "past" }>;
+type FutureNode = Extract<TimelineNode, { kind: "future" }>;
+
+function TimelineCard({ storyline }: { storyline: NonNullable<Item["storyline"]> }) {
+  const pastNodes = storyline.timeline.filter((n): n is PastNode => n.kind === "past");
+  const futureNode = storyline.timeline.find((n): n is FutureNode => n.kind === "future");
+
+  return (
+    <div>
+      <Link
+        href="/archive"
+        className="inline-flex items-center gap-1.5 font-[family-name:var(--font-space-mono)] text-[10px] font-bold uppercase tracking-widest text-[#2f6df0] hover:underline"
+      >
+        <span>Verhaallijn</span>
+        <span className="text-stone-400">·</span>
+        <span className="normal-case tracking-normal">{storyline.title}</span>
+      </Link>
+      <div className="relative mt-3 pl-4">
+        {/* Vertical connector line */}
+        <div className="absolute left-[7px] top-2 bottom-2 w-px bg-stone-200 dark:bg-stone-700" />
+
+        {/* Past nodes */}
+        {pastNodes.map((node) => (
+          <div key={`${node.date}-${node.deel}`} className="relative mb-3 flex items-start gap-3">
+            <div
+              className={`mt-1 h-3 w-3 shrink-0 rounded-full border-2 ${
+                node.isNow
+                  ? "border-[#2f6df0] bg-[#2f6df0]"
+                  : "border-stone-300 bg-white dark:border-stone-600 dark:bg-stone-900"
+              }`}
+            />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-baseline gap-1.5">
+                <span
+                  className={`font-[family-name:var(--font-space-mono)] text-[10px] font-bold uppercase tracking-wide ${
+                    node.isNow ? "text-[#2f6df0]" : "text-stone-400"
+                  }`}
+                >
+                  {node.isNow ? "vandaag" : formatShortDate(node.date)}
+                </span>
+                <span className="font-[family-name:var(--font-space-mono)] text-[10px] text-stone-400">
+                  deel {node.deel}
+                </span>
+              </div>
+              <p
+                className={`mt-0.5 font-[family-name:var(--font-space-grotesk)] text-[12.5px] leading-snug ${
+                  node.isNow
+                    ? "font-semibold text-stone-800 dark:text-stone-100"
+                    : "text-stone-600 dark:text-stone-300"
+                }`}
+              >
+                {node.title}
+              </p>
+              {node.source && (
+                <span className="font-[family-name:var(--font-space-mono)] text-[10px] text-stone-400">
+                  {node.source}
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {/* Future node (prediction) */}
+        {futureNode && (
+          <div className="relative flex items-start gap-3">
+            <div className="mt-1 h-3 w-3 shrink-0 rounded-full border-2 border-dashed border-stone-300 dark:border-stone-600" />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-baseline gap-1.5">
+                <span className="font-[family-name:var(--font-space-mono)] text-[10px] font-bold text-stone-400">
+                  {formatShortDate(futureNode.date)}
+                </span>
+                <span
+                  className={`rounded-full px-1.5 py-0.5 font-[family-name:var(--font-space-mono)] text-[9px] font-bold uppercase ${CERTAINTY_CHIP[futureNode.certainty]}`}
+                >
+                  {CERTAINTY_LABEL[futureNode.certainty]}
+                </span>
+              </div>
+              <p className="mt-0.5 font-[family-name:var(--font-space-grotesk)] text-[12.5px] leading-snug text-stone-500 dark:text-stone-400">
+                {futureNode.text}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// The aside slot for P2/P3. Shows the full TimelineCard when the storyline has
+// ≥2 past instalments; falls back to VerhaallijnLabel + Vooruitblik otherwise.
+// Returns null when a story has no storyline or prediction (grid collapses cleanly).
 function VerhaallijnAside({ item }: { item: Item }) {
   if (!item.storyline && !item.prediction) return null;
+  const pastCount = item.storyline?.timeline.filter((n) => n.kind === "past").length ?? 0;
+  const showTimeline = pastCount >= 2;
+
   return (
     <aside className="mt-5 space-y-1 rounded-2xl border border-stone-100 bg-stone-50 p-4 dark:border-stone-800 dark:bg-stone-900/50 lg:mt-0">
-      {item.storyline && <VerhaallijnLabel storyline={item.storyline} />}
-      {item.prediction && <Vooruitblik prediction={item.prediction} />}
-      {/* P2: <TimelineCard storyline={item.storyline} /> */}
+      {showTimeline && item.storyline ? (
+        <TimelineCard storyline={item.storyline} />
+      ) : (
+        <>
+          {item.storyline && <VerhaallijnLabel storyline={item.storyline} />}
+          {item.prediction && <Vooruitblik prediction={item.prediction} />}
+        </>
+      )}
       {/* P3: <ImpactMapCard regio={item.regio} /> */}
     </aside>
   );

@@ -3,7 +3,7 @@
 // category → color map. Kept pure (no React) so they're unit-testable.
 
 import type { Story } from "@/app/lib/queries";
-import type { ThreadStatus } from "@/modules/shared/types";
+import type { ThreadPrediction, ThreadStatus, TimelineNode } from "@/modules/shared/types";
 
 export type StorySort = "latest" | "longest" | "active";
 
@@ -241,3 +241,75 @@ export function seriesPoints(series: number[], maxActivity: number): LinePoint[]
 export function lineWeight(recency: Recency): number {
   return recency === "live" ? 3 : recency === "week" ? 2 : 1.25;
 }
+
+// ── Verhaallijn timeline builder (A3 Phase 2) ────────────────────────────────
+
+/** Raw link record from thread_items enriched with edition date + item metadata. */
+export interface TimelineLink {
+  edition_id: string;
+  date: string;
+  title: string;
+  source: string | null;
+  item_id: string;
+}
+
+/**
+ * Assemble the A3 Verhaallijn timeline from raw links for one thread.
+ *
+ * One `TimelineNode` per distinct edition on/before `today` (ascending date),
+ * the latest marked `isNow`. An optional `future` node from `prediction` is
+ * appended at the end. Returns `[]` when `links` is empty.
+ *
+ * Per-edition dedup: the first link seen for a given `edition_id` wins
+ * (callers iterate in whatever order the DB returns; ordering by date is done
+ * here from the deduplicated set).
+ */
+export function buildStorylineTimeline(
+  links: TimelineLink[],
+  today: string,
+  prediction: ThreadPrediction | null,
+): TimelineNode[] {
+  // Dedup: one entry per edition_id, on/before today
+  const seen = new Set<string>();
+  const byEdition: { edition_id: string; date: string; title: string; source: string | null }[] = [];
+  for (const l of links) {
+    if (l.date > today) continue;
+    if (seen.has(l.edition_id)) continue;
+    seen.add(l.edition_id);
+    byEdition.push({ edition_id: l.edition_id, date: l.date, title: l.title, source: l.source });
+  }
+
+  if (byEdition.length === 0) return [];
+
+  // Ascending by date so deel numbering is chronological
+  byEdition.sort((a, b) => a.date.localeCompare(b.date));
+
+  const nodes: TimelineNode[] = byEdition.map((e, i) => ({
+    kind: "past" as const,
+    date: e.date,
+    title: e.title,
+    source: e.source,
+    deel: i + 1,
+    isNow: false,
+  }));
+
+  // Mark the latest past node as "vandaag"
+  const lastIdx = nodes.length - 1;
+  const last = nodes[lastIdx];
+  if (last.kind === "past") {
+    nodes[lastIdx] = { ...last, isNow: true };
+  }
+
+  // Append future node from prediction
+  if (prediction) {
+    nodes.push({
+      kind: "future",
+      date: prediction.target_date,
+      text: prediction.text,
+      certainty: prediction.confidence,
+    });
+  }
+
+  return nodes;
+}
+

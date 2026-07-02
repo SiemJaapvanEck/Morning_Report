@@ -3,6 +3,17 @@
 Chronologisch logboek van het project. Eén regel (of kort blok) per
 werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
 
+- **2 July 2026 — Entity typing F1/F2 went live + F3 gate cleared.** Applied
+  migration `0017_entities.sql` to the live Supabase project (now the latest
+  migration). Dropped the `apply_migration` deny rail from `.claude/settings.json`
+  (Siem's call — the block gave no approval prompt; other four Supabase rails
+  stay denied). Ran a full `npm run pipeline` (complete edition, all steps green)
+  to fire F2's registry write-back: `entities` grew 25 seeds → 313 rows (286
+  `ai_high`), with Anthropic=actor / Claude+Fable=product correctly typed and
+  seeds preserved. Scan cost €0.1251 — ~25% over the €0.10 target, parked as a
+  tuning item. No F3 code yet; that's next. Also commits the `.claude/` hooks +
+  push-main/start skills.
+
 - **2 July 2026 — Merged `idle-work/2026-07-02` → main.** Entity typing Phases F1
   and F2: entity registry table + seed migration (`0017_entities.sql`), pure
   `modules/entities/` helpers, scan entity typing with registry write-back.

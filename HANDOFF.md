@@ -1,6 +1,6 @@
 # HANDOFF — Entity Typing (Phases F1–F5)
 
-> **Last updated:** 2 July 2026 — merged to main from `idle-work/2026-07-02`
+> **Last updated:** 2 July 2026 — Siem (main)
 > **Sprint board + per-phase specs:** `docs/entity-typing-plan.md`.
 
 ## What this arc is
@@ -18,53 +18,61 @@ Five phases:
 
 - **F1** ✅ — `entities` registry table (migration) + seed + pure `modules/entities/` helpers.
 - **F2** ✅ — Scan tags each entity with a type (registry-as-memory + write-back loop).
-- **F3** — Threading uses the type (actors=umbrellas, products/events=facets). **The visible reader fix.**
+- **F3** — Threading uses the type (actors=umbrellas, products/events=facets). **The visible reader fix.** ← next
 - **F4** — Relationships (product→actor) + variant canonicalization (deep layer).
 - **F5** — Feed typed entities + relationships into Sol/redactie (actor-level cross-ref).
 
-## What landed in this merge (F1 + F2)
+## Where we stand (this session)
 
-### Phase F1 — Entity registry table + seed + pure helpers
+**F1 + F2 are now LIVE, and the F3 gate is fully clear.** This session did not
+write F3 code — it took F1/F2 from "merged but dormant" to "running against the
+live DB," and verified the result:
 
-- **`supabase/migrations/0017_entities.sql`** (NOT yet applied): creates
-  `entity_type` enum (`actor|person|product|event|place|other`) and
-  `entity_confidence` enum (`seed|ai_high|ai_low`), then the `entities` table
-  with 27 seed rows covering dateline places, alias-map targets, persons, actors,
-  and key AI products (Claude, Fable).
-- **`modules/shared/types.ts`**: added `EntityType`, `EntityConfidence`, `Entity`.
-- **`modules/entities/index.ts`**: new pure module — `buildRegistry`, `typeOf`,
-  `isUmbrellaType`, `isFacetType`, `resolveCanonical`, `mergeRegistryEntry`,
-  `buildRegistryPriming`. No framework imports, no DB calls.
-- **`modules/entities/entities.test.ts`**: 19 vitest tests.
+- **Migration `0017_entities.sql` applied** to the live Supabase project
+  (`iqhyndhrlhjfdrwjvmjv`) — it is now the latest migration
+  (`20260702094459_0017_entities`). Enums + `entities` table + index + RLS +
+  seed rows all committed in one transaction.
+- **Permission change (Siem's call):** `.claude/settings.json` had a hard
+  `deny` on the Supabase `apply_migration` tool — this blocked the migration
+  with no prompt to approve. Siem chose to **drop that rail permanently** (the
+  other four rails — `execute_sql`, `deploy_edge_function`, `merge_branch`,
+  `reset_branch` — stay denied). This is why the settings change is in this
+  commit; it must persist so future interactive sessions can apply migrations.
+- **F2 write-back ran** via one full `npm run pipeline` (a complete edition for
+  today, all steps green). The `entities` table grew from **25 seed rows →
+  313 rows** (286 `ai_high`, 2 `ai_low`, 25 seeds preserved with their `seed`
+  confidence). Type spread: product 109, place 75, actor 54, other 42,
+  person 29, event 4.
+- **Fragmentation-critical entities verified correctly typed and seed-protected:**
+  Anthropic/OpenAI/SpaceX/NASA/Federal Reserve/Warner Bros = `actor/seed`;
+  Claude (8 aliases) & Fable (3 aliases) = `product/seed`; Trump = `person/seed`.
+  The write-back did not clobber the trusted seed core.
 
-### Phase F2 — Scan entity typing + registry write-back
+### Cost check (⚠️ scan slightly over target)
 
-- **`modules/rank/index.ts`**: scan schema now returns entities as
-  `{ name, type, confidence }` objects (six-value enum + high/low confidence).
-  `scanBatch` gains an optional `registry` parameter for prompt priming and
-  canonical resolution. `ScanUitslag` gains `entity_types` (norm_key → type for
-  F3), `entity_display`, and `entity_confidence` for the write-back path.
-  `maxTokens` 3500 → 5000.
-- **`modules/pipeline/steps.ts`**: `scanRankStep` loads the entity registry before
-  the scan, passes it to `scanBatch`, then batch-upserts typed entities to the
-  `entities` table after each scan. Idempotent on `norm_key`. `scan_meta` now
-  stores `entity_types` (norm_key → type) alongside the unchanged `entities`
-  display strings.
-- **`modules/entities/entities.test.ts`**: 4 additional tests for `buildRegistryPriming`.
+From `usage_log` for the run (45 AI calls, full edition €0.2321):
 
-### Gate (both phases)
-`npm run lint && npx tsc --noEmit && npm test && npm run build` → **green**.
-239 tests passing.
+| Step | Cost | Calls |
+|---|---|---|
+| `scan_rank` | **€0.1251** | 8 |
+| `generate` | €0.0955 | 33 |
+| `daily_paper` | €0.0115 | 4 |
 
-## What's next — Phase F3
+Scan came in **~25% over the €0.10/edition target**. Cause: the `maxTokens`
+3500→5000 raise plus richer output (each entity is now a `{name,type,confidence}`
+object, not a bare string), and this edition ingested a large two-wave batch
+(8 scan calls). Not blocking — the registry is a growing asset, so future runs
+should mostly hit existing rows and trend cheaper. **Parked as a tuning item**
+(options: emit type/confidence only for non-place entities, or drop `maxTokens`
+back once the registry matures).
 
-**First unchecked box on the sprint board: Phase F3.**
+## What's next — Phase F3 (gate is now clear)
 
-Goal: threading uses entity types so the fragmentation Siem saw clears up.
+**First unchecked box on the sprint board: Phase F3.** Everything F3 reads is now
+in place (typed registry populated, migration live). No plan has been agreed yet
+— draft one before writing code.
 
 What F3 needs:
-- The `entities` table must be live (Siem applies `0017_entities.sql`) and F2's
-  write-back must have run at least once so the registry has typed entries.
 - **`modules/threads/index.ts`**: anchor selection uses `isUmbrellaType`
   (actor/person only may anchor an umbrella). Products/events become storyline
   facets, never sibling umbrellas — this directly fixes the "Claude" / "Fable"
@@ -89,15 +97,17 @@ from the current HEAD** (snapshotting F1–F3), then write F4 code.
 - Following is thread-level (`follow_marks`, `target_type`/`target_id`/`active`).
 - AI provider = Grok (xAI) via `askAI()`; Anthropic switchable. All model IDs /
   prices live in `modules/shared/config.ts`.
-- The `entities` table does not exist until Siem applies `0017_entities.sql`. The
-  `db().from("entities")` call in `scanRankStep` will fail at runtime until then.
+- The `entities` table is now live and populated — the earlier "table does not
+  exist until applied" caveat no longer applies.
+- **Untracked, deliberately not committed:** `Morning Report design/` (6.8M of
+  standalone HTML/JSX mockups — referenced by CLAUDE.md but not yet tracked;
+  a separate decision) and several throwaway `scripts/*.ts` (verify/rebuild
+  dry-run helpers from prior sessions).
 
 ## Next actions for Siem
 
-1. Apply `supabase/migrations/0017_entities.sql` via the Supabase connector
-   (required before F2's write-back and F3's type lookups can run live).
-2. Verify live cost of the scan step: target ≤ €0.10 per edition; the raised
-   `maxTokens` (5000) slightly increases output tokens but stays on the cheap
-   scan tier.
-3. Start Phase F3 — either manually or via a new idle run.
-4. Live verification of the reader fix (F3 payoff) on `localhost:3000`.
+1. **Start Phase F3** — agree a short plan first (per working agreements), then
+   implement in `modules/threads/index.ts` with a throwaway dry-run rebuild to
+   preview the re-derived umbrellas.
+2. Live verification of the reader fix (F3 payoff) on `localhost:3000`.
+3. Decide whether to act on the scan-cost tuning item now or after F3.

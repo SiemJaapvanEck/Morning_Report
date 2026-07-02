@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Morning Report — Atlas Daily</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #e9e7e2; }
+  * { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  #stage { position: fixed; inset: 0; overflow-y: auto; overflow-x: hidden; background: #e9e7e2; }
+  #sizer { position: relative; width: 100%; }
+  #canvas { position: absolute; top: 0; left: 0; width: 1440px; transform-origin: top left; }
+</style>
+</head>
+<body>
+<template id="__bundler_thumbnail" data-bg-color="#2f6df0">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#2f6df0" />
+    <rect x="120" y="180" width="620" height="440" rx="40" fill="#ffffff" opacity="0.16" />
+    <rect x="170" y="240" width="430" height="40" rx="12" fill="#ffffff" opacity="0.9" />
+    <rect x="170" y="300" width="520" height="40" rx="12" fill="#ffffff" opacity="0.9" />
+    <rect x="170" y="430" width="360" height="20" rx="8" fill="#ffffff" opacity="0.55" />
+    <rect x="170" y="470" width="420" height="20" rx="8" fill="#ffffff" opacity="0.55" />
+    <g fill="#ffffff">
+      <circle cx="850" cy="250" r="14" opacity="0.9" />
+      <circle cx="890" cy="250" r="14" opacity="0.55" />
+      <circle cx="930" cy="250" r="14" opacity="0.35" />
+      <circle cx="970" cy="280" r="14" opacity="0.8" />
+      <circle cx="1010" cy="280" r="14" opacity="0.5" />
+      <circle cx="850" cy="290" r="14" opacity="0.65" />
+      <circle cx="890" cy="290" r="14" opacity="0.95" />
+      <circle cx="1050" cy="250" r="14" opacity="0.7" />
+    </g>
+    <path d="M800 620 L860 560 L920 590 L980 500 L1040 540 L1080 470" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" opacity="0.9" />
+  </svg>
+</template>
+<div id="stage"><div id="sizer"><div id="canvas"><div id="root"></div></div></div></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script src="data.js"></script>
+<script src="icons.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="atlas-daily.jsx"></script>
+
+<script type="text/babel" data-presets="react">
+  // Fit the fixed-width 1440 canvas to viewport width; the page scrolls vertically.
+  (function () {
+    const cv = document.getElementById('canvas');
+    const sizer = document.getElementById('sizer');
+    function fit() {
+      const s = window.innerWidth / 1440;
+      cv.style.transform = 'scale(' + s + ')';
+      sizer.style.height = (cv.offsetHeight * s) + 'px';
+      document.documentElement.style.setProperty('--dc-inv-zoom', 1 / s);
+    }
+    window.addEventListener('resize', fit);
+    if (window.ResizeObserver) { new ResizeObserver(fit).observe(cv); }
+    fit();
+  })();
+
+  const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+    "accent": "#2f6df0",
+    "dark": false,
+    "radius": 18,
+    "density": "regular",
+    "headlines": 5,
+    "mapIntensity": 1,
+    "showMap": true,
+    "showMarkets": true
+  }/*EDITMODE-END*/;
+
+  function App() {
+    const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+    return (
+      <>
+        <AtlasDaily t={t} />
+        <TweaksPanel title="Tweaks">
+          <TweakSection label="Theme" />
+          <TweakColor label="Accent" value={t.accent}
+            options={['#2f6df0', '#4b41d8', '#0d9488', '#e0533d', '#d4a017']}
+            onChange={(v) => setTweak('accent', v)} />
+          <TweakToggle label="Dark mode" value={t.dark} onChange={(v) => setTweak('dark', v)} />
+          <TweakSlider label="Corner radius" value={t.radius} min={4} max={28} unit="px"
+            onChange={(v) => setTweak('radius', v)} />
+
+          <TweakSection label="Layout" />
+          <TweakRadio label="Density" value={t.density} options={['compact', 'regular', 'comfy']}
+            onChange={(v) => setTweak('density', v)} />
+          <TweakSlider label="Headlines" value={t.headlines} min={3} max={6}
+            onChange={(v) => setTweak('headlines', v)} />
+          <TweakToggle label="Show map" value={t.showMap} onChange={(v) => setTweak('showMap', v)} />
+          <TweakToggle label="Show weather" value={t.showMarkets} onChange={(v) => setTweak('showMarkets', v)} />
+
+          <TweakSection label="Map" />
+          <TweakSlider label="Shading intensity" value={t.mapIntensity} min={0.5} max={1.4} step={0.05}
+            onChange={(v) => setTweak('mapIntensity', v)} />
+        </TweaksPanel>
+      </>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

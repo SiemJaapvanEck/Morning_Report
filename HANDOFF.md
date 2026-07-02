@@ -1,6 +1,6 @@
 # HANDOFF — Entity Typing (Phases F1–F5)
 
-> **Last updated:** 2 July 2026 — Siem (main)
+> **Last updated:** 2 July 2026 (later session) — Siem (main)
 > **Sprint board + per-phase specs:** `docs/entity-typing-plan.md`.
 
 ## What this arc is
@@ -24,61 +24,68 @@ Five phases:
 
 ## Where we stand (this session)
 
-**F3 is done, on main, and verified.** The shallow fix is complete: from the
-next edition on, a product/event can no longer open its own umbrella next to its
-actor — it nests as a storyline facet instead. Live-verified by Siem on
-`localhost:3000` ("perfect like this").
+**F1–F3 are done, on main, and verified.** The shallow reader fix shipped last
+session; **this session cleared two parked housekeeping items** (scan-cost tuning
++ throwaway-script cleanup) so F4 starts from a clean tree.
 
-What this session built (all in three tracked files, no schema change):
+### Scan-cost tuning — done (the "trends cheaper as the registry matures" mechanism)
 
-- **Pure predicates** in `modules/threads/index.ts`: `resolveEntityType`
-  (registry-aware type of a normalized key, folding aliases), `canAnchorUmbrella`
-  (blocks `product`/`event` from anchoring), `canBeFacet` (blocks `actor`/`person`
-  from being a facet).
-- **Registry-aware branches** added to `primaryEntity`, `dominantEntity`,
-  `bigTopicAnchors`, `personalAnchors`, `storylineFacets` — each takes an
-  **optional** `registry` and falls back to the exact old behaviour when it's
-  absent, so nothing outside the thread-plan step changed.
-- **Lenient policy (Siem's call):** only facet types (product/event) are blocked
-  from anchoring; actors, persons, places **and still-untyped (`other`)**
-  entities may still anchor. This targets the fragmentation bug without starving
-  new/untyped actors of their own umbrella.
-- **Wiring** in `modules/pipeline/steps.ts`: the thread-plan step loads the
-  registry once via the new `loadRegistry()` DB helper and threads it through
-  anchor + facet selection, plus a `canAnchorUmbrella` filter next to the
-  existing dateline filter.
-- **Tests:** 20 new F3 cases in `modules/threads/threads.test.ts`. Full suite
-  **253 pass**. Gate green (lint, tsc, test, build).
+The F2 overshoot came from the scan emitting a `type` + `confidence` for **every**
+entity, including ones already in the registry whose type we then discard
+(registry wins). Fix, all in `modules/rank/index.ts`:
 
-### Dry-run preview (read-only, live DB)
+- `type`/`confidence` are now **optional** in `SCAN_SCHEMA` + `ScanVerdict`
+  (only `name` is required).
+- New prompt clause: for any entity already in the registry priming list, the
+  model may send **`name` only** — we reuse the registry type. This is the actual
+  mechanism that makes scan cheaper as the registry grows (before it was just a
+  hope). Savings are modest early on and grow with the registry.
+- The write-back mapping was extracted into a **pure, unit-tested**
+  `buildEntityMaps()` helper with `?? "other"` / `?? "low"` floors for omitted
+  fields. Verified safe: a known entity always keeps its **registry** type, and
+  `mergeRegistryEntry` blocks an `ai_low` from downgrading a stronger existing
+  row — so omission can't corrupt the registry.
+- **Tests:** 6 new `buildEntityMaps` cases in `modules/rank/rank.test.ts`. Full
+  suite **259 pass**. Gate green (lint, tsc, test, build).
+- **Not yet measured live:** the token saving is real but wasn't verified against
+  a real scan run. Spot-check the next edition's `usage_log` to confirm the trend.
 
-`scripts/verify-f3.ts` (throwaway, uncommitted) confirmed the effect against the
-live registry (313 rows, 121 umbrellas, 32 storylines):
+### Script cleanup — done
 
-- **4 existing umbrellas are really facet types** and would collapse under the
-  new rules: `fable 5` (product — the exact double-up), `world cup` (event),
-  `onlyfans` (product), `ai native games` (product).
-- **2 existing facets are really actors** (siblings): `sk hynix`, `fifa`.
-- Umbrella-anchor type spread: `other=88, actor=17, place=9, person=3,
-  product=3, event=1` — the 88 untyped stay anchoring, as the lenient policy
-  intends.
+Deleted the 6 read-only phase-verify one-offs (`verify-f3`, `verify-phase4`,
+`verify-phase5`, `verify-phase5a`, `verify-threads`, `verify-anchor-threads`) —
+untracked throwaways for phases already shipped. **Kept** the 4 DB-mutation
+helpers (`rebuild-threads`, `split-storylines`, `backfill-threads`,
+`regen-phase5`) since their logic may inform F4's canonicalization/re-parenting.
+
+### F3 recap (prior session, still current)
+
+The shallow fix: from the next edition on, a product/event can no longer open its
+own umbrella next to its actor — it nests as a storyline facet. Live-verified by
+Siem ("perfect like this"). Pure predicates (`resolveEntityType`,
+`canAnchorUmbrella`, `canBeFacet`) in `modules/threads/index.ts`; registry-aware
+branches in the anchor/facet selectors (all default to pre-F3 behaviour without a
+registry); wired through the thread-plan step in `modules/pipeline/steps.ts` via
+`loadRegistry()`. **Lenient policy:** only product/event are blocked from
+anchoring; actors, persons, places and still-untyped (`other`) entities may still
+anchor.
 
 ## What's open
 
 - **Existing-thread cleanup — Siem chose to LEAVE them (option 1).** F3 is
-  go-forward only; the 4 pre-F3 product/event umbrellas above (and the 2 sibling
-  facets) stay in the DB until they age out. A re-parenting `--apply` rebuild was
-  deliberately *not* run — that's closer to F4's canonicalization pass and would
-  rewrite live thread data. Revisit during F4 if it still bothers.
+  go-forward only; the 4 pre-F3 product/event umbrellas (`fable 5`, `world cup`,
+  `onlyfans`, `ai native games`) and 2 sibling facets (`sk hynix`, `fifa`) stay in
+  the DB until they age out. A re-parenting `--apply` rebuild was deliberately
+  *not* run — that's closer to F4's canonicalization pass and would rewrite live
+  thread data. Revisit during F4 if it still bothers.
 - **Phase F4 — the next box.** Relationships (`parent_entity_id`, product→actor)
   + full variant canonicalization. **Backup checkpoint first:** at the start of
   F4, create and push `idle-work/2026-07-02-after-f3` from HEAD (snapshotting
   F1–F3) *before* writing any F4 code — Siem's standing call, so the shallow-fix
   state stays cleanly reviewable.
-- **Scan-cost tuning (parked since F2).** Scan ran ~25% over the €0.10/edition
-  target after the F2 `maxTokens` raise + richer entity output. Not blocking;
-  should trend cheaper as the registry matures. Options: emit type/confidence
-  only for non-place entities, or drop `maxTokens` back.
+- **Verify the scan saving live** — check `usage_log` on the next real edition to
+  confirm scan cost actually dropped (this session changed the code, not the
+  measurement).
 
 ## Known gotchas
 
@@ -94,8 +101,10 @@ live registry (313 rows, 121 umbrellas, 32 storylines):
   thread-plan step passes the registry.
 - **Untracked, deliberately not committed:** `Morning Report design/` (6.8M of
   standalone HTML/JSX mockups — referenced by CLAUDE.md but not yet tracked;
-  a separate decision) and several throwaway `scripts/*.ts` (verify/rebuild
-  dry-run helpers, including this session's `scripts/verify-f3.ts`).
+  a separate decision) and 4 throwaway DB-mutation `scripts/*.ts`
+  (`rebuild-threads`, `split-storylines`, `backfill-threads`, `regen-phase5`) —
+  kept for possible F4 reuse; the 6 read-only verify one-offs were deleted this
+  session.
 
 ## Next actions for Siem
 

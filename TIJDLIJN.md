@@ -3,6 +3,18 @@
 Chronologisch logboek van het project. Eén regel (of kort blok) per
 werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
 
+- **2 July 2026 (later) — Scan-cost tuning + script cleanup (parked items cleared).**
+  Post-F3 housekeeping session, no schema change. Made the scan emit
+  `type`/`confidence` only for entities NOT already in the registry (known ones
+  send `name` only — we reuse the registry type), turning the F2 overshoot's
+  "trends cheaper as the registry matures" hope into an actual mechanism.
+  Extracted the write-back mapping into a pure, tested `buildEntityMaps()` helper
+  in `modules/rank/index.ts` with `other`/`low` floors; verified safe
+  (`mergeRegistryEntry` blocks any ai_low downgrade). Deleted the 6 read-only
+  phase-verify one-off scripts, kept the 4 DB-mutation helpers for F4. Gate green,
+  **259 tests** (+6). Saving not yet measured live — spot-check `usage_log` next
+  edition.
+
 - **2 July 2026 — Phase F3: typed threading, the shallow reader fix shipped.**
   Threading now reads the entity registry: products/events can no longer open a
   sibling umbrella next to their actor — they nest as storyline facets. Added

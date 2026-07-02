@@ -8,10 +8,13 @@ import {
   preRankScore,
   isUserSelected,
   selectForScan,
+  buildEntityMaps,
   type ScoreContext,
   type CategoryBands,
   type DistributeOptions,
 } from "./index";
+import type { EntityRegistry } from "../entities";
+import type { Entity } from "../shared/types";
 
 function ctx(overrides: Partial<ScoreContext> = {}): ScoreContext {
   return {
@@ -359,5 +362,75 @@ describe("selectForScan (pre-scan gate)", () => {
     ];
     const picked = selectForScan(candidates, ctx(), new Set(), new Set(["cat-1"]), 0.5, now);
     expect(picked.map((p) => p.id)).toEqual(["stale-followed", "fresh"]);
+  });
+});
+
+// ============================================================
+// buildEntityMaps — F2 write-back + scan-cost optimisation
+// ============================================================
+
+function entity(overrides: Partial<Entity> & Pick<Entity, "norm_key" | "type">): Entity {
+  return {
+    id: `id-${overrides.norm_key}`,
+    canonical_name: overrides.canonical_name ?? overrides.norm_key,
+    aliases: [],
+    confidence: "ai_high",
+    first_seen_edition: null,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+function registry(...entries: Entity[]): EntityRegistry {
+  return new Map(entries.map((e) => [e.norm_key, e]));
+}
+
+describe("buildEntityMaps", () => {
+  it("uses the AI's type + confidence for a brand-new entity", () => {
+    const out = buildEntityMaps([{ name: "Acme Corp", type: "actor", confidence: "high" }]);
+    expect(out.entities).toEqual(["Acme Corp"]);
+    expect(out.entity_types["acme corp"]).toBe("actor");
+    expect(out.entity_confidence["acme corp"]).toBe("high");
+    expect(out.entity_display["acme corp"]).toBe("Acme Corp");
+  });
+
+  it("registry type wins over the AI type for a known entity", () => {
+    const reg = registry(entity({ norm_key: "claude", type: "product", canonical_name: "Claude" }));
+    // AI mislabels it as an actor — registry should override.
+    const out = buildEntityMaps([{ name: "Claude", type: "actor", confidence: "high" }], reg);
+    expect(out.entity_types["claude"]).toBe("product");
+  });
+
+  it("falls back to other/low when the AI omits type/confidence for a NEW entity", () => {
+    const out = buildEntityMaps([{ name: "Mystery Thing" }]);
+    expect(out.entity_types["mystery thing"]).toBe("other");
+    expect(out.entity_confidence["mystery thing"]).toBe("low");
+  });
+
+  it("omitted type/confidence on a KNOWN entity keeps the registry type (the cost-saver path)", () => {
+    const reg = registry(entity({ norm_key: "anthropic", type: "actor", canonical_name: "Anthropic" }));
+    // Model saved tokens by sending name only for an already-primed entity.
+    const out = buildEntityMaps([{ name: "Anthropic" }], reg);
+    expect(out.entity_types["anthropic"]).toBe("actor");
+    // confidence floors to "low" — mergeRegistryEntry protects the stronger existing one.
+    expect(out.entity_confidence["anthropic"]).toBe("low");
+  });
+
+  it("folds an alias onto its canonical key via the registry", () => {
+    const reg = registry(
+      entity({ norm_key: "openai", type: "actor", canonical_name: "OpenAI", aliases: ["open ai"] }),
+    );
+    const out = buildEntityMaps([{ name: "Open AI" }], reg);
+    expect(out.entity_types["openai"]).toBe("actor");
+  });
+
+  it("first occurrence sets display + confidence for a repeated canonical key", () => {
+    const out = buildEntityMaps([
+      { name: "Tesla", type: "actor", confidence: "high" },
+      { name: "TESLA", type: "actor", confidence: "low" },
+    ]);
+    expect(out.entity_display["tesla"]).toBe("Tesla");
+    expect(out.entity_confidence["tesla"]).toBe("high");
   });
 });

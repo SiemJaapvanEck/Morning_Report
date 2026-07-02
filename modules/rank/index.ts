@@ -30,8 +30,13 @@ interface ScanVerdict {
   topic_index: number;
   /** wereldregio waar het nieuws over gaat, of "geen" */
   regio: string;
-  /** 2–5 kernentiteiten als getypeerde objecten (Phase F2) */
-  entities: { name: string; type: string; confidence: string }[];
+  /**
+   * 2–5 kernentiteiten als getypeerde objecten (Phase F2).
+   * type/confidence zijn optioneel: voor entiteiten die al in het register
+   * (priming) staan mag het model ze weglaten — we hergebruiken dan het
+   * registertype, wat scan-tokens spaart naarmate het register groeit.
+   */
+  entities: { name: string; type?: string; confidence?: string }[];
   /** expliciet gedateerde toekomstige gebeurtenissen uit de tekst (mag leeg) */
   events: ExtractedEvent[];
 }
@@ -58,7 +63,7 @@ const SCAN_SCHEMA = {
                   type: { type: "string", enum: ["actor", "person", "product", "event", "place", "other"] },
                   confidence: { type: "string", enum: ["high", "low"] },
                 },
-                required: ["name", "type", "confidence"],
+                required: ["name"],
                 additionalProperties: false,
               },
             },
@@ -117,6 +122,46 @@ export interface ScanUitslag {
  * Returns entity_types (norm_key → type) and write-back metadata alongside the
  * existing display-string entities for back-compat.
  */
+/**
+ * Pure: turn the scan's raw entity objects into the typed maps used for
+ * thread-matching (F3) and registry write-back (F2). Kept separate from the AI
+ * call so the fallback rules are unit-testable.
+ *
+ * - Registry type always wins for a known entity (consistency across editions).
+ * - For a new entity the AI's type fills the gap; if the AI omitted type/confidence
+ *   (allowed for already-primed entities to save tokens), we floor to "other"/"low".
+ *   That floor is safe: a known entity keeps its registry type here, and
+ *   mergeRegistryEntry won't let an ai_low entry downgrade a stronger existing one.
+ */
+export function buildEntityMaps(
+  rawEntities: { name: string; type?: string; confidence?: string }[],
+  registry: EntityRegistry = new Map(),
+): Pick<ScanUitslag, "entities" | "entity_types" | "entity_display" | "entity_confidence"> {
+  const displayNames: string[] = [];
+  const entity_types: Record<string, EntityType> = {};
+  const entity_display: Record<string, string> = {};
+  const entity_confidence: Record<string, "high" | "low"> = {};
+
+  for (const e of rawEntities) {
+    displayNames.push(e.name);
+    const normKey = normalizeEntity(e.name);
+    if (!normKey) continue;
+    const canonical = resolveCanonical(normKey, registry);
+    const existing = registry.get(canonical);
+    entity_types[canonical] = existing ? existing.type : ((e.type as EntityType) ?? "other");
+    // First occurrence of this canonical key sets the display name and confidence.
+    if (!entity_display[canonical]) entity_display[canonical] = e.name;
+    if (!entity_confidence[canonical]) entity_confidence[canonical] = (e.confidence as "high" | "low") ?? "low";
+  }
+
+  return {
+    entities: dedupeEntities(displayNames),
+    entity_types,
+    entity_display,
+    entity_confidence,
+  };
+}
+
 export async function scanBatch(
   items: Item[],
   editionId: string,
@@ -136,7 +181,10 @@ export async function scanBatch(
 
   const priming = buildRegistryPriming(registry);
   const primingClause = priming
-    ? `Al bekende entiteiten in het register (hergebruik dit type tenzij je heel zeker weet dat het onjuist is): ${priming}. `
+    ? `Al bekende entiteiten in het register: ${priming}. ` +
+      "Voor een entiteit die hierin al staat mag je type en confidence WEGLATEN " +
+      "(alleen name volstaat) — we hergebruiken dan het bekende type. Geef type/confidence " +
+      "alleen voor entiteiten die hier NIET tussen staan, of als je zeker weet dat het bekende type onjuist is. "
     : "";
 
   const { data } = await askAIJson<{ items: ScanVerdict[] }>({
@@ -178,30 +226,17 @@ export async function scanBatch(
     if (!item) continue;
 
     // Build typed entity maps from the AI's output.
-    const displayNames: string[] = [];
-    const entity_types: Record<string, EntityType> = {};
-    const entity_display: Record<string, string> = {};
-    const entity_confidence: Record<string, "high" | "low"> = {};
-
-    for (const e of verdict.entities ?? []) {
-      displayNames.push(e.name);
-      const normKey = normalizeEntity(e.name);
-      if (!normKey) continue;
-      const canonical = resolveCanonical(normKey, registry);
-      // Registry type wins for consistency; AI type fills the gap for new entities.
-      const existing = registry.get(canonical);
-      entity_types[canonical] = existing ? existing.type : (e.type as EntityType);
-      // First occurrence of this canonical key sets the display name and confidence.
-      if (!entity_display[canonical]) entity_display[canonical] = e.name;
-      if (!entity_confidence[canonical]) entity_confidence[canonical] = e.confidence as "high" | "low";
-    }
+    const { entities, entity_types, entity_display, entity_confidence } = buildEntityMaps(
+      verdict.entities ?? [],
+      registry,
+    );
 
     verdicts.set(item.id, {
       belang: Math.max(0, Math.min(1, verdict.belang)),
       isReclame: verdict.is_reclame,
       topicId: topics[verdict.topic_index]?.id ?? null,
       regio: isRegioCode(verdict.regio) ? verdict.regio : null,
-      entities: dedupeEntities(displayNames),
+      entities,
       entity_types,
       entity_display,
       entity_confidence,

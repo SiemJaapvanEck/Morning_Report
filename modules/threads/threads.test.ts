@@ -31,7 +31,7 @@ import {
   type AnchorSpec,
   type EntityDays,
 } from "./index";
-import { buildRegistry, type EntityRegistry } from "../entities";
+import { buildRegistry, buildEntityById, expandWithParents, type EntityRegistry } from "../entities";
 import type { Entity } from "../shared/types";
 
 describe("normalizeEntity", () => {
@@ -573,6 +573,7 @@ function ent(overrides: Partial<Entity> & Pick<Entity, "norm_key" | "type">): En
     canonical_name: overrides.norm_key,
     aliases: [],
     confidence: "seed",
+    parent_entity_id: null,
     first_seen_edition: null,
     created_at: "2026-07-02T00:00:00Z",
     updated_at: "2026-07-02T00:00:00Z",
@@ -709,5 +710,62 @@ describe("storylineFacets (F3 registry-aware)", () => {
     expect(names).toContain("claude");
     expect(names).toContain("ipo");
     expect(names).not.toContain("spacex"); // actor → sibling, never a facet
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase F4 — product→actor routing (expandWithParents + matchByAnchor)
+// ---------------------------------------------------------------------------
+
+describe("F4 parent-expansion routing", () => {
+  // Registry with a real parent link: Claude (product) belongs to Anthropic (actor).
+  const ANTHROPIC_ID = "aaaaaaaa-0000-0000-0000-000000000001";
+  const F4_REGISTRY: EntityRegistry = buildRegistry([
+    {
+      id: ANTHROPIC_ID,
+      canonical_name: "Anthropic",
+      norm_key: "anthropic",
+      type: "actor",
+      aliases: [],
+      confidence: "seed",
+      parent_entity_id: null,
+      first_seen_edition: null,
+      created_at: "2026-07-02T00:00:00Z",
+      updated_at: "2026-07-02T00:00:00Z",
+    },
+    {
+      id: "cccccccc-0000-0000-0000-000000000002",
+      canonical_name: "Claude",
+      norm_key: "claude",
+      type: "product",
+      aliases: ["claude sonnet 5"],
+      confidence: "seed",
+      parent_entity_id: ANTHROPIC_ID,
+      first_seen_edition: null,
+      created_at: "2026-07-02T00:00:00Z",
+      updated_at: "2026-07-02T00:00:00Z",
+    },
+  ]);
+
+  it("routes a product-only item to its actor's umbrella", () => {
+    const byId = buildEntityById(F4_REGISTRY);
+    const umbrella = [{ id: "t-anthropic", anchor_entity: "anthropic" }];
+    // Item names only "Claude Sonnet 5" (an alias) — no Anthropic anywhere.
+    const raw = ["Claude Sonnet 5"];
+    expect(matchByAnchor(raw, umbrella)).toBeNull(); // without expansion: no match
+
+    const expanded = expandWithParents(raw, F4_REGISTRY, byId, normalizeEntity);
+    expect(matchByAnchor(expanded, umbrella)).toBe("t-anthropic"); // with F4: routed
+  });
+
+  it("lets a directly-named actor outrank an inferred parent", () => {
+    const byId = buildEntityById(F4_REGISTRY);
+    const umbrellas = [
+      { id: "t-openai", anchor_entity: "openai" },
+      { id: "t-anthropic", anchor_entity: "anthropic" },
+    ];
+    // OpenAI is named first; Claude's inferred parent (anthropic) is appended last.
+    const expanded = expandWithParents(["OpenAI", "Claude"], F4_REGISTRY, byId, normalizeEntity);
+    expect(matchByAnchor(expanded, umbrellas)).toBe("t-openai");
   });
 });

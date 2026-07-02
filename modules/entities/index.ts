@@ -49,8 +49,71 @@ export function resolveCanonical(normKey: string, registry: EntityRegistry): str
 /** A registry entry without the DB-managed fields (used for upsert payloads). */
 export type EntityRow = Pick<
   Entity,
-  "canonical_name" | "norm_key" | "type" | "aliases" | "confidence" | "first_seen_edition"
+  | "canonical_name"
+  | "norm_key"
+  | "type"
+  | "aliases"
+  | "confidence"
+  | "parent_entity_id"
+  | "first_seen_edition"
 >;
+
+/**
+ * Build an id → Entity index over a registry. The main registry is keyed by
+ * norm_key; resolving a product→actor link needs the reverse (parent_entity_id
+ * is a uuid). Build once per pipeline pass and share across item lookups.
+ */
+export function buildEntityById(registry: EntityRegistry): Map<string, Entity> {
+  return new Map([...registry.values()].map((e) => [e.id, e]));
+}
+
+/**
+ * The norm_key of the actor a (pre-normalized) entity belongs to, or undefined.
+ * Folds registry aliases first, reads parent_entity_id, resolves it via the id
+ * index. Returns undefined when the entity is unknown, has no parent, or the
+ * parent id isn't in the registry. (F4 — product→actor connective tissue.)
+ */
+export function parentActorKey(
+  normKey: string,
+  registry: EntityRegistry,
+  byId: Map<string, Entity>,
+): string | undefined {
+  const entry = registry.get(resolveCanonical(normKey, registry));
+  if (!entry?.parent_entity_id) return undefined;
+  return byId.get(entry.parent_entity_id)?.norm_key;
+}
+
+/**
+ * Expand a set of (raw or normalized) entity strings with the actor each product
+ * belongs to, so an item that names only "Claude" also carries "anthropic" and
+ * therefore matches the Anthropic umbrella. Pure and additive: returns the
+ * original entities plus any resolved parent actor keys, de-duplicated, order
+ * preserved (originals first). With an empty registry it's the identity map, so
+ * every existing caller keeps today's behaviour.
+ *
+ * `normalize` folds a raw string to its norm_key (callers pass modules/threads'
+ * normalizeEntity); parent keys are already normalized canonical forms.
+ */
+export function expandWithParents(
+  entities: string[],
+  registry: EntityRegistry,
+  byId: Map<string, Entity>,
+  normalize: (s: string) => string,
+): string[] {
+  if (registry.size === 0) return entities;
+  const out = [...entities];
+  const have = new Set(entities.map(normalize).filter(Boolean));
+  for (const raw of entities) {
+    const norm = normalize(raw);
+    if (!norm) continue;
+    const parent = parentActorKey(norm, registry, byId);
+    if (parent && !have.has(parent)) {
+      out.push(parent);
+      have.add(parent);
+    }
+  }
+  return out;
+}
 
 /**
  * Build a compact primer string for the scan prompt.
@@ -96,6 +159,11 @@ export function mergeRegistryEntry(
     type: keepExisting ? existing.type : incoming.type,
     aliases: Array.from(new Set([...existing.aliases, ...incoming.aliases])),
     confidence: keepExisting ? existing.confidence : incoming.confidence,
+    // parent_entity_id (F4): a link once set is the registry's memory and is
+    // never nulled by a later scan that omits it. An unset link (null) can be
+    // filled by an inferred parent; changing an existing link stays a reviewed
+    // script operation, never the hot path.
+    parent_entity_id: existing.parent_entity_id ?? incoming.parent_entity_id,
     // first_seen_edition is immutable once set; seeds carry null ("pre-dates all editions")
     // and must not be overwritten by an ai_* entry's edition id.
     first_seen_edition: existing.first_seen_edition,

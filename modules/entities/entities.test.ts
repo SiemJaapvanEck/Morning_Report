@@ -7,6 +7,9 @@ import {
   resolveCanonical,
   mergeRegistryEntry,
   buildRegistryPriming,
+  buildEntityById,
+  parentActorKey,
+  expandWithParents,
   type EntityRegistry,
   type EntityRow,
 } from "./index";
@@ -16,12 +19,14 @@ import type { Entity } from "../shared/types";
 // Fixtures
 // ---------------------------------------------------------------------------
 
+let entityIdSeq = 1;
 function makeEntity(overrides: Partial<Entity> & Pick<Entity, "norm_key" | "type">): Entity {
   return {
-    id: "00000000-0000-0000-0000-000000000001",
+    id: `00000000-0000-0000-0000-${String(entityIdSeq++).padStart(12, "0")}`,
     canonical_name: overrides.norm_key,
     aliases: [],
     confidence: "seed",
+    parent_entity_id: null,
     first_seen_edition: null,
     created_at: "2026-07-02T00:00:00Z",
     updated_at: "2026-07-02T00:00:00Z",
@@ -29,11 +34,12 @@ function makeEntity(overrides: Partial<Entity> & Pick<Entity, "norm_key" | "type
   };
 }
 
+const ANTHROPIC_ID = "00000000-0000-0000-0000-0000000000a1";
 const SEED_ROWS: Entity[] = [
-  makeEntity({ norm_key: "anthropic",       type: "actor",   canonical_name: "Anthropic" }),
+  makeEntity({ norm_key: "anthropic",       type: "actor",   canonical_name: "Anthropic", id: ANTHROPIC_ID }),
   makeEntity({ norm_key: "trump",           type: "person",  canonical_name: "Trump",     aliases: ["donald trump", "trump administration"] }),
-  makeEntity({ norm_key: "claude",          type: "product", canonical_name: "Claude",    aliases: ["claude science", "claude sonnet 5"] }),
-  makeEntity({ norm_key: "fable",           type: "product", canonical_name: "Fable",     aliases: ["claude fable 5", "fable 5"] }),
+  makeEntity({ norm_key: "claude",          type: "product", canonical_name: "Claude",    aliases: ["claude science", "claude sonnet 5"], parent_entity_id: ANTHROPIC_ID }),
+  makeEntity({ norm_key: "fable",           type: "product", canonical_name: "Fable",     aliases: ["claude fable 5", "fable 5"], parent_entity_id: ANTHROPIC_ID }),
   makeEntity({ norm_key: "us",              type: "place",   canonical_name: "US" }),
   makeEntity({ norm_key: "federal reserve", type: "actor",   canonical_name: "Federal Reserve", aliases: ["fed"] }),
 ];
@@ -191,6 +197,7 @@ describe("mergeRegistryEntry", () => {
       type: "actor",
       aliases: [],
       confidence: "ai_high",
+      parent_entity_id: null,
       first_seen_edition: "edition-1",
     };
     expect(mergeRegistryEntry(undefined, incoming)).toEqual(incoming);
@@ -203,6 +210,7 @@ describe("mergeRegistryEntry", () => {
       type: "actor",
       aliases: [],
       confidence: "seed",
+      parent_entity_id: null,
       first_seen_edition: null,
     };
     const incoming: EntityRow = {
@@ -211,6 +219,7 @@ describe("mergeRegistryEntry", () => {
       type: "other",        // AI guessed wrong
       aliases: ["anthropic inc"],
       confidence: "ai_low",
+      parent_entity_id: null,
       first_seen_edition: "edition-1",
     };
     const merged = mergeRegistryEntry(existing, incoming);
@@ -228,6 +237,7 @@ describe("mergeRegistryEntry", () => {
       type: "other",         // bad ai_low guess previously stored
       aliases: [],
       confidence: "ai_low",
+      parent_entity_id: null,
       first_seen_edition: "edition-0",
     };
     const incoming: EntityRow = {
@@ -236,6 +246,7 @@ describe("mergeRegistryEntry", () => {
       type: "product",
       aliases: ["fable 5"],
       confidence: "ai_high",
+      parent_entity_id: null,
       first_seen_edition: "edition-1",
     };
     const merged = mergeRegistryEntry(existing, incoming);
@@ -251,6 +262,7 @@ describe("mergeRegistryEntry", () => {
       type: "product",
       aliases: ["claude science", "claude sonnet"],
       confidence: "seed",
+      parent_entity_id: null,
       first_seen_edition: null,
     };
     const incoming: EntityRow = {
@@ -259,6 +271,7 @@ describe("mergeRegistryEntry", () => {
       type: "product",
       aliases: ["claude sonnet", "claude sonnet 4"],  // "claude sonnet" is a dupe
       confidence: "ai_high",
+      parent_entity_id: null,
       first_seen_edition: "edition-1",
     };
     const merged = mergeRegistryEntry(existing, incoming);
@@ -272,6 +285,7 @@ describe("mergeRegistryEntry", () => {
       type: "person",
       aliases: ["donald trump"],
       confidence: "seed",
+      parent_entity_id: null,
       first_seen_edition: null,
     };
     const incoming: EntityRow = {
@@ -280,9 +294,119 @@ describe("mergeRegistryEntry", () => {
       type: "actor",   // different guess at same confidence
       aliases: ["trump admin"],
       confidence: "seed",
+      parent_entity_id: null,
       first_seen_edition: "edition-1",
     };
     const merged = mergeRegistryEntry(existing, incoming);
     expect(merged.type).toBe("person"); // tie → existing wins
+  });
+
+  // Phase F4 — parent_entity_id (product→actor link)
+  it("keeps an existing parent link even when incoming omits it (null)", () => {
+    const existing: EntityRow = {
+      canonical_name: "Claude",
+      norm_key: "claude",
+      type: "product",
+      aliases: [],
+      confidence: "seed",
+      parent_entity_id: ANTHROPIC_ID,
+      first_seen_edition: null,
+    };
+    const incoming: EntityRow = {
+      canonical_name: "Claude",
+      norm_key: "claude",
+      type: "product",
+      aliases: [],
+      confidence: "ai_high",
+      parent_entity_id: null,        // scan didn't infer a parent this time
+      first_seen_edition: "edition-1",
+    };
+    const merged = mergeRegistryEntry(existing, incoming);
+    expect(merged.parent_entity_id).toBe(ANTHROPIC_ID); // link is the registry's memory
+  });
+
+  it("fills an unset parent link from an inferred incoming parent", () => {
+    const existing: EntityRow = {
+      canonical_name: "Mythos",
+      norm_key: "mythos",
+      type: "product",
+      aliases: [],
+      confidence: "ai_high",
+      parent_entity_id: null,
+      first_seen_edition: "edition-0",
+    };
+    const incoming: EntityRow = {
+      canonical_name: "Mythos",
+      norm_key: "mythos",
+      type: "product",
+      aliases: [],
+      confidence: "ai_low",
+      parent_entity_id: ANTHROPIC_ID, // scan spotted "Mythos, Anthropic's…"
+      first_seen_edition: "edition-1",
+    };
+    const merged = mergeRegistryEntry(existing, incoming);
+    expect(merged.parent_entity_id).toBe(ANTHROPIC_ID); // unset link gets filled
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase F4 — parent helpers (product→actor connective tissue)
+// ---------------------------------------------------------------------------
+
+describe("buildEntityById", () => {
+  it("indexes every entity by its id", () => {
+    const reg = buildRegistry(SEED_ROWS);
+    const byId = buildEntityById(reg);
+    expect(byId.get(ANTHROPIC_ID)?.norm_key).toBe("anthropic");
+    expect(byId.size).toBe(reg.size);
+  });
+});
+
+describe("parentActorKey", () => {
+  it("resolves a product to its actor's norm_key", () => {
+    const reg = buildRegistry(SEED_ROWS);
+    const byId = buildEntityById(reg);
+    expect(parentActorKey("claude", reg, byId)).toBe("anthropic");
+    expect(parentActorKey("fable", reg, byId)).toBe("anthropic");
+  });
+
+  it("follows an alias to the canonical product's parent", () => {
+    const reg = buildRegistry(SEED_ROWS);
+    const byId = buildEntityById(reg);
+    // "claude sonnet 5" is an alias of claude, whose parent is anthropic
+    expect(parentActorKey("claude sonnet 5", reg, byId)).toBe("anthropic");
+  });
+
+  it("returns undefined for an actor (no parent) or an unknown entity", () => {
+    const reg = buildRegistry(SEED_ROWS);
+    const byId = buildEntityById(reg);
+    expect(parentActorKey("anthropic", reg, byId)).toBeUndefined();
+    expect(parentActorKey("someone new", reg, byId)).toBeUndefined();
+  });
+});
+
+describe("expandWithParents", () => {
+  const normalize = (s: string) => s.toLowerCase();
+
+  it("appends the parent norm_key, de-duped and originals-first", () => {
+    const reg = buildRegistry(SEED_ROWS);
+    const byId = buildEntityById(reg);
+    const out = expandWithParents(["Claude", "Fable"], reg, byId, normalize);
+    expect(out.slice(0, 2)).toEqual(["Claude", "Fable"]); // originals preserved, in order
+    expect(out).toContain("anthropic");                    // parent appended once
+    expect(out.filter((e) => e === "anthropic")).toHaveLength(1);
+  });
+
+  it("does not duplicate a parent already present in the item", () => {
+    const reg = buildRegistry(SEED_ROWS);
+    const byId = buildEntityById(reg);
+    const out = expandWithParents(["anthropic", "Claude"], reg, byId, normalize);
+    expect(out.filter((e) => e === "anthropic")).toHaveLength(1);
+  });
+
+  it("is the identity map when the registry is empty (back-compat)", () => {
+    const empty: EntityRegistry = new Map();
+    const out = expandWithParents(["Claude", "Fable"], empty, new Map(), normalize);
+    expect(out).toEqual(["Claude", "Fable"]);
   });
 });

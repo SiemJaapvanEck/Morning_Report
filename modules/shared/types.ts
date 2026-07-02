@@ -454,6 +454,11 @@ export interface Entity {
   /** pre-normalized alias strings that also resolve to this canonical entry */
   aliases: string[];
   confidence: EntityConfidence;
+  /**
+   * The actor entity this product/event belongs to (product→actor link, F4).
+   * Null for actors, persons, places and still-unlinked products.
+   */
+  parent_entity_id: string | null;
   /** null for seeded rows (they pre-date any edition) */
   first_seen_edition: string | null;
   created_at: string;

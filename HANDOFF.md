@@ -1,6 +1,6 @@
 # HANDOFF — Entity Typing (Phases F1–F5)
 
-> **Last updated:** 2 July 2026 (later session) — Siem (main)
+> **Last updated:** 2 July 2026 (F4 session) — Siem (main)
 > **Sprint board + per-phase specs:** `docs/entity-typing-plan.md`.
 
 ## What this arc is
@@ -18,97 +18,109 @@ Five phases:
 
 - **F1** ✅ — `entities` registry table (migration) + seed + pure `modules/entities/` helpers.
 - **F2** ✅ — Scan tags each entity with a type (registry-as-memory + write-back loop).
-- **F3** ✅ — Threading uses the type (actors=umbrellas, products/events=facets). **The visible reader fix — shipped.**
-- **F4** — Relationships (product→actor) + variant canonicalization (deep layer). ← next
-- **F5** — Feed typed entities + relationships into Sol/redactie (actor-level cross-ref).
+- **F3** ✅ — Threading uses the type (actors=umbrellas, products/events=facets). **The visible shallow reader fix.**
+- **F4** ✅ — Relationships (product→actor) + variant canonicalization (deep layer). **Built this session; awaiting Siem's localhost review.**
+- **F5** — Feed typed entities + relationships into Sol/redactie (actor-level cross-ref). ← next
 
-## Where we stand (this session)
+## Where we stand (this session — F4)
 
-**F1–F3 are done, on main, and verified.** The shallow reader fix shipped last
-session; **this session cleared two parked housekeeping items** (scan-cost tuning
-+ throwaway-script cleanup) so F4 starts from a clean tree.
+**F1–F4 are done and on main.** Before writing any F4 code the session pushed a
+backup branch **`idle-work/2026-07-02-after-f3`** from HEAD (Siem's standing
+call), snapshotting the clean shallow-fix state. F4 then added the deep layer:
+the registry now records **which actor a product belongs to**, and threading
+routes a product's news to its actor's umbrella even when the article never names
+the actor. Full gate green (**lint, tsc, 274 tests, build**). **Not yet
+live-verified** — this pauses for Siem's localhost review per the per-phase
+cadence.
 
-### Scan-cost tuning — done (the "trends cheaper as the registry matures" mechanism)
+### What F4 shipped
 
-The F2 overshoot came from the scan emitting a `type` + `confidence` for **every**
-entity, including ones already in the registry whose type we then discard
-(registry wins). Fix, all in `modules/rank/index.ts`:
+- **Migration `0018_entity_parent.sql` (applied live).** Adds nullable,
+  self-referential `entities.parent_entity_id` (`on delete set null`) + index.
+  Seeds the two known links: Claude → Anthropic, Fable → Anthropic (by norm_key
+  subquery, so it's id-agnostic and idempotent). `Entity`/`EntityRow` synced in
+  `modules/shared/types.ts`.
+- **Pure helpers (`modules/entities/index.ts`, unit-tested).**
+  `buildEntityById` (id→Entity index, since the registry is keyed by norm_key),
+  `parentActorKey` (product norm_key → its actor's norm_key, folding aliases),
+  and `expandWithParents` (append each product's parent actor to an entity list,
+  de-duped, originals-first; identity map on an empty registry).
+  `mergeRegistryEntry` extended: a parent link once set is **never nulled** by a
+  later scan that omits it, but an **unset** link can be filled by an inferred
+  parent (`existing.parent_entity_id ?? incoming.parent_entity_id`).
+- **Scan inference (`modules/rank/index.ts`).** Each scanned entity may carry an
+  optional `parent` (the actor a product belongs to), with a prompt clause that
+  demands it only when explicit ("Claude, het model van Anthropic"). No extra AI
+  call — piggybacks the existing scan. `buildEntityMaps` records the parent only
+  for facet-type entities, folds the parent name to canonical, drops
+  self-references → new `entity_parents` map on `ScanUitslag`.
+- **Write-back (`modules/pipeline/steps.ts`).** Resolves the inferred parent to
+  its registry **id**, but **only when the actor is already a known row** (the FK
+  requires it). New actors link on a later edition once they've been written —
+  idempotent and convergent.
+- **The payoff — parent-expansion routing (`threadsStep`).** Right after loading
+  candidates, each item's entities are expanded with their parent actor, so an
+  item that names only "Claude" also carries "anthropic" and flows into the
+  Anthropic umbrella — the connective tissue F3's co-occurrence heuristic
+  couldn't provide. The parent key is **appended last**, so a directly-named
+  actor still outranks an inferred one in `matchByAnchor`. Empty/parent-less
+  registry ⇒ identity (no-op), so every existing caller keeps today's behaviour.
+- **+15 tests** (259 → 274): parent helpers + merge-preservation in
+  `entities.test.ts`, parent inference in `rank.test.ts`, and an
+  integration-style routing test (`expandWithParents` + `matchByAnchor`) in
+  `threads.test.ts`.
 
-- `type`/`confidence` are now **optional** in `SCAN_SCHEMA` + `ScanVerdict`
-  (only `name` is required).
-- New prompt clause: for any entity already in the registry priming list, the
-  model may send **`name` only** — we reuse the registry type. This is the actual
-  mechanism that makes scan cheaper as the registry grows (before it was just a
-  hope). Savings are modest early on and grow with the registry.
-- The write-back mapping was extracted into a **pure, unit-tested**
-  `buildEntityMaps()` helper with `?? "other"` / `?? "low"` floors for omitted
-  fields. Verified safe: a known entity always keeps its **registry** type, and
-  `mergeRegistryEntry` blocks an `ai_low` from downgrading a stronger existing
-  row — so omission can't corrupt the registry.
-- **Tests:** 6 new `buildEntityMaps` cases in `modules/rank/rank.test.ts`. Full
-  suite **259 pass**. Gate green (lint, tsc, test, build).
-- **Not yet measured live:** the token saving is real but wasn't verified against
-  a real scan run. Spot-check the next edition's `usage_log` to confirm the trend.
+### Variant canonicalization — deliberately script-only (Siem's call, 2 Jul 2026)
 
-### Script cleanup — done
-
-Deleted the 6 read-only phase-verify one-offs (`verify-f3`, `verify-phase4`,
-`verify-phase5`, `verify-phase5a`, `verify-threads`, `verify-anchor-threads`) —
-untracked throwaways for phases already shipped. **Kept** the 4 DB-mutation
-helpers (`rebuild-threads`, `split-storylines`, `backfill-threads`,
-`regen-phase5`) since their logic may inform F4's canonicalization/re-parenting.
-
-### F3 recap (prior session, still current)
-
-The shallow fix: from the next edition on, a product/event can no longer open its
-own umbrella next to its actor — it nests as a storyline facet. Live-verified by
-Siem ("perfect like this"). Pure predicates (`resolveEntityType`,
-`canAnchorUmbrella`, `canBeFacet`) in `modules/threads/index.ts`; registry-aware
-branches in the anchor/facet selectors (all default to pre-F3 behaviour without a
-registry); wired through the thread-plan step in `modules/pipeline/steps.ts` via
-`loadRegistry()`. **Lenient policy:** only product/event are blocked from
-anchoring; actors, persons, places and still-untyped (`other`) entities may still
-anchor.
+The spec's "full variant canonicalization" was scoped **away from the live hot
+path**: no code auto-merges entities. Instead a throwaway dry-run script,
+`scripts/reparent-entities.ts` (untracked, like the other DB-mutation helpers),
+previews (1) product→actor re-parenting from co-occurrence evidence and (2)
+likely variant collapses — and `--apply` writes **parent links only**, never
+merges. **Ran the dry-run this session:** across 111 parent-less products it
+found essentially nothing to backfill (one weak `Starlink → SpaceX` at 1×
+co-occurrence, below the confidence bar; the rest are one-off arXiv-style paper
+names). Takeaway: **F4's value is the forward path** (scan inference +
+parent-expansion), not history rewriting — so no `--apply` was run.
 
 ## What's open
 
-- **Existing-thread cleanup — Siem chose to LEAVE them (option 1).** F3 is
-  go-forward only; the 4 pre-F3 product/event umbrellas (`fable 5`, `world cup`,
-  `onlyfans`, `ai native games`) and 2 sibling facets (`sk hynix`, `fifa`) stay in
-  the DB until they age out. A re-parenting `--apply` rebuild was deliberately
-  *not* run — that's closer to F4's canonicalization pass and would rewrite live
-  thread data. Revisit during F4 if it still bothers.
-- **Phase F4 — the next box.** Relationships (`parent_entity_id`, product→actor)
-  + full variant canonicalization. **Backup checkpoint first:** at the start of
-  F4, create and push `idle-work/2026-07-02-after-f3` from HEAD (snapshotting
-  F1–F3) *before* writing any F4 code — Siem's standing call, so the shallow-fix
-  state stays cleanly reviewable.
-- **Verify the scan saving live** — check `usage_log` on the next real edition to
-  confirm scan cost actually dropped (this session changed the code, not the
-  measurement).
+- **Live-verify F4 on localhost (the review gate).** In the umbrella reader,
+  confirm a product-only item (e.g. a "Claude" story with no "Anthropic" in the
+  text) now nests under the Anthropic umbrella. The one behaviour change to
+  eyeball is the parent-expansion in `threadsStep`.
+- **Phase F5 — the payoff.** Feed typed entities + the new product→actor
+  relationships into Sol/redactie so "de rode draad" connects **actors**, not
+  just topics. See `docs/entity-typing-plan.md` §F5.
+- **Verify the F2 scan saving live** (carried over from last session) — spot-check
+  `usage_log` on the next real edition to confirm scan cost dropped as the
+  registry matured.
+- **Pre-F3 thread cleanup — still deliberately LEFT.** The 4 pre-F3 product/event
+  umbrellas (`fable 5`, `world cup`, `onlyfans`, `ai native games`) + 2 sibling
+  facets stay in the DB until they age out. F4's dry-run confirmed there's no
+  clean automated re-parent for them either — revisit only if it still bothers.
 
 ## Known gotchas
 
-- `.next/types/… 2.*` duplicate files break `tsc` with bogus "Duplicate identifier".
-  Fix: `find .next -name "* 2.*" -delete` then re-run.
+- `.next/types/… 2.*` duplicate files break `tsc` with bogus "Duplicate
+  identifier". Fix: `find .next -name "* 2.*" -delete` then re-run.
 - Following is thread-level (`follow_marks`, `target_type`/`target_id`/`active`).
 - AI provider = Grok (xAI) via `askAI()`; Anthropic switchable. All model IDs /
   prices live in `modules/shared/config.ts`.
-- The `entities` table is live and populated (313 rows); migration
-  `0017_entities` is the latest applied migration.
-- F3's registry-aware pure functions all default to the pre-F3 behaviour when no
-  registry is passed — existing callers/tests are unaffected; only the pipeline
-  thread-plan step passes the registry.
-- **Untracked, deliberately not committed:** `Morning Report design/` (6.8M of
-  standalone HTML/JSX mockups — referenced by CLAUDE.md but not yet tracked;
-  a separate decision) and 4 throwaway DB-mutation `scripts/*.ts`
-  (`rebuild-threads`, `split-storylines`, `backfill-threads`, `regen-phase5`) —
-  kept for possible F4 reuse; the 6 read-only verify one-offs were deleted this
-  session.
+- The `entities` table is live; `0018_entity_parent` is now the latest applied
+  migration (was `0017_entities`). Claude/Fable carry `parent_entity_id` →
+  Anthropic.
+- F4's parent helpers all default to today's behaviour when no registry / no
+  parent links are present — existing callers/tests unaffected; only the
+  thread-plan step (with the loaded registry) sees the expansion.
+- **Untracked, deliberately not committed:** `Morning Report design/` (standalone
+  HTML/JSX mockups) and 5 throwaway DB-mutation `scripts/*.ts`
+  (`rebuild-threads`, `split-storylines`, `backfill-threads`, `regen-phase5`, and
+  now `reparent-entities`) — kept for reuse; not part of the app.
 
 ## Next actions for Siem
 
-1. **Start Phase F4** — first push the `idle-work/2026-07-02-after-f3` backup
-   branch from HEAD, then agree a short plan (per working agreements) before
-   writing the relationships + canonicalization code.
-2. Decide whether the scan-cost tuning item is worth acting on before/within F4.
+1. **Review F4 on localhost** in the umbrella reader (does a Claude-only item sit
+   under Anthropic?). If good, F4 is closed.
+2. **Start Phase F5** — agree a short plan (per working agreements) before wiring
+   typed entities + relationships into `modules/redactie/index.ts`.

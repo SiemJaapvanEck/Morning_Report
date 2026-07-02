@@ -47,7 +47,7 @@ import {
   shouldPromote,
   loadThreadItemEntities,
 } from "../threads";
-import { buildRegistry, mergeRegistryEntry } from "../entities";
+import { buildRegistry, mergeRegistryEntry, buildEntityById, expandWithParents } from "../entities";
 import type { EntityRow } from "../entities";
 import type { Edition, Item, PipelineStep, Band, MarktSnapshot, DailyPaperArticle, Entity, EntityConfidence } from "../shared/types";
 
@@ -243,15 +243,23 @@ const scanRankStep: StepHandler = async ({ edition, step }) => {
               type: existing.type,
               aliases: existing.aliases,
               confidence: existing.confidence,
+              parent_entity_id: existing.parent_entity_id,
               first_seen_edition: existing.first_seen_edition,
             }
           : undefined;
+        // F4: resolve an inferred product→actor parent to its registry id, but
+        // only when the actor is already a known row (the FK requires it). New
+        // actors link on a later edition once they've been written — idempotent
+        // and convergent; mergeRegistryEntry never nulls a link once set.
+        const parentKey = verdict.entity_parents[normKey];
+        const parentId = parentKey ? (registry.get(parentKey)?.id ?? null) : null;
         const incoming: EntityRow = {
           canonical_name: displayName,
           norm_key: normKey,
           type: verdict.entity_types[normKey],
           aliases: [],
           confidence: entityConf,
+          parent_entity_id: parentId,
           first_seen_edition: edition.id,
         };
         toUpsert.set(normKey, mergeRegistryEntry(existingRow, incoming));
@@ -264,6 +272,7 @@ const scanRankStep: StepHandler = async ({ edition, step }) => {
         type: r.type,
         aliases: r.aliases,
         confidence: r.confidence,
+        parent_entity_id: r.parent_entity_id,
         first_seen_edition: r.first_seen_edition,
         updated_at: new Date().toISOString(),
       }));
@@ -446,6 +455,17 @@ const threadsStep: StepHandler = async ({ edition }) => {
   ]);
 
   const now = new Date().toISOString();
+
+  // Phase F4: expand each candidate's entities with the actor every product/event
+  // belongs to (product→actor link from the registry), so an item that names only
+  // "Claude" also carries "anthropic" and thus flows into the Anthropic umbrella —
+  // the connective tissue F3's co-occurrence heuristic couldn't provide. The
+  // parent key is appended last, so a directly-named actor still outranks an
+  // inferred one in matchByAnchor. Empty/parent-less registry ⇒ identity (no-op).
+  const byId = buildEntityById(registry);
+  for (const c of candidates) {
+    c.entities = expandWithParents(c.entities, registry, byId, normalizeEntity);
+  }
 
   // Entities that actually have news today — a recurring anchor only spawns or
   // links on a day it has something to say, so every new thread gets a seed item.

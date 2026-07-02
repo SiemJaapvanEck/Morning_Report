@@ -532,3 +532,17 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   making has-article-not-selected dots a hollow outline instead of a fill —
   only the truly selected dot fills solid now. Gate green, tests stayed at
   **220** (one fixture updated for the new `storylineCount` field).
+
+- **2 July 2026 (F4) — Entity typing Phase F4: product→actor relationships.**
+  Pushed backup branch `idle-work/2026-07-02-after-f3` from HEAD first (Siem's
+  standing call), then built the deep layer. Migration `0018_entity_parent`
+  (applied live) adds `entities.parent_entity_id` (self-ref, nullable) + seeds
+  Claude/Fable → Anthropic. New pure helpers (`parentActorKey`, `buildEntityById`,
+  `expandWithParents`) + `mergeRegistryEntry` now preserves a set parent link.
+  Scan infers a product's parent actor when explicit (no extra AI call);
+  write-back links it once the actor is a known row (convergent). The payoff:
+  the thread step expands each item's entities with their parent actor, so a
+  "Claude"-only item now routes into the Anthropic umbrella. Canonicalization
+  kept to a reviewed dry-run script (`scripts/reparent-entities.ts`, untracked)
+  per Siem — ran it: no meaningful history backfill (F4's value is the forward
+  path). Gate green, tests **259 → 274**. Awaiting Siem's localhost review.

@@ -69,9 +69,11 @@ first.
 
 - [x] **Phase F1** — Entity registry table + seed + pure helpers
 - [x] **Phase F2** — Scan tags type (registry-as-memory, write-back loop)
-- [ ] **Phase F3** — Threading uses type (actors=umbrellas, products/events=facets)
-- [ ] **backup checkpoint** — push `idle-work/2026-07-02-after-f3` (start of F4)
-- [ ] **Phase F4** — Relationships (product→actor) + variant canonicalization
+- [x] **Phase F3** — Threading uses type (actors=umbrellas, products/events=facets)
+- [x] **backup checkpoint** — pushed `idle-work/2026-07-02-after-f3` (start of F4)
+- [x] **Phase F4** — Relationships (product→actor) + variant canonicalization
+      *(code + migration 0018 applied; parent-expansion routing; canonicalization
+      kept to a reviewed dry-run script per Siem. Awaiting localhost review.)*
 - [ ] **Phase F5** — Feed typed entities into Sol/redactie (actor-level cross-ref)
 
 ---

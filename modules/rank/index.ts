@@ -13,7 +13,7 @@ import { askAIJson } from "../shared/ai";
 import { budgetPolicy } from "../shared/budget";
 import { config } from "../shared/config";
 import { dedupeEntities, normalizeEntity } from "../threads";
-import { buildRegistryPriming, resolveCanonical, type EntityRegistry } from "../entities";
+import { buildRegistryPriming, resolveCanonical, isFacetType, type EntityRegistry } from "../entities";
 import { REGIO_CODES, REGIO_GEEN, REGIO_NAAM, isRegioCode } from "../shared/regios";
 import { CALENDAR_KINDS, CALENDAR_CERTAINTIES } from "../calendar";
 import type { BudgetMode, Item, Topic, TopicScore, Band, ExtractedEvent, EntityType } from "../shared/types";
@@ -36,7 +36,7 @@ interface ScanVerdict {
    * (priming) staan mag het model ze weglaten — we hergebruiken dan het
    * registertype, wat scan-tokens spaart naarmate het register groeit.
    */
-  entities: { name: string; type?: string; confidence?: string }[];
+  entities: { name: string; type?: string; confidence?: string; parent?: string }[];
   /** expliciet gedateerde toekomstige gebeurtenissen uit de tekst (mag leeg) */
   events: ExtractedEvent[];
 }
@@ -62,6 +62,7 @@ const SCAN_SCHEMA = {
                   name: { type: "string" },
                   type: { type: "string", enum: ["actor", "person", "product", "event", "place", "other"] },
                   confidence: { type: "string", enum: ["high", "low"] },
+                  parent: { type: "string" },
                 },
                 required: ["name"],
                 additionalProperties: false,
@@ -109,6 +110,13 @@ export interface ScanUitslag {
   entity_display: Record<string, string>;
   /** norm_key → AI confidence level (used by write-back to set EntityConfidence) */
   entity_confidence: Record<string, "high" | "low">;
+  /**
+   * product norm_key → parent ACTOR norm_key (F4). Only present when the scan
+   * inferred the actor a product belongs to ("Claude, Anthropic's model…").
+   * The write-back turns the actor norm_key into a parent_entity_id when that
+   * actor is already a registry row.
+   */
+  entity_parents: Record<string, string>;
   /** expliciet gedateerde toekomstige gebeurtenissen uit de tekst */
   events: ExtractedEvent[];
 }
@@ -134,13 +142,17 @@ export interface ScanUitslag {
  *   mergeRegistryEntry won't let an ai_low entry downgrade a stronger existing one.
  */
 export function buildEntityMaps(
-  rawEntities: { name: string; type?: string; confidence?: string }[],
+  rawEntities: { name: string; type?: string; confidence?: string; parent?: string }[],
   registry: EntityRegistry = new Map(),
-): Pick<ScanUitslag, "entities" | "entity_types" | "entity_display" | "entity_confidence"> {
+): Pick<
+  ScanUitslag,
+  "entities" | "entity_types" | "entity_display" | "entity_confidence" | "entity_parents"
+> {
   const displayNames: string[] = [];
   const entity_types: Record<string, EntityType> = {};
   const entity_display: Record<string, string> = {};
   const entity_confidence: Record<string, "high" | "low"> = {};
+  const entity_parents: Record<string, string> = {};
 
   for (const e of rawEntities) {
     displayNames.push(e.name);
@@ -152,6 +164,13 @@ export function buildEntityMaps(
     // First occurrence of this canonical key sets the display name and confidence.
     if (!entity_display[canonical]) entity_display[canonical] = e.name;
     if (!entity_confidence[canonical]) entity_confidence[canonical] = (e.confidence as "high" | "low") ?? "low";
+    // F4: record a product→actor parent only for facet-type entities, folding
+    // the parent name to its canonical key and dropping self-references. The
+    // write-back turns this into a parent_entity_id when the actor is known.
+    if (e.parent && isFacetType(entity_types[canonical]) && !entity_parents[canonical]) {
+      const parentKey = resolveCanonical(normalizeEntity(e.parent), registry);
+      if (parentKey && parentKey !== canonical) entity_parents[canonical] = parentKey;
+    }
   }
 
   return {
@@ -159,6 +178,7 @@ export function buildEntityMaps(
     entity_types,
     entity_display,
     entity_confidence,
+    entity_parents,
   };
 }
 
@@ -210,6 +230,9 @@ export async function scanBatch(
       "type uit (actor|person|product|event|place|other) — actor=organisatie/bedrijf/groep, " +
       "person=persoon, product=product/dienst/model/AI, event=evenement/lancering/verkiezing, " +
       "place=land/stad/regio, other=overig — en confidence: high (zeker) of low (twijfelachtig). " +
+      "Voor een product/event mag je optioneel parent geven: de actor (organisatie/bedrijf) " +
+      "waar het bij hoort, ALLEEN als dat expliciet blijkt (bv. \"Claude, het model van Anthropic\" ⇒ " +
+      "parent=Anthropic). Bij twijfel laat je parent weg. " +
       primingClause +
       "Geef tot slot per item de toekomstige gebeurtenissen (events) waarvoor in de tekst een " +
       "EXPLICIETE datum staat — bv. \"IPO op 1 juli\", \"verkiezingen 5 november\", \"cijfers in Q3\". " +
@@ -226,7 +249,7 @@ export async function scanBatch(
     if (!item) continue;
 
     // Build typed entity maps from the AI's output.
-    const { entities, entity_types, entity_display, entity_confidence } = buildEntityMaps(
+    const { entities, entity_types, entity_display, entity_confidence, entity_parents } = buildEntityMaps(
       verdict.entities ?? [],
       registry,
     );
@@ -240,6 +263,7 @@ export async function scanBatch(
       entity_types,
       entity_display,
       entity_confidence,
+      entity_parents,
       events: verdict.events ?? [],
     });
   }

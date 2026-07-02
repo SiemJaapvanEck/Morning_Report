@@ -375,6 +375,7 @@ function entity(overrides: Partial<Entity> & Pick<Entity, "norm_key" | "type">):
     canonical_name: overrides.canonical_name ?? overrides.norm_key,
     aliases: [],
     confidence: "ai_high",
+    parent_entity_id: null,
     first_seen_edition: null,
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
@@ -432,5 +433,32 @@ describe("buildEntityMaps", () => {
     ]);
     expect(out.entity_display["tesla"]).toBe("Tesla");
     expect(out.entity_confidence["tesla"]).toBe("high");
+  });
+
+  // Phase F4 — parent (product→actor) inference
+  it("records a product's parent actor, folding the parent name to its canonical key", () => {
+    const out = buildEntityMaps([
+      { name: "Mythos", type: "product", confidence: "high", parent: "Anthropic" },
+    ]);
+    expect(out.entity_parents["mythos"]).toBe("anthropic");
+  });
+
+  it("ignores a parent on a non-facet entity (only products/events link to an actor)", () => {
+    const out = buildEntityMaps([
+      { name: "Anthropic", type: "actor", confidence: "high", parent: "SomeHolding" },
+    ]);
+    expect(out.entity_parents["anthropic"]).toBeUndefined();
+  });
+
+  it("drops a self-referential parent", () => {
+    const out = buildEntityMaps([
+      { name: "Claude", type: "product", confidence: "high", parent: "Claude" },
+    ]);
+    expect(out.entity_parents["claude"]).toBeUndefined();
+  });
+
+  it("has no parents when the AI omits them", () => {
+    const out = buildEntityMaps([{ name: "Acme Corp", type: "actor", confidence: "high" }]);
+    expect(out.entity_parents).toEqual({});
   });
 });

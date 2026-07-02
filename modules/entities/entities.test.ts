@@ -10,6 +10,7 @@ import {
   buildEntityById,
   parentActorKey,
   expandWithParents,
+  clusterByActor,
   type EntityRegistry,
   type EntityRow,
 } from "./index";
@@ -408,5 +409,109 @@ describe("expandWithParents", () => {
     const empty: EntityRegistry = new Map();
     const out = expandWithParents(["Claude", "Fable"], empty, new Map(), normalize);
     expect(out).toEqual(["Claude", "Fable"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// clusterByActor
+// ---------------------------------------------------------------------------
+
+describe("clusterByActor", () => {
+  const normalize = (s: string) => s.toLowerCase();
+
+  it("returns [] for an empty registry (no-op)", () => {
+    const out = clusterByActor(
+      [{ title: "t", entities: ["Claude"] }],
+      new Map(),
+      normalize,
+    );
+    expect(out).toEqual([]);
+  });
+
+  it("folds products to their parent actor and clusters across threads", () => {
+    const reg = buildRegistry(SEED_ROWS);
+    const out = clusterByActor(
+      [
+        { title: "Claude Science ships", entities: ["Claude"] },
+        { title: "Fable 5 launches", entities: ["Fable"] },
+      ],
+      reg,
+      normalize,
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].actor).toBe("Anthropic");
+    expect(out[0].type).toBe("actor");
+    expect(out[0].items).toEqual(["Claude Science ships", "Fable 5 launches"]);
+  });
+
+  it("anchors directly on actor/person entities", () => {
+    const reg = buildRegistry(SEED_ROWS);
+    const out = clusterByActor(
+      [
+        { title: "Trump signs order", entities: ["Trump"] },
+        { title: "Trump on tariffs", entities: ["donald trump"] },
+      ],
+      reg,
+      normalize,
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].actor).toBe("Trump");
+    expect(out[0].type).toBe("person");
+    expect(out[0].items).toHaveLength(2);
+  });
+
+  it("drops actors that span only a single thread (not a through-line)", () => {
+    const reg = buildRegistry(SEED_ROWS);
+    const out = clusterByActor(
+      [{ title: "Claude only", entities: ["Claude"] }],
+      reg,
+      normalize,
+    );
+    expect(out).toEqual([]);
+  });
+
+  it("counts a thread once per actor even when it names both product and actor", () => {
+    const reg = buildRegistry(SEED_ROWS);
+    const out = clusterByActor(
+      [
+        { title: "Anthropic ships Claude", entities: ["Anthropic", "Claude"] },
+        { title: "Fable 5 launches", entities: ["Fable"] },
+      ],
+      reg,
+      normalize,
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].items).toEqual(["Anthropic ships Claude", "Fable 5 launches"]);
+  });
+
+  it("ignores places and unknown entities", () => {
+    const reg = buildRegistry(SEED_ROWS);
+    const out = clusterByActor(
+      [
+        { title: "US story A", entities: ["US", "Something Unknown"] },
+        { title: "US story B", entities: ["US"] },
+      ],
+      reg,
+      normalize,
+    );
+    expect(out).toEqual([]);
+  });
+
+  it("sorts by cluster size descending", () => {
+    const reg = buildRegistry(SEED_ROWS);
+    const out = clusterByActor(
+      [
+        { title: "Fed A", entities: ["Fed"] },
+        { title: "Fed B", entities: ["federal reserve"] },
+        { title: "Anthropic X", entities: ["Claude"] },
+        { title: "Anthropic Y", entities: ["Fable"] },
+        { title: "Anthropic Z", entities: ["Anthropic"] },
+      ],
+      reg,
+      normalize,
+    );
+    expect(out.map((c) => c.actor)).toEqual(["Anthropic", "Federal Reserve"]);
+    expect(out[0].items).toHaveLength(3);
+    expect(out[1].items).toHaveLength(2);
   });
 });

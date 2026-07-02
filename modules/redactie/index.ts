@@ -9,6 +9,7 @@
 import { askAI, askAIJson } from "../shared/ai";
 import { budgetPolicy } from "../shared/budget";
 import { db, unwrap } from "../shared/db";
+import type { ActorCluster } from "../entities";
 import type { BudgetMode, DailyPaperSection } from "../shared/types";
 
 // ============================================================
@@ -170,6 +171,7 @@ export async function composeDailyPaper(
   mode: BudgetMode,
   editionId: string,
   stepId?: string,
+  actorClusters: ActorCluster[] = [],
 ): Promise<DailyPaperParts | null> {
   const policy = budgetPolicy[mode];
   if (policy.solMaxTokens === 0) return null;
@@ -183,6 +185,15 @@ export async function composeDailyPaper(
     .join("\n\n");
   const followed = ordered.filter((t) => t.followed).map((t) => t.name);
 
+  // Actor through-lines: the same actor (org/person) recurring across separate
+  // storylines — the cross-references "de rode draad" should draw (F5).
+  const actorBlok = actorClusters.length
+    ? actorClusters.map((c) => `## ${c.actor}\n${c.items.map((h) => `- ${h}`).join("\n")}`).join("\n\n")
+    : "";
+  const actorSystem = actorClusters.length
+    ? " Meerdere verhaallijnen draaien vandaag om dezelfde speler (organisatie of persoon) — die dwarsverbanden staan onder 'Spelers die vandaag terugkeren'. Benoem ze op spelersniveau ('Anthropic bracht zowel X als Y uit'), niet alleen per onderwerp."
+    : "";
+
   const { data } = await askAIJson<DailyPaperParts>({
     tier: "deep",
     editionId,
@@ -195,10 +206,12 @@ export async function composeDailyPaper(
       "'summary' — 3-4 zinnen, de dag in het kort voor de voorpagina; " +
       "'intro' — 2-3 zinnen die de dag en de opbouw van de krant inleiden" +
       (followed.length ? `, begin bij wat de lezer volgt (${followed.join(", ")})` : "") +
-      "; 'generalHeadline' + 'generalBody' — één overzichtsartikel (2-3 alinea's) van het nieuws dat NIET in de uitgelichte verhaallijnen zit. Verwijs naar de verhaallijnen, herhaal ze niet.",
+      "; 'generalHeadline' + 'generalBody' — één overzichtsartikel (2-3 alinea's) van het nieuws dat NIET in de uitgelichte verhaallijnen zit. Verwijs naar de verhaallijnen, herhaal ze niet." +
+      actorSystem,
     prompt:
       `Uitgelichte verhaallijnen van vandaag (al uitgeschreven):\n${leadBlok}\n\n` +
-      `Alle onderwerpen met nieuws vandaag:\n${topicBlok || "(geen)"}`,
+      `Alle onderwerpen met nieuws vandaag:\n${topicBlok || "(geen)"}` +
+      (actorBlok ? `\n\nSpelers die vandaag terugkeren over meerdere verhaallijnen:\n${actorBlok}` : ""),
   });
 
   return {

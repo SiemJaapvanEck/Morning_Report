@@ -546,3 +546,16 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   kept to a reviewed dry-run script (`scripts/reparent-entities.ts`, untracked)
   per Siem — ran it: no meaningful history backfill (F4's value is the forward
   path). Gate green, tests **259 → 274**. Awaiting Siem's localhost review.
+
+- **2 July 2026 (F5) — Entity typing Phase F5: actor-level "rode draad".** Siem
+  confirmed F4 live (closed), then we built the final phase. New pure helper
+  `clusterByActor` (`modules/entities/`) folds the day's threads' entities up to
+  their umbrella actor (products/events → parent actor via F4's links), keeping
+  only actors that span ≥2 threads — the genuine through-lines. `composeDailyPaper`
+  gained an optional `actorClusters` param that adds a "Spelers die vandaag
+  terugkeren" block + a clause telling the editor to cross-reference at the actor
+  level, not just per topic; `dailyPaperStep` loads the registry and passes the
+  clusters in. Pure enrichment of the existing editorial call — no migration, no
+  new AI call, no schema change. Scoped to `composeDailyPaper` only (per-section
+  intros left) per Siem. Gate green, tests **274 → 281**. The whole F1–F5
+  entity-typing arc is now code-complete; awaiting Siem's localhost review of F5.

@@ -115,6 +115,77 @@ export function expandWithParents(
   return out;
 }
 
+/** An actor umbrella and the day's thread headlines that cluster under it. */
+export interface ActorCluster {
+  /** display form of the umbrella actor/person, e.g. "Anthropic" */
+  actor: string;
+  /** always an umbrella type: actor or person */
+  type: EntityType;
+  /** headlines of the threads that touch this actor, in first-seen order */
+  items: string[];
+}
+
+/**
+ * Cluster the day's threads by the umbrella **actor** they touch — the raw
+ * material for an actor-level cross-reference ("Anthropic shipped Claude Science
+ * and Claude Sonnet 5"). For each thread, every entity is folded to its umbrella:
+ * actors/persons anchor directly, products/events route to their parent actor
+ * (F4), places/other/unknown are ignored. A thread contributes its title once
+ * per distinct actor it touches.
+ *
+ * Only actors spanning **≥2 threads** are returned — a single thread under an
+ * actor is not a through-line, and surfacing it would just cost prompt tokens.
+ * Sorted by cluster size (desc), then actor name for stable output. Empty
+ * registry ⇒ [] (no-op), so it's safe to call unconditionally.
+ *
+ * `normalize` folds a raw entity string to its norm_key (callers pass
+ * modules/threads' normalizeEntity).
+ */
+export function clusterByActor(
+  threads: { title: string; entities: string[] }[],
+  registry: EntityRegistry,
+  normalize: (s: string) => string,
+): ActorCluster[] {
+  if (registry.size === 0) return [];
+  const byId = buildEntityById(registry);
+
+  // actor norm_key → ordered, de-duped thread titles
+  const clusters = new Map<string, string[]>();
+  for (const thread of threads) {
+    // the distinct umbrella actors this one thread touches
+    const actors = new Set<string>();
+    for (const raw of thread.entities) {
+      const norm = normalize(raw);
+      if (!norm) continue;
+      const canon = resolveCanonical(norm, registry);
+      const entry = registry.get(canon);
+      if (entry && isUmbrellaType(entry.type)) {
+        actors.add(entry.norm_key);
+      } else {
+        const parent = parentActorKey(norm, registry, byId);
+        if (parent) actors.add(parent);
+      }
+    }
+    for (const actorKey of actors) {
+      const titles = clusters.get(actorKey) ?? [];
+      if (!titles.includes(thread.title)) titles.push(thread.title);
+      clusters.set(actorKey, titles);
+    }
+  }
+
+  return [...clusters.entries()]
+    .filter(([, items]) => items.length >= 2)
+    .map(([actorKey, items]) => {
+      const entry = registry.get(actorKey);
+      return {
+        actor: entry?.canonical_name ?? actorKey,
+        type: entry?.type ?? "actor",
+        items,
+      };
+    })
+    .sort((a, b) => b.items.length - a.items.length || a.actor.localeCompare(b.actor));
+}
+
 /**
  * Build a compact primer string for the scan prompt.
  * Format: "Anthropic=actor, Claude=product, ..."

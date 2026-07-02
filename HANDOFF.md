@@ -1,6 +1,6 @@
 # HANDOFF — Entity Typing (Phases F1–F5)
 
-> **Last updated:** 2 July 2026 (F4 session) — Siem (main)
+> **Last updated:** 2 July 2026 (F5 session) — Siem (main)
 > **Sprint board + per-phase specs:** `docs/entity-typing-plan.md`.
 
 ## What this arc is
@@ -14,91 +14,77 @@ threading can't tell an **actor** (Anthropic) from a **product** (Claude) from a
 **registry**, then apply the rule: **umbrellas = actors, storylines = the
 products/events an actor is involved in.**
 
-Five phases:
+Five phases — **all five now done and on main:**
 
 - **F1** ✅ — `entities` registry table (migration) + seed + pure `modules/entities/` helpers.
 - **F2** ✅ — Scan tags each entity with a type (registry-as-memory + write-back loop).
 - **F3** ✅ — Threading uses the type (actors=umbrellas, products/events=facets). **The visible shallow reader fix.**
-- **F4** ✅ — Relationships (product→actor) + variant canonicalization (deep layer). **Built this session; awaiting Siem's localhost review.**
-- **F5** — Feed typed entities + relationships into Sol/redactie (actor-level cross-ref). ← next
+- **F4** ✅ — Relationships (product→actor) + variant canonicalization (deep layer). **Built and live-verified by Siem — closed.**
+- **F5** ✅ — Typed entities + relationships feed Sol/redactie (actor-level cross-ref). **Built this session; awaiting Siem's localhost review.**
 
-## Where we stand (this session — F4)
+## Where we stand (this session — F5)
 
-**F1–F4 are done and on main.** Before writing any F4 code the session pushed a
-backup branch **`idle-work/2026-07-02-after-f3`** from HEAD (Siem's standing
-call), snapshotting the clean shallow-fix state. F4 then added the deep layer:
-the registry now records **which actor a product belongs to**, and threading
-routes a product's news to its actor's umbrella even when the article never names
-the actor. Full gate green (**lint, tsc, 274 tests, build**). **Not yet
-live-verified** — this pauses for Siem's localhost review per the per-phase
-cadence.
+**The whole F1–F5 arc is code-complete and on main.** F5 is the payoff: "de rode
+draad" (the front-page summary + the general roundup) now connects **actors**
+across storylines, not just topics — e.g. Anthropic named across its Claude and
+Fable storylines in one breath. It's pure enrichment of the existing editorial
+call: **no migration, no new AI call, no schema change.** Full gate green
+(**lint, tsc, 281 tests, build**). **Not yet live-verified** — pauses for Siem's
+localhost review per the per-phase cadence.
 
-### What F4 shipped
+### What F5 shipped
 
-- **Migration `0018_entity_parent.sql` (applied live).** Adds nullable,
-  self-referential `entities.parent_entity_id` (`on delete set null`) + index.
-  Seeds the two known links: Claude → Anthropic, Fable → Anthropic (by norm_key
-  subquery, so it's id-agnostic and idempotent). `Entity`/`EntityRow` synced in
-  `modules/shared/types.ts`.
-- **Pure helpers (`modules/entities/index.ts`, unit-tested).**
-  `buildEntityById` (id→Entity index, since the registry is keyed by norm_key),
-  `parentActorKey` (product norm_key → its actor's norm_key, folding aliases),
-  and `expandWithParents` (append each product's parent actor to an entity list,
-  de-duped, originals-first; identity map on an empty registry).
-  `mergeRegistryEntry` extended: a parent link once set is **never nulled** by a
-  later scan that omits it, but an **unset** link can be filled by an inferred
-  parent (`existing.parent_entity_id ?? incoming.parent_entity_id`).
-- **Scan inference (`modules/rank/index.ts`).** Each scanned entity may carry an
-  optional `parent` (the actor a product belongs to), with a prompt clause that
-  demands it only when explicit ("Claude, het model van Anthropic"). No extra AI
-  call — piggybacks the existing scan. `buildEntityMaps` records the parent only
-  for facet-type entities, folds the parent name to canonical, drops
-  self-references → new `entity_parents` map on `ScanUitslag`.
-- **Write-back (`modules/pipeline/steps.ts`).** Resolves the inferred parent to
-  its registry **id**, but **only when the actor is already a known row** (the FK
-  requires it). New actors link on a later edition once they've been written —
-  idempotent and convergent.
-- **The payoff — parent-expansion routing (`threadsStep`).** Right after loading
-  candidates, each item's entities are expanded with their parent actor, so an
-  item that names only "Claude" also carries "anthropic" and flows into the
-  Anthropic umbrella — the connective tissue F3's co-occurrence heuristic
-  couldn't provide. The parent key is **appended last**, so a directly-named
-  actor still outranks an inferred one in `matchByAnchor`. Empty/parent-less
-  registry ⇒ identity (no-op), so every existing caller keeps today's behaviour.
-- **+15 tests** (259 → 274): parent helpers + merge-preservation in
-  `entities.test.ts`, parent inference in `rank.test.ts`, and an
-  integration-style routing test (`expandWithParents` + `matchByAnchor`) in
-  `threads.test.ts`.
+- **New pure helper `clusterByActor` (`modules/entities/index.ts`, unit-tested).**
+  Takes the day's threads (`{ title, entities }[]`) + the registry and folds each
+  thread's entities up to their umbrella **actor**: actors/persons anchor
+  directly, products/events route to their parent actor (reusing F4's
+  `parentActorKey`), places/other/unknown are ignored. A thread contributes its
+  title once per distinct actor it touches. Returns only actors spanning **≥2
+  threads** (a single thread under an actor is not a through-line and would just
+  cost prompt tokens), sorted by cluster size desc then name. Empty registry ⇒
+  `[]` (no-op), so it's safe to call unconditionally. Returns `ActorCluster[]`
+  (`{ actor, type, items }`).
+- **`composeDailyPaper` (`modules/redactie/index.ts`).** New **optional**
+  `actorClusters: ActorCluster[] = []` param. When non-empty it adds a *"Spelers
+  die vandaag terugkeren"* block to the prompt context plus one system clause
+  telling the editor to connect developments at the actor level ("Anthropic
+  bracht zowel X als Y uit"), not just per topic. Persona-free, Dutch,
+  budget-aware — all unchanged. Optional + empty default ⇒ every existing caller
+  and test is untouched.
+- **`dailyPaperStep` (`modules/pipeline/steps.ts`).** After ranking the day's
+  threads it calls `loadRegistry()`, builds the clusters with `clusterByActor`
+  from the already-loaded `threads` (which carry `.entities`), and passes them
+  into `composeDailyPaper`. No extra AI call — it enriches the existing editorial
+  call; cost stays essentially flat (just a small context block).
+- **+7 tests** (274 → 281): `clusterByActor` in `entities.test.ts` — folding,
+  direct actor/person anchoring, ≥2-thread filtering, dedupe per actor, ignoring
+  places/unknowns, size sorting, empty-registry no-op.
 
-### Variant canonicalization — deliberately script-only (Siem's call, 2 Jul 2026)
+### Scope call worth flagging (Siem agreed, 2 Jul 2026)
 
-The spec's "full variant canonicalization" was scoped **away from the live hot
-path**: no code auto-merges entities. Instead a throwaway dry-run script,
-`scripts/reparent-entities.ts` (untracked, like the other DB-mutation helpers),
-previews (1) product→actor re-parenting from co-occurrence evidence and (2)
-likely variant collapses — and `--apply` writes **parent links only**, never
-merges. **Ran the dry-run this session:** across 111 parent-less products it
-found essentially nothing to backfill (one weak `Starlink → SpaceX` at 1×
-co-occurrence, below the confidence bar; the rest are one-off arXiv-style paper
-names). Takeaway: **F4's value is the forward path** (scan inference +
-parent-expansion), not history rewriting — so no `--apply` was run.
+- **Only `composeDailyPaper` gets the actor context this phase.**
+  `writeDailyDigest` has no callers anymore; `composeSectionIntros` is per-section
+  and actor cross-ref is inherently cross-section — both deliberately left.
+- **No test added to `redactie.test.ts`.** The real new logic is `clusterByActor`
+  (fully tested); the `composeDailyPaper` change is prompt-wiring glue and that
+  module has no AI-mocking harness. Didn't introduce one just for string
+  assembly. Revisit if Siem wants belt-and-braces coverage there.
 
 ## What's open
 
-- **Live-verify F4 on localhost (the review gate).** In the umbrella reader,
-  confirm a product-only item (e.g. a "Claude" story with no "Anthropic" in the
-  text) now nests under the Anthropic umbrella. The one behaviour change to
-  eyeball is the parent-expansion in `threadsStep`.
-- **Phase F5 — the payoff.** Feed typed entities + the new product→actor
-  relationships into Sol/redactie so "de rode draad" connects **actors**, not
-  just topics. See `docs/entity-typing-plan.md` §F5.
-- **Verify the F2 scan saving live** (carried over from last session) — spot-check
-  `usage_log` on the next real edition to confirm scan cost dropped as the
-  registry matured.
+- **Live-verify F5 on localhost (the review gate).** On a real edition with
+  recurring actors, confirm the front-page summary + general roundup draw
+  actor-level through-lines (an actor named across its storylines) rather than
+  walking topic by topic. It only fires when **≥2 of the day's threads share an
+  actor**, so a quiet day correctly shows no change.
+- **Verify the F2 scan saving live** (carried over) — spot-check `usage_log` on
+  the next real edition to confirm scan cost dropped as the registry matured.
 - **Pre-F3 thread cleanup — still deliberately LEFT.** The 4 pre-F3 product/event
   umbrellas (`fable 5`, `world cup`, `onlyfans`, `ai native games`) + 2 sibling
   facets stay in the DB until they age out. F4's dry-run confirmed there's no
-  clean automated re-parent for them either — revisit only if it still bothers.
+  clean automated re-parent for them — revisit only if it still bothers.
+- **The entity-typing arc is complete** — with F5 reviewed, the whole F1–F5 arc
+  closes. No further phases planned; next direction is Siem's call.
 
 ## Known gotchas
 
@@ -107,20 +93,22 @@ parent-expansion), not history rewriting — so no `--apply` was run.
 - Following is thread-level (`follow_marks`, `target_type`/`target_id`/`active`).
 - AI provider = Grok (xAI) via `askAI()`; Anthropic switchable. All model IDs /
   prices live in `modules/shared/config.ts`.
-- The `entities` table is live; `0018_entity_parent` is now the latest applied
-  migration (was `0017_entities`). Claude/Fable carry `parent_entity_id` →
-  Anthropic.
-- F4's parent helpers all default to today's behaviour when no registry / no
-  parent links are present — existing callers/tests unaffected; only the
-  thread-plan step (with the loaded registry) sees the expansion.
+- The `entities` table is live; `0018_entity_parent` is the latest applied
+  migration. Claude/Fable carry `parent_entity_id` → Anthropic.
+- All F4/F5 helpers default to today's behaviour when the registry is empty or
+  has no parent links — existing callers/tests unaffected. `clusterByActor`
+  returns `[]` on an empty registry, and `composeDailyPaper`'s new param is
+  optional, so the digest degrades gracefully to its old topic-only behaviour.
 - **Untracked, deliberately not committed:** `Morning Report design/` (standalone
   HTML/JSX mockups) and 5 throwaway DB-mutation `scripts/*.ts`
-  (`rebuild-threads`, `split-storylines`, `backfill-threads`, `regen-phase5`, and
-  now `reparent-entities`) — kept for reuse; not part of the app.
+  (`rebuild-threads`, `split-storylines`, `backfill-threads`, `regen-phase5`,
+  `reparent-entities`) — kept for reuse; not part of the app.
 
 ## Next actions for Siem
 
-1. **Review F4 on localhost** in the umbrella reader (does a Claude-only item sit
-   under Anthropic?). If good, F4 is closed.
-2. **Start Phase F5** — agree a short plan (per working agreements) before wiring
-   typed entities + relationships into `modules/redactie/index.ts`.
+1. **Review F5 on localhost** — on an edition where an actor recurs across
+   storylines, does the front-page summary / general roundup now cross-reference
+   at the actor level? If good, F5 (and the whole entity-typing arc) is closed.
+2. **Decide the next direction** — the F1–F5 arc is done. Open candidates from
+   memory: the news-threads build, the daily-paper re-imagination (Phase C/B/D),
+   or the deep-research Phase 5 (Tavily grounding, needs a `TAVILY_API_KEY`).

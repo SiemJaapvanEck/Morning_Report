@@ -47,7 +47,7 @@ import {
   shouldPromote,
   loadThreadItemEntities,
 } from "../threads";
-import { buildRegistry, mergeRegistryEntry, buildEntityById, expandWithParents } from "../entities";
+import { buildRegistry, mergeRegistryEntry, buildEntityById, expandWithParents, clusterByActor } from "../entities";
 import type { EntityRow } from "../entities";
 import type { Edition, Item, PipelineStep, Band, MarktSnapshot, DailyPaperArticle, Entity, EntityConfidence } from "../shared/types";
 
@@ -916,8 +916,25 @@ const dailyPaperStep: StepHandler = async ({ edition, step }) => {
 
   const dp_articles: DailyPaperArticle[] = ranked.map((r) => r.article);
 
+  // Actor through-lines (F5): fold today's threads' entities up to their umbrella
+  // actor so the digest can cross-reference at the actor level, not just topic
+  // level. Empty/parent-less registry ⇒ [] (no-op).
+  const registry = await loadRegistry();
+  const actorClusters = clusterByActor(
+    threads.map((t) => ({ title: t.title, entities: t.entities })),
+    registry,
+    normalizeEntity,
+  );
+
   // The editorial wrapper: summary + intro + one broad general roundup.
-  const parts = await composeDailyPaper(dp_articles.map((a) => a.headline), topics, mode, edition.id, step.id);
+  const parts = await composeDailyPaper(
+    dp_articles.map((a) => a.headline),
+    topics,
+    mode,
+    edition.id,
+    step.id,
+    actorClusters,
+  );
 
   // Sol's per-section editorial text: caption + small summary for each category.
   const dp_sections = await composeSectionIntros(topics, mode, edition.id, step.id);

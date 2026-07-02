@@ -3,6 +3,20 @@
 Chronologisch logboek van het project. Eén regel (of kort blok) per
 werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
 
+- **2 July 2026 — Idle-run: Krant A3 Phase 2 — Verhaallijn timeline.**
+  Pure builder `buildStorylineTimeline` in `app/lib/stories.ts` (10 new tests; total 306):
+  deduplicates links per edition, orders ascending, numbers deel 1…N, marks latest `isNow`,
+  appends optional `kind:"future"` node from the thread's prediction. `TimelineNode`
+  discriminated union added to `modules/shared/types.ts`. `getEdition` in `queries.ts`
+  enriched: `partLinks` select extended to pull `item_id + items(title, sources(name))`
+  in one select (no extra round-trips); `rawLinksByThread` map feeds `buildStorylineTimeline`
+  so each `StorylineRef` now carries a full `timeline: TimelineNode[]`. New `TimelineCard`
+  component in `EditieWeergave.tsx`: vertical timeline with blue VANDAAG dot, past nodes
+  (date + deel N + headline + source), dashed future node (date + certainty chip + prediction
+  text). `VerhaallijnAside` shows `TimelineCard` when ≥2 past instalments, falls back to
+  compact `VerhaallijnLabel + Vooruitblik` for 1-instalment stories. Gate green.
+  Not yet live-verified.
+
 - **2 July 2026 — Idle-run: Krant A3 Phase 1 — A3 shell + topzone + card restyle.**
   Rewrote `EditieWeergave.tsx` to the A3 "Dagblad + Verhaallijn" layout:
   masthead band (title + long Dutch date + ochtendeditie + nr. derived as day-of-year),

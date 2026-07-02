@@ -3,6 +3,18 @@
 Chronologisch logboek van het project. Eén regel (of kort blok) per
 werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
 
+- **2 July 2026 — Idle-run: Krant A3 Phase 1 — A3 shell + topzone + card restyle.**
+  Rewrote `EditieWeergave.tsx` to the A3 "Dagblad + Verhaallijn" layout:
+  masthead band (title + long Dutch date + ochtendeditie + nr. derived as day-of-year),
+  horizontal weather bar, topzone (Sol blue block + Markten tile with signed delta in
+  emerald/rose + Regio tile with scaled progress bars), image-or-hatch placeholder on
+  each lead/featured card (135° diagonal hatch when `image_url` is null), reserved aside
+  slot (VerhaallijnAside with VerhaallijnLabel + Vooruitblik in P1; P2 timeline + P3 map
+  inject here without container changes), summary cards and brief list restyled to
+  `rounded-2xl border` cards, Space Grotesk added as body font. Pure helpers in
+  `app/lib/krant-a3.ts` + 15 tests (DST-safe `dayOfYear` via `Date.UTC`). Every current
+  feature preserved. Gate green: 296 tests, lint + tsc + build all green. Not yet live-verified.
+
 - **2 July 2026 (later) — Scan-cost tuning + script cleanup (parked items cleared).**
   Post-F3 housekeeping session, no schema change. Made the scan emit
   `type`/`confidence` only for entities NOT already in the registry (known ones

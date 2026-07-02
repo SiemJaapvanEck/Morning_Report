@@ -1,9 +1,9 @@
 # HANDOFF — idle run: Entity Typing (Phases F1–F5)
 
-> **This is the `idle-work/2026-07-02` branch**, seeded 2 July 2026 (~01:40 CEST)
-> on Siem's account for an unattended overnight coding run. Working agreements
-> live in CLAUDE.md. **Full sprint board + per-phase specs: `docs/entity-typing-plan.md`.**
-> Idle-session rituals: `/start-idle` (open) and `/push-idle-branche` (close).
+> **Last updated:** 2 July 2026 — idle run (Phase F1 complete)
+> **Branch:** `idle-work/2026-07-02`, forked from `main` at `f9f0504`.
+> **Sprint board + per-phase specs:** `docs/entity-typing-plan.md`.
+> **Idle-session rituals:** `/start-idle` (open) and `/push-idle-branche` (close).
 
 ## What this run is
 
@@ -18,28 +18,69 @@ products/events an actor is involved in.**
 
 Five phases, each its own scheduled session:
 
-- **F1** — `entities` registry table (migration) + seed + pure `modules/entities/` helpers. No behaviour change.
-- **F2** — scan tags each entity with a type (registry-as-memory + write-back loop).
-- **F3** — threading uses the type (actors anchor umbrellas, products/events become facets). **The visible reader fix.**
-- **F4** — relationships (product→actor) + variant canonicalization (deep layer).
-- **F5** — feed typed entities + relationships into Sol/redactie (actor-level cross-ref).
+- **F1** ✅ — `entities` registry table (migration) + seed + pure `modules/entities/` helpers.
+- **F2** — Scan tags each entity with a type (registry-as-memory + write-back loop).
+- **F3** — Threading uses the type (actors=umbrellas, products/events=facets). **The visible reader fix.**
+- **F4** — Relationships (product→actor) + variant canonicalization (deep layer).
+- **F5** — Feed typed entities + relationships into Sol/redactie (actor-level cross-ref).
 
-## Where the idle run starts
+## What Phase F1 did (this session)
 
-- **Branch:** `idle-work/2026-07-02`, forked from `main` at `f9f0504` (Phase E
-  reader polish; gate was green there — lint / tsc / 220 tests / build).
-- **First unchecked box:** **Phase F1**. Each session picks up at the first
-  unchecked box on the sprint board in `docs/entity-typing-plan.md`.
-- The plan doc is the source of truth; each phase's spec (goal · acceptance ·
-  files · locked decisions) is also injected verbatim into that phase's scheduled
-  session prompt, so a cold session can start writing code immediately.
+**Goal:** stand up storage and pure logic. No behaviour change.
+
+### Files changed / created
+
+- **`supabase/migrations/0017_entities.sql`** (new, NOT applied — Siem applies in
+  the morning): creates `entity_type` enum (`actor|person|product|event|place|other`)
+  and `entity_confidence` enum (`seed|ai_high|ai_low`), then the `entities` table
+  (`id`, `canonical_name`, `norm_key` unique+indexed, `type`, `aliases text[]`,
+  `confidence`, `first_seen_edition`, `created_at`, `updated_at`). Seeds 27 rows:
+  - DATELINE_STOPLIST entries → `place` (matches today's `isAnchorableEntity`)
+  - Alias-map canonical targets (ukraine, russia, lebanon) → `place`; trump → `person`
+  - Institutional actors: Federal Reserve, Warner Bros, Anthropic, OpenAI, SpaceX, NASA
+  - AI products: `claude` (aliases: claude science, claude sonnet 5, etc.),
+    `fable` (aliases: claude fable 5, claude fable, fable 5) — the key
+    fragmentation sources from the spec
+
+- **`modules/shared/types.ts`** (updated): added `EntityType`, `EntityConfidence`,
+  and `Entity` interface in sync with the migration.
+
+- **`modules/entities/index.ts`** (new pure module): `buildRegistry()`,
+  `typeOf()`, `isUmbrellaType()`, `isFacetType()`, `resolveCanonical()`,
+  `mergeRegistryEntry()`. No framework imports, no DB calls.
+
+- **`modules/entities/entities.test.ts`** (new): 15 vitest tests covering all
+  helpers. The key `mergeRegistryEntry` decision: `first_seen_edition` is
+  immutable once set; seed rows have `null` (pre-date all editions) and a
+  later AI-discovered entry for the same entity does not overwrite it.
+
+### Gate
+
+`npm run lint && npx tsc --noEmit && npm test && npm run build` → **green**.
+235 tests passing (15 new in `entities.test.ts`).
+
+## What's next — Phase F2
+
+**First unchecked box on the sprint board: Phase F2.**
+
+Goal: every scanned entity gets a type; the registry grows and stays consistent.
+
+What F2 needs:
+- The `entities` table must be live (Siem applies `0017_entities.sql` first).
+- **Scan prompt/schema** (`modules/rank/index.ts`): each entity returns
+  `{ name, type }` instead of a bare string. The scan prompt is primed with known
+  registry types for entities in the batch and constrained to the six-value enum.
+- **Write-back** in the scan step (`modules/pipeline/steps.ts`): upsert new entities
+  into `entities` (confidence `ai_high`/`ai_low`) after the scan call. Idempotent
+  upsert on `norm_key`. No extra AI call — piggybacks the existing scan.
+- `scan_meta.entities` keeps display strings (back-compat); add
+  `scan_meta.entity_types` (norm_key → type) so F3 can read the typed data.
 
 ## Backup checkpoint after F3 (Siem's call)
 
 F3 completes the *shallow* fix — the natural review point. **At the start of
 Phase F4, the session must first create and push `idle-work/2026-07-02-after-f3`
-from the current HEAD** (snapshotting F1–F3), then write F4 code. This preserves a
-clean shallow-fix state before the deep layer builds on it.
+from the current HEAD** (snapshotting F1–F3), then write F4 code.
 
 ## Standing rules for every idle session (non-negotiable)
 
@@ -49,7 +90,6 @@ clean shallow-fix state before the deep layer builds on it.
   No live DB calls, no live pipeline run, no paid AI calls at night.
 - **"Done" = code written + gate green + migration authored**, not live-verified.
   The gate is `npm run lint && npx tsc --noEmit && npm test && npm run build`.
-  Idle sessions verify via the gate only (no localhost, no secrets, no DB).
 - **Architecture invariants hold** (CLAUDE.md): pure `modules/`; step-machine
   pipeline (idempotent, ~7s/step); every AI call via `askAI()`; typing
   **piggybacks the existing scan call** (no extra AI call); registry write-back is
@@ -60,12 +100,10 @@ clean shallow-fix state before the deep layer builds on it.
 - Close every session with `/push-idle-branche` (rewrites this HANDOFF on the
   branch, ticks the board, runs the gate, commits + pushes to this branch only).
 
-## Known gotchas (from the Phase E sessions)
+## Known gotchas
 
-- `.next/types/… 2.*` duplicate files break `tsc` with bogus "Duplicate
-  identifier". Fix: `find .next -name "* 2.*" -delete` then re-run.
-- CSS can fail to load after many HMR cycles → `rm -rf .next` and restart (only
-  relevant if a session tries the dev server; the gate itself doesn't need it).
+- `.next/types/… 2.*` duplicate files break `tsc` with bogus "Duplicate identifier".
+  Fix: `find .next -name "* 2.*" -delete` then re-run.
 - Following is thread-level (`follow_marks`, `target_type`/`target_id`/`active`).
 - AI provider = Grok (xAI) via `askAI()`; Anthropic switchable. All model IDs /
   prices live in `modules/shared/config.ts`.
@@ -73,8 +111,11 @@ clean shallow-fix state before the deep layer builds on it.
 ## Morning review (Siem)
 
 1. Read this file + `docs/entity-typing-plan.md` (board shows how far it got).
-2. Apply any new `supabase/migrations/*.sql` via the Supabase connector.
-3. Live-verify the reader fix (F3 payoff) on `localhost:3000` in a real desktop
-   browser — the headless preview reports a 0-width viewport.
-4. Decide on merging `idle-work/2026-07-02` → `main`. The
-   `idle-work/2026-07-02-after-f3` branch is the shallow-only fallback.
+2. Apply `supabase/migrations/0017_entities.sql` via the Supabase connector.
+3. Start the next scheduled idle session for Phase F2 (or merge if you prefer to
+   continue manually).
+4. Eventual live verification of the reader fix (F3 payoff) on `localhost:3000` in
+   a real desktop browser — the headless preview reports a 0-width viewport.
+5. Decide on merging `idle-work/2026-07-02` → `main`. The
+   `idle-work/2026-07-02-after-f3` branch will be the shallow-only fallback
+   (created at the start of F4).

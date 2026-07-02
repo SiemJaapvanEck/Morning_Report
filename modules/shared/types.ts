@@ -429,3 +429,34 @@ export interface WeatherSnapshot {
 
 /** Budget-modus bepaalt hoeveel de generatie mag uitgeven */
 export type BudgetMode = "vol" | "zuinig" | "minimaal" | "stop";
+
+// ============================================================
+// Entity registry (Phase F1 — entity typing)
+// ============================================================
+
+/** The kind of a real-world entity. Drives umbrella vs. facet selection in F3. */
+export type EntityType = "actor" | "person" | "product" | "event" | "place" | "other";
+
+/** How confident we are in a registry entry — seed rows are the trusted core. */
+export type EntityConfidence = "seed" | "ai_high" | "ai_low";
+
+/**
+ * One row in the `entities` registry table. Mirrors supabase/migrations/0017_entities.sql.
+ * The pipeline upserts on `norm_key` — see modules/entities/ for the pure helpers.
+ */
+export interface Entity {
+  id: string;
+  /** display form, e.g. "Anthropic", "Claude" */
+  canonical_name: string;
+  /** unique lookup key: output of normalizeEntity() */
+  norm_key: string;
+  type: EntityType;
+  /** pre-normalized alias strings that also resolve to this canonical entry */
+  aliases: string[];
+  confidence: EntityConfidence;
+  /** null for seeded rows (they pre-date any edition) */
+  first_seen_edition: string | null;
+  created_at: string;
+  /** updated by the application upsert on every write-back */
+  updated_at: string;
+}

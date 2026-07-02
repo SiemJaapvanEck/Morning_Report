@@ -456,6 +456,15 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   `/api/threads/follow` — no schema, no migration, no pipeline change. Verified live
   on the SpaceX/Anthropic umbrellas. Tests 208 → **220**, gate green.
 
+- **2 July 2026 — Idle-run: Phase F1 — Entity registry.** Overnight autonomous
+  session on `idle-work/2026-07-02`. Authored migration `0017_entities.sql`
+  (entities table + `entity_type`/`entity_confidence` enums, 27 seed rows).
+  Added `EntityType`, `EntityConfidence`, `Entity` to `modules/shared/types.ts`.
+  New pure module `modules/entities/` with helpers `buildRegistry`, `typeOf`,
+  `isUmbrellaType`, `isFacetType`, `resolveCanonical`, `mergeRegistryEntry` + 15
+  vitest tests. No behaviour change: migration not yet applied, no pipeline
+  wiring. Gate green, 235 tests.
+
 - **1 July 2026 — Reader polish, from live use.** Small follow-up session, no
   schema/pipeline changes. Resolved two open calls from the Phase E handoff:
   the `/archive` "▨ verhaallijnen" badge now shows an actual child count

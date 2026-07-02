@@ -3,6 +3,12 @@
 Chronologisch logboek van het project. Eén regel (of kort blok) per
 werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
 
+- **2 July 2026 — Merged `idle-work/2026-07-02` → main.** Entity typing Phases F1
+  and F2: entity registry table + seed migration (`0017_entities.sql`), pure
+  `modules/entities/` helpers, scan entity typing with registry write-back.
+  Gate green on both source and destination (239 tests). Also ships the
+  `/merge-idle-to-main` skill itself. Migration not yet applied — see HANDOFF.
+
 - **6 juni 2026** — Ontwerpfase afgerond op claude.ai: levend ontwerpdocument
   met architectuur (Vercel + Supabase + externe scheduler), onderwerpen,
   bronnen, interessemotor, Sol, budget-plafond ~€0,30/editie.
@@ -455,6 +461,27 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   ("Nasdaq 100", "Cursor") derived from entities. Both follow tiers reuse
   `/api/threads/follow` — no schema, no migration, no pipeline change. Verified live
   on the SpaceX/Anthropic umbrellas. Tests 208 → **220**, gate green.
+
+- **2 July 2026 — Idle-run: Phase F2 — Scan entity typing + registry write-back.**
+  Overnight autonomous session on `idle-work/2026-07-02`. Scan schema updated:
+  entities now returned as `{ name, type, confidence }` objects instead of bare
+  strings, constrained to the six-value enum. Added `buildRegistryPriming` to
+  `modules/entities/` to inject known types into the scan prompt. `scanBatch` gains
+  a `registry` parameter; produces three new `ScanUitslag` fields (`entity_types`,
+  `entity_display`, `entity_confidence`). `scan_meta.entity_types` (norm_key → type)
+  stored alongside the existing `entities` display strings (back-compat). Registry
+  write-back in `scanRankStep`: upserts typed entities to DB via `mergeRegistryEntry`
+  after every scan; idempotent on `norm_key`. 4 new vitest tests for `buildRegistryPriming`.
+  Gate green, 239 tests. Migration `0017_entities.sql` still needs Siem to apply.
+
+- **2 July 2026 — Idle-run: Phase F1 — Entity registry.** Overnight autonomous
+  session on `idle-work/2026-07-02`. Authored migration `0017_entities.sql`
+  (entities table + `entity_type`/`entity_confidence` enums, 27 seed rows).
+  Added `EntityType`, `EntityConfidence`, `Entity` to `modules/shared/types.ts`.
+  New pure module `modules/entities/` with helpers `buildRegistry`, `typeOf`,
+  `isUmbrellaType`, `isFacetType`, `resolveCanonical`, `mergeRegistryEntry` + 15
+  vitest tests. No behaviour change: migration not yet applied, no pipeline
+  wiring. Gate green, 235 tests.
 
 - **1 July 2026 — Reader polish, from live use.** Small follow-up session, no
   schema/pipeline changes. Resolved two open calls from the Phase E handoff:

@@ -12,10 +12,11 @@ import { db, unwrap } from "../shared/db";
 import { askAIJson } from "../shared/ai";
 import { budgetPolicy } from "../shared/budget";
 import { config } from "../shared/config";
-import { dedupeEntities } from "../threads";
+import { dedupeEntities, normalizeEntity } from "../threads";
+import { buildRegistryPriming, resolveCanonical, type EntityRegistry } from "../entities";
 import { REGIO_CODES, REGIO_GEEN, REGIO_NAAM, isRegioCode } from "../shared/regios";
 import { CALENDAR_KINDS, CALENDAR_CERTAINTIES } from "../calendar";
-import type { BudgetMode, Item, Topic, TopicScore, Band, ExtractedEvent } from "../shared/types";
+import type { BudgetMode, Item, Topic, TopicScore, Band, ExtractedEvent, EntityType } from "../shared/types";
 
 // ============================================================
 // Scan: belang-classificatie (Haiku, batch)
@@ -29,8 +30,8 @@ interface ScanVerdict {
   topic_index: number;
   /** wereldregio waar het nieuws over gaat, of "geen" */
   regio: string;
-  /** 2–5 kernentiteiten (eigennamen) uit het item, in normale schrijfwijze */
-  entities: string[];
+  /** 2–5 kernentiteiten als getypeerde objecten (Phase F2) */
+  entities: { name: string; type: string; confidence: string }[];
   /** expliciet gedateerde toekomstige gebeurtenissen uit de tekst (mag leeg) */
   events: ExtractedEvent[];
 }
@@ -48,7 +49,19 @@ const SCAN_SCHEMA = {
           is_reclame: { type: "boolean" },
           topic_index: { type: "integer" },
           regio: { type: "string", enum: [...REGIO_CODES, REGIO_GEEN] },
-          entities: { type: "array", items: { type: "string" } },
+          entities: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  name: { type: "string" },
+                  type: { type: "string", enum: ["actor", "person", "product", "event", "place", "other"] },
+                  confidence: { type: "string", enum: ["high", "low"] },
+                },
+                required: ["name", "type", "confidence"],
+                additionalProperties: false,
+              },
+            },
           events: {
             type: "array",
             items: {
@@ -83,8 +96,14 @@ export interface ScanUitslag {
   topicId: string | null;
   /** wereldregio waar het nieuws over gaat, of null als geen duidelijke plek */
   regio: string | null;
-  /** kernentiteiten (eigennamen) uit het item, ontdubbeld in displayvorm */
+  /** kernentiteiten (eigennamen) uit het item, ontdubbeld in displayvorm (back-compat) */
   entities: string[];
+  /** norm_key → effective entity type (registry wins; used by F3 threading) */
+  entity_types: Record<string, EntityType>;
+  /** norm_key → original AI display name (used by write-back to set canonical_name) */
+  entity_display: Record<string, string>;
+  /** norm_key → AI confidence level (used by write-back to set EntityConfidence) */
+  entity_confidence: Record<string, "high" | "low">;
   /** expliciet gedateerde toekomstige gebeurtenissen uit de tekst */
   events: ExtractedEvent[];
 }
@@ -93,12 +112,17 @@ export interface ScanUitslag {
  * Classificeert een batch items op algemeen nieuwsbelang én wijst het best
  * passende topic toe (zo werken topic-voorkeuren — hoe specifiek ook — door
  * in de match-score). Eén call per batch van ~25 — de goedkope brede scan.
+ *
+ * Phase F2: accepts an entity registry for prompt priming and canonical resolution.
+ * Returns entity_types (norm_key → type) and write-back metadata alongside the
+ * existing display-string entities for back-compat.
  */
 export async function scanBatch(
   items: Item[],
   editionId: string,
   stepId?: string,
   topics: ScanTopic[] = [],
+  registry: EntityRegistry = new Map(),
 ): Promise<Map<string, ScanUitslag>> {
   if (items.length === 0) return new Map();
 
@@ -110,11 +134,16 @@ export async function scanBatch(
     .map((topic, i) => `${i}. ${topic.name}${topic.query_text ? ` (${topic.query_text})` : ""}`)
     .join("\n");
 
+  const priming = buildRegistryPriming(registry);
+  const primingClause = priming
+    ? `Al bekende entiteiten in het register (hergebruik dit type tenzij je heel zeker weet dat het onjuist is): ${priming}. `
+    : "";
+
   const { data } = await askAIJson<{ items: ScanVerdict[] }>({
     tier: "scan",
     editionId,
     stepId,
-    maxTokens: 3500,
+    maxTokens: 5000,
     jsonSchema: SCAN_SCHEMA as unknown as Record<string, unknown>,
     system:
       "Je beoordeelt nieuwsitems voor een persoonlijk ochtendrapport. " +
@@ -127,9 +156,13 @@ export async function scanBatch(
       `${REGIO_CODES.map((c) => `${c}=${REGIO_NAAM[c]}`).join(", ")}. ` +
       `Nederland valt onder eu. Gebruik "${REGIO_GEEN}" als er geen duidelijke geografische plek is ` +
       "(bv. algemeen tech-, wetenschap- of marktnieuws). " +
-      "Geef tot slot per item 2 tot 5 kernentiteiten (entities): de belangrijkste eigennamen " +
-      "— personen, organisaties, bedrijven, plaatsen of producten — die in het item centraal staan, " +
-      "in hun normale schrijfwijze (bv. \"SpaceX\", \"Europese Centrale Bank\", \"Tibet\"). " +
+      "Geef per item 2 tot 5 kernentiteiten (entities): de belangrijkste eigennamen " +
+      "— personen, organisaties, bedrijven, plaatsen of producten — die in het item centraal staan. " +
+      "Elk entity is een object met: name (normale schrijfwijze, bv. \"SpaceX\"), " +
+      "type uit (actor|person|product|event|place|other) — actor=organisatie/bedrijf/groep, " +
+      "person=persoon, product=product/dienst/model/AI, event=evenement/lancering/verkiezing, " +
+      "place=land/stad/regio, other=overig — en confidence: high (zeker) of low (twijfelachtig). " +
+      primingClause +
       "Geef tot slot per item de toekomstige gebeurtenissen (events) waarvoor in de tekst een " +
       "EXPLICIETE datum staat — bv. \"IPO op 1 juli\", \"verkiezingen 5 november\", \"cijfers in Q3\". " +
       "Géén expliciete datum ⇒ lege lijst []; verzin nooit een datum. Elke event: title (korte " +
@@ -142,16 +175,38 @@ export async function scanBatch(
   const verdicts = new Map<string, ScanUitslag>();
   for (const verdict of data.items) {
     const item = items[verdict.index];
-    if (item) {
-      verdicts.set(item.id, {
-        belang: Math.max(0, Math.min(1, verdict.belang)),
-        isReclame: verdict.is_reclame,
-        topicId: topics[verdict.topic_index]?.id ?? null,
-        regio: isRegioCode(verdict.regio) ? verdict.regio : null,
-        entities: dedupeEntities(verdict.entities ?? []),
-        events: verdict.events ?? [],
-      });
+    if (!item) continue;
+
+    // Build typed entity maps from the AI's output.
+    const displayNames: string[] = [];
+    const entity_types: Record<string, EntityType> = {};
+    const entity_display: Record<string, string> = {};
+    const entity_confidence: Record<string, "high" | "low"> = {};
+
+    for (const e of verdict.entities ?? []) {
+      displayNames.push(e.name);
+      const normKey = normalizeEntity(e.name);
+      if (!normKey) continue;
+      const canonical = resolveCanonical(normKey, registry);
+      // Registry type wins for consistency; AI type fills the gap for new entities.
+      const existing = registry.get(canonical);
+      entity_types[canonical] = existing ? existing.type : (e.type as EntityType);
+      // First occurrence of this canonical key sets the display name and confidence.
+      if (!entity_display[canonical]) entity_display[canonical] = e.name;
+      if (!entity_confidence[canonical]) entity_confidence[canonical] = e.confidence as "high" | "low";
     }
+
+    verdicts.set(item.id, {
+      belang: Math.max(0, Math.min(1, verdict.belang)),
+      isReclame: verdict.is_reclame,
+      topicId: topics[verdict.topic_index]?.id ?? null,
+      regio: isRegioCode(verdict.regio) ? verdict.regio : null,
+      entities: dedupeEntities(displayNames),
+      entity_types,
+      entity_display,
+      entity_confidence,
+      events: verdict.events ?? [],
+    });
   }
   return verdicts;
 }

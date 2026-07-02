@@ -45,7 +45,9 @@ import {
   shouldPromote,
   loadThreadItemEntities,
 } from "../threads";
-import type { Edition, Item, PipelineStep, Band, MarktSnapshot, DailyPaperArticle } from "../shared/types";
+import { buildRegistry, mergeRegistryEntry } from "../entities";
+import type { EntityRow } from "../entities";
+import type { Edition, Item, PipelineStep, Band, MarktSnapshot, DailyPaperArticle, Entity, EntityConfidence } from "../shared/types";
 
 export interface StepContext {
   edition: Edition;
@@ -211,9 +213,61 @@ const scanRankStep: StepHandler = async ({ edition, step }) => {
   // bestaande scan_meta bewaren (bv. media van media-bronnen) bij de update
   const existingMeta = new Map(batch.map((item) => [item.id, item.scan_meta ?? {}]));
 
+  // Phase F2: load entity registry for type priming and write-back.
+  const entityRows = unwrap(
+    await db().from("entities").select("*"),
+  ) as Entity[];
+  const registry = buildRegistry(entityRows);
+
   let scanned = 0;
   if (batch.length > 0) {
-    const verdicts = await scanBatch(batch, edition.id, step.id, topics);
+    const verdicts = await scanBatch(batch, edition.id, step.id, topics, registry);
+
+    // Write-back: collect typed entities across all verdicts and upsert to the
+    // registry. Idempotent on norm_key; mergeRegistryEntry preserves higher-
+    // confidence entries (seed > ai_high > ai_low).
+    const toUpsert = new Map<string, EntityRow>();
+    for (const [, verdict] of verdicts) {
+      for (const normKey of Object.keys(verdict.entity_types)) {
+        if (toUpsert.has(normKey)) continue;
+        const aiConf = verdict.entity_confidence[normKey] ?? "low";
+        const entityConf: EntityConfidence = aiConf === "high" ? "ai_high" : "ai_low";
+        const displayName = verdict.entity_display[normKey] ?? normKey;
+        const existing = registry.get(normKey);
+        const existingRow: EntityRow | undefined = existing
+          ? {
+              canonical_name: existing.canonical_name,
+              norm_key: existing.norm_key,
+              type: existing.type,
+              aliases: existing.aliases,
+              confidence: existing.confidence,
+              first_seen_edition: existing.first_seen_edition,
+            }
+          : undefined;
+        const incoming: EntityRow = {
+          canonical_name: displayName,
+          norm_key: normKey,
+          type: verdict.entity_types[normKey],
+          aliases: [],
+          confidence: entityConf,
+          first_seen_edition: edition.id,
+        };
+        toUpsert.set(normKey, mergeRegistryEntry(existingRow, incoming));
+      }
+    }
+    if (toUpsert.size > 0) {
+      const upsertRows = [...toUpsert.values()].map((r) => ({
+        canonical_name: r.canonical_name,
+        norm_key: r.norm_key,
+        type: r.type,
+        aliases: r.aliases,
+        confidence: r.confidence,
+        first_seen_edition: r.first_seen_edition,
+        updated_at: new Date().toISOString(),
+      }));
+      await db().from("entities").upsert(upsertRows, { onConflict: "norm_key" });
+    }
+
     for (const [itemId, verdict] of verdicts) {
       await db()
         .from("items")
@@ -230,6 +284,7 @@ const scanRankStep: StepHandler = async ({ edition, step }) => {
             ...existingMeta.get(itemId),
             regio: verdict.regio,
             entities: verdict.entities,
+            entity_types: verdict.entity_types,
             events: verdict.events,
           },
         })

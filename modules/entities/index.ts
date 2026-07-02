@@ -52,6 +52,21 @@ export type EntityRow = Pick<
   "canonical_name" | "norm_key" | "type" | "aliases" | "confidence" | "first_seen_edition"
 >;
 
+/**
+ * Build a compact primer string for the scan prompt.
+ * Format: "Anthropic=actor, Claude=product, ..."
+ * Seeds come first (most trusted), then ai_high, then ai_low. Capped at
+ * `limit` entries so the prompt stays within the token budget for large registries.
+ */
+export function buildRegistryPriming(registry: EntityRegistry, limit = 60): string {
+  if (registry.size === 0) return "";
+  return [...registry.values()]
+    .sort((a, b) => CONFIDENCE_RANK[a.confidence] - CONFIDENCE_RANK[b.confidence])
+    .slice(0, limit)
+    .map((e) => `${e.canonical_name}=${e.type}`)
+    .join(", ");
+}
+
 // Confidence levels ranked lowest-ordinal-wins (seed is most trusted).
 const CONFIDENCE_RANK: Record<EntityConfidence, number> = {
   seed: 0,

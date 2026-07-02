@@ -68,7 +68,7 @@ first.
 ## Sprint board
 
 - [x] **Phase F1** — Entity registry table + seed + pure helpers
-- [ ] **Phase F2** — Scan tags type (registry-as-memory, write-back loop)
+- [x] **Phase F2** — Scan tags type (registry-as-memory, write-back loop)
 - [ ] **Phase F3** — Threading uses type (actors=umbrellas, products/events=facets)
 - [ ] **backup checkpoint** — push `idle-work/2026-07-02-after-f3` (start of F4)
 - [ ] **Phase F4** — Relationships (product→actor) + variant canonicalization

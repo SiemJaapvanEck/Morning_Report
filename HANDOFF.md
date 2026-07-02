@@ -1,6 +1,6 @@
 # HANDOFF — idle run: Entity Typing (Phases F1–F5)
 
-> **Last updated:** 2 July 2026 — idle run (Phase F1 complete)
+> **Last updated:** 2 July 2026 — idle run (Phase F2 complete)
 > **Branch:** `idle-work/2026-07-02`, forked from `main` at `f9f0504`.
 > **Sprint board + per-phase specs:** `docs/entity-typing-plan.md`.
 > **Idle-session rituals:** `/start-idle` (open) and `/push-idle-branche` (close).
@@ -19,62 +19,96 @@ products/events an actor is involved in.**
 Five phases, each its own scheduled session:
 
 - **F1** ✅ — `entities` registry table (migration) + seed + pure `modules/entities/` helpers.
-- **F2** — Scan tags each entity with a type (registry-as-memory + write-back loop).
+- **F2** ✅ — Scan tags each entity with a type (registry-as-memory + write-back loop).
 - **F3** — Threading uses the type (actors=umbrellas, products/events=facets). **The visible reader fix.**
 - **F4** — Relationships (product→actor) + variant canonicalization (deep layer).
 - **F5** — Feed typed entities + relationships into Sol/redactie (actor-level cross-ref).
 
-## What Phase F1 did (this session)
+## What Phase F2 did (this session)
 
-**Goal:** stand up storage and pure logic. No behaviour change.
+**Goal:** every scanned entity gets a type; the registry grows and stays consistent
+via a single combined registry-as-memory + write-back loop. No extra AI call —
+typing piggybacks the existing scan call.
 
-### Files changed / created
+### Files changed
 
-- **`supabase/migrations/0017_entities.sql`** (new, NOT applied — Siem applies in
-  the morning): creates `entity_type` enum (`actor|person|product|event|place|other`)
-  and `entity_confidence` enum (`seed|ai_high|ai_low`), then the `entities` table
-  (`id`, `canonical_name`, `norm_key` unique+indexed, `type`, `aliases text[]`,
-  `confidence`, `first_seen_edition`, `created_at`, `updated_at`). Seeds 27 rows:
-  - DATELINE_STOPLIST entries → `place` (matches today's `isAnchorableEntity`)
-  - Alias-map canonical targets (ukraine, russia, lebanon) → `place`; trump → `person`
-  - Institutional actors: Federal Reserve, Warner Bros, Anthropic, OpenAI, SpaceX, NASA
-  - AI products: `claude` (aliases: claude science, claude sonnet 5, etc.),
-    `fable` (aliases: claude fable 5, claude fable, fable 5) — the key
-    fragmentation sources from the spec
+- **`modules/entities/index.ts`** — added `buildRegistryPriming(registry, limit)`:
+  builds a compact "Anthropic=actor, Claude=product, …" string for the scan prompt
+  (seeds first, then ai_high, then ai_low, capped at 60 entries).
 
-- **`modules/shared/types.ts`** (updated): added `EntityType`, `EntityConfidence`,
-  and `Entity` interface in sync with the migration.
+- **`modules/rank/index.ts`** — the scan schema and prompt:
+  - `ScanVerdict.entities` changed from `string[]` to
+    `{ name: string; type: string; confidence: string }[]`, constrained by the
+    JSON schema to the six-value enum + high/low confidence.
+  - `SCAN_SCHEMA` updated to match the new entity object shape.
+  - `scanBatch` signature gains an optional `registry: EntityRegistry = new Map()`
+    parameter (default empty → back-compat with existing callers and tests).
+  - System prompt now includes the entity-type vocabulary and a `primingClause`
+    drawn from the live registry ("al bekende entiteiten: Anthropic=actor, …").
+  - `maxTokens` raised from 3500 → 5000 to accommodate the larger entity objects.
+  - `ScanUitslag` gains three new fields alongside the existing `entities: string[]`
+    (which is kept for back-compat, populated from display names as before):
+    - `entity_types: Record<string, EntityType>` — norm_key → effective type
+      (registry type wins over AI type for known entities; F3 reads this).
+    - `entity_display: Record<string, string>` — norm_key → AI display name
+      (used by write-back as `canonical_name` for new entities).
+    - `entity_confidence: Record<string, "high" | "low">` — norm_key → AI
+      confidence (used by write-back to set `EntityConfidence`).
+  - Processing loop in `scanBatch`: for each entity the AI returns, normalizes
+    the name via `normalizeEntity`, resolves to canonical via `resolveCanonical`,
+    then stores the effective type (registry wins) + display + AI confidence.
 
-- **`modules/entities/index.ts`** (new pure module): `buildRegistry()`,
-  `typeOf()`, `isUmbrellaType()`, `isFacetType()`, `resolveCanonical()`,
-  `mergeRegistryEntry()`. No framework imports, no DB calls.
+- **`modules/pipeline/steps.ts`** — registry write-back in `scanRankStep`:
+  - Loads the full entity registry from DB before the scan call.
+  - Passes the registry to `scanBatch` (for prompt priming and canonical resolution).
+  - After scan: collects all typed entities across all verdicts; for each unique
+    norm_key, builds an `EntityRow` from AI data, merges with the existing registry
+    entry via `mergeRegistryEntry` (seed > ai_high > ai_low), then batch-upserts to
+    `entities` on conflict `norm_key`. Idempotent.
+  - `scan_meta` update now includes `entity_types: verdict.entity_types` alongside
+    the unchanged `entities` (display strings) and `events`.
 
-- **`modules/entities/entities.test.ts`** (new): 15 vitest tests covering all
-  helpers. The key `mergeRegistryEntry` decision: `first_seen_edition` is
-  immutable once set; seed rows have `null` (pre-date all editions) and a
-  later AI-discovered entry for the same entity does not overwrite it.
+- **`modules/entities/entities.test.ts`** — 4 new tests for `buildRegistryPriming`:
+  empty registry → empty string; format check; seed-first ordering; limit cap.
 
 ### Gate
 
 `npm run lint && npx tsc --noEmit && npm test && npm run build` → **green**.
-235 tests passing (15 new in `entities.test.ts`).
+239 tests passing (4 new in `entities.test.ts`).
 
-## What's next — Phase F2
+### Decisions made autonomously
 
-**First unchecked box on the sprint board: Phase F2.**
+- **`entity_display` and `entity_confidence` in `ScanUitslag`**: added as two
+  parallel maps (norm_key → display name / AI confidence) so the write-back step
+  in `steps.ts` has all it needs without coupling rank to DB concerns. These are
+  internal bookkeeping fields, not stored to `scan_meta`.
+- **`maxTokens` 3500 → 5000**: entity objects are ~5× larger than bare strings;
+  25 items × 5 entities × ~40 extra chars ≈ ~1250 extra tokens. The scan tier
+  (Haiku/cheap model) keeps cost impact minimal.
+- **Write-back collects across all verdicts, first-occurrence wins**: if two items
+  in a batch give different types for the same entity, the first verdict in the
+  loop wins — `mergeRegistryEntry` handles the actual merge logic, so a seed or
+  ai_high entry in the registry still cannot be overridden by an ai_low new guess.
 
-Goal: every scanned entity gets a type; the registry grows and stays consistent.
+## What's next — Phase F3
 
-What F2 needs:
-- The `entities` table must be live (Siem applies `0017_entities.sql` first).
-- **Scan prompt/schema** (`modules/rank/index.ts`): each entity returns
-  `{ name, type }` instead of a bare string. The scan prompt is primed with known
-  registry types for entities in the batch and constrained to the six-value enum.
-- **Write-back** in the scan step (`modules/pipeline/steps.ts`): upsert new entities
-  into `entities` (confidence `ai_high`/`ai_low`) after the scan call. Idempotent
-  upsert on `norm_key`. No extra AI call — piggybacks the existing scan.
-- `scan_meta.entities` keeps display strings (back-compat); add
-  `scan_meta.entity_types` (norm_key → type) so F3 can read the typed data.
+**First unchecked box on the sprint board: Phase F3.**
+
+Goal: threading uses entity types so the fragmentation Siem saw clears up.
+
+What F3 needs:
+- The `entities` table must be live (Siem applies `0017_entities.sql`) and F2's
+  write-back must have run at least once so the registry has typed entries.
+- **`modules/threads/index.ts`**: anchor selection uses `isUmbrellaType`
+  (actor/person only may anchor an umbrella). Products/events become storyline
+  facets, never sibling umbrellas — this directly fixes the "Claude" / "Fable"
+  fragmentation.
+- `primaryEntity` / `resolveThreadMeta` prefer the actor as umbrella identity;
+  the salient product/event as the facet eyebrow.
+- No schema change — reuses `parent_thread_id` / `anchor_entity` from migration 0009.
+- A dry-run rebuild script (throwaway, not committed) to preview the re-derived
+  umbrella/storyline assignment under the new typed rules.
+- F3 is the last phase of the shallow fix — the visible payoff.
 
 ## Backup checkpoint after F3 (Siem's call)
 
@@ -107,15 +141,19 @@ from the current HEAD** (snapshotting F1–F3), then write F4 code.
 - Following is thread-level (`follow_marks`, `target_type`/`target_id`/`active`).
 - AI provider = Grok (xAI) via `askAI()`; Anthropic switchable. All model IDs /
   prices live in `modules/shared/config.ts`.
+- The `entities` table does not exist until Siem applies `0017_entities.sql`. The
+  `db().from("entities")` call in `scanRankStep` will fail at runtime until then.
 
 ## Morning review (Siem)
 
 1. Read this file + `docs/entity-typing-plan.md` (board shows how far it got).
-2. Apply `supabase/migrations/0017_entities.sql` via the Supabase connector.
-3. Start the next scheduled idle session for Phase F2 (or merge if you prefer to
-   continue manually).
-4. Eventual live verification of the reader fix (F3 payoff) on `localhost:3000` in
-   a real desktop browser — the headless preview reports a 0-width viewport.
-5. Decide on merging `idle-work/2026-07-02` → `main`. The
+2. Apply `supabase/migrations/0017_entities.sql` via the Supabase connector
+   (required before F2's write-back and F3's type lookups can run live).
+3. Start the next scheduled idle session for Phase F3 (or continue manually).
+4. Live cost verification of the scan step: target ≤ €0.10 per edition; the
+   raised maxTokens (5000) slightly increases output tokens but stays on the
+   cheap scan tier.
+5. Eventual live verification of the reader fix (F3 payoff) on `localhost:3000`.
+6. Decide on merging `idle-work/2026-07-02` → `main`. The
    `idle-work/2026-07-02-after-f3` branch will be the shallow-only fallback
    (created at the start of F4).

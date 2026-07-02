@@ -6,6 +6,7 @@ import {
   isFacetType,
   resolveCanonical,
   mergeRegistryEntry,
+  buildRegistryPriming,
   type EntityRegistry,
   type EntityRow,
 } from "./index";
@@ -38,6 +39,47 @@ const SEED_ROWS: Entity[] = [
 ];
 
 let registry: EntityRegistry;
+
+// ---------------------------------------------------------------------------
+// buildRegistryPriming
+// ---------------------------------------------------------------------------
+
+describe("buildRegistryPriming", () => {
+  it("returns empty string for an empty registry", () => {
+    expect(buildRegistryPriming(new Map())).toBe("");
+  });
+
+  it("formats entries as 'Name=type' pairs joined by ', '", () => {
+    const reg = buildRegistry([
+      makeEntity({ norm_key: "anthropic", type: "actor", canonical_name: "Anthropic", confidence: "seed" }),
+      makeEntity({ norm_key: "claude",    type: "product", canonical_name: "Claude",  confidence: "seed" }),
+    ]);
+    const priming = buildRegistryPriming(reg);
+    expect(priming).toContain("Anthropic=actor");
+    expect(priming).toContain("Claude=product");
+  });
+
+  it("puts seed entries before ai_high before ai_low", () => {
+    const reg = buildRegistry([
+      makeEntity({ norm_key: "b", type: "actor",   canonical_name: "B", confidence: "ai_low"  }),
+      makeEntity({ norm_key: "c", type: "product", canonical_name: "C", confidence: "ai_high" }),
+      makeEntity({ norm_key: "a", type: "place",   canonical_name: "A", confidence: "seed"    }),
+    ]);
+    const priming = buildRegistryPriming(reg);
+    expect(priming.indexOf("A=place")).toBeLessThan(priming.indexOf("C=product"));
+    expect(priming.indexOf("C=product")).toBeLessThan(priming.indexOf("B=actor"));
+  });
+
+  it("caps output at the given limit", () => {
+    const rows = Array.from({ length: 10 }, (_, i) =>
+      makeEntity({ norm_key: `e${i}`, type: "other", canonical_name: `E${i}`, confidence: "seed" }),
+    );
+    const reg = buildRegistry(rows);
+    const priming = buildRegistryPriming(reg, 3);
+    // 3 entries → 2 commas
+    expect(priming.split(", ")).toHaveLength(3);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // buildRegistry

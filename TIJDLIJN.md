@@ -456,6 +456,18 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   `/api/threads/follow` — no schema, no migration, no pipeline change. Verified live
   on the SpaceX/Anthropic umbrellas. Tests 208 → **220**, gate green.
 
+- **2 July 2026 — Idle-run: Phase F2 — Scan entity typing + registry write-back.**
+  Overnight autonomous session on `idle-work/2026-07-02`. Scan schema updated:
+  entities now returned as `{ name, type, confidence }` objects instead of bare
+  strings, constrained to the six-value enum. Added `buildRegistryPriming` to
+  `modules/entities/` to inject known types into the scan prompt. `scanBatch` gains
+  a `registry` parameter; produces three new `ScanUitslag` fields (`entity_types`,
+  `entity_display`, `entity_confidence`). `scan_meta.entity_types` (norm_key → type)
+  stored alongside the existing `entities` display strings (back-compat). Registry
+  write-back in `scanRankStep`: upserts typed entities to DB via `mergeRegistryEntry`
+  after every scan; idempotent on `norm_key`. 4 new vitest tests for `buildRegistryPriming`.
+  Gate green, 239 tests. Migration `0017_entities.sql` still needs Siem to apply.
+
 - **2 July 2026 — Idle-run: Phase F1 — Entity registry.** Overnight autonomous
   session on `idle-work/2026-07-02`. Authored migration `0017_entities.sql`
   (entities table + `entity_type`/`entity_confidence` enums, 27 seed rows).

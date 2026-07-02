@@ -559,3 +559,11 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   new AI call, no schema change. Scoped to `composeDailyPaper` only (per-section
   intros left) per Siem. Gate green, tests **274 → 281**. The whole F1–F5
   entity-typing arc is now code-complete; awaiting Siem's localhost review of F5.
+
+- **2 July 2026 — Krant A3 idle run: setup.** F1–F5 reviews closed. Siem handed a
+  standalone A3 "Dagblad + Verhaallijn" HTML mockup and asked to fold **all** current
+  krant functionality into it. Decoded the design (signature = per-story Verhaallijn
+  timeline + "WAAR HET SPEELT" impact map on a daily-paper shell), confirmed every
+  element is backed by existing data, and wrote `docs/krant-a3-plan.md` — 3 phases
+  (shell+topzone restyle · timeline · impact map). Opened `idle-work/2026-07-02-krant-a3`,
+  seeded HANDOFF + plan + idle skills. Scheduled locally: P1 20:00, P2 21:30, P3 01:00.

@@ -1,114 +1,75 @@
-# HANDOFF — Entity Typing (Phases F1–F5)
+# HANDOFF — Krant A3 "Dagblad + Verhaallijn" (idle run)
 
-> **Last updated:** 2 July 2026 (F5 session) — Siem (main)
-> **Sprint board + per-phase specs:** `docs/entity-typing-plan.md`.
+> **Branch:** `idle-work/2026-07-02-krant-a3` — **IDLE WORK ONLY. NEVER PUSH MAIN.**
+> **Started:** 2 July 2026, Siem (setup on `main`, run executes locally overnight).
+> **Full plan + per-phase specs:** `docs/krant-a3-plan.md` (source of truth).
 
-## What this arc is
+## What this run is
 
-An autonomous build of **entity typing** — the fix for the storyline
-fragmentation Siem saw in the umbrella reader (under *Anthropic*: "Claude" /
-"Claude Science" / "Claude Sonnet 5" splitting into separate storylines; *Fable*
-vs *Claude Fable 5* doubling up). The root cause: entities are flat strings, so
-threading can't tell an **actor** (Anthropic) from a **product** (Claude) from an
-**event** (an IPO). We attach a **type** to every entity via a growing DB
-**registry**, then apply the rule: **umbrellas = actors, storylines = the
-products/events an actor is involved in.**
+Redesign the full krant reading page — `app/components/EditieWeergave.tsx` — to the
+**A3 "Dagblad + Verhaallijn"** design, **keeping every current feature** and folding
+it into A3's visual language. Design source is a standalone HTML mockup Siem
+provided (`~/Downloads/Morning Report A3 (standalone).html`; its internal `<title>`
+still says "Richting A2" — that's a stale label, the file is A3).
 
-Five phases — **all five now done and on main:**
+A3's signature: every deep story is shown **as an ongoing storyline over time** —
+a **Verhaallijn timeline** (deel 1..N → vandaag → Vooruitblik forecast) plus an
+**impact map "WAAR HET SPEELT"** in an aside, on top of a proper daily-paper shell
+(masthead + weather bar + a topzone with Sol's synthesis and Markten/Regio data
+tiles). All of it is backed by **data that already exists** — see the data map in
+the plan doc. This is enrichment + restyle, not a rewrite of the pipeline.
 
-- **F1** ✅ — `entities` registry table (migration) + seed + pure `modules/entities/` helpers.
-- **F2** ✅ — Scan tags each entity with a type (registry-as-memory + write-back loop).
-- **F3** ✅ — Threading uses the type (actors=umbrellas, products/events=facets). **The visible shallow reader fix.**
-- **F4** ✅ — Relationships (product→actor) + variant canonicalization (deep layer). **Built and live-verified by Siem — closed.**
-- **F5** ✅ — Typed entities + relationships feed Sol/redactie (actor-level cross-ref). **Built this session; awaiting Siem's localhost review.**
+## Three phases — one per scheduled session
 
-## Where we stand (this session — F5)
+- [ ] **Phase 1 — A3 shell + topzone + card restyle** (frontend only, no backend)
+- [ ] **Phase 2 — Verhaallijn timeline** (pure builder + query extension + card)
+- [ ] **Phase 3 — Impact map "WAAR HET SPEELT"** (pure geo helper + query + card)
 
-**The whole F1–F5 arc is code-complete and on main.** F5 is the payoff: "de rode
-draad" (the front-page summary + the general roundup) now connects **actors**
-across storylines, not just topics — e.g. Anthropic named across its Claude and
-Fable storylines in one breath. It's pure enrichment of the existing editorial
-call: **no migration, no new AI call, no schema change.** Full gate green
-(**lint, tsc, 281 tests, build**). **Not yet live-verified** — pauses for Siem's
-localhost review per the per-phase cadence.
+Each phase's **full self-contained spec** (goal · acceptance criteria · files ·
+locked decisions) is in `docs/krant-a3-plan.md` and is injected into that phase's
+scheduled prompt. Read the plan doc first.
 
-### What F5 shipped
+## Locked decisions (agreed with Siem, 2 Jul 2026)
 
-- **New pure helper `clusterByActor` (`modules/entities/index.ts`, unit-tested).**
-  Takes the day's threads (`{ title, entities }[]`) + the registry and folds each
-  thread's entities up to their umbrella **actor**: actors/persons anchor
-  directly, products/events route to their parent actor (reusing F4's
-  `parentActorKey`), places/other/unknown are ignored. A thread contributes its
-  title once per distinct actor it touches. Returns only actors spanning **≥2
-  threads** (a single thread under an actor is not a through-line and would just
-  cost prompt tokens), sorted by cluster size desc then name. Empty registry ⇒
-  `[]` (no-op), so it's safe to call unconditionally. Returns `ActorCluster[]`
-  (`{ actor, type, items }`).
-- **`composeDailyPaper` (`modules/redactie/index.ts`).** New **optional**
-  `actorClusters: ActorCluster[] = []` param. When non-empty it adds a *"Spelers
-  die vandaag terugkeren"* block to the prompt context plus one system clause
-  telling the editor to connect developments at the actor level ("Anthropic
-  bracht zowel X als Y uit"), not just per topic. Persona-free, Dutch,
-  budget-aware — all unchanged. Optional + empty default ⇒ every existing caller
-  and test is untouched.
-- **`dailyPaperStep` (`modules/pipeline/steps.ts`).** After ranking the day's
-  threads it calls `loadRegistry()`, builds the clusters with `clusterByActor`
-  from the already-loaded `threads` (which carry `.entities`), and passes them
-  into `composeDailyPaper`. No extra AI call — it enriches the existing editorial
-  call; cost stays essentially flat (just a small context block).
-- **+7 tests** (274 → 281): `clusterByActor` in `entities.test.ts` — folding,
-  direct actor/person anchoring, ≥2-thread filtering, dedupe per actor, ignoring
-  places/unknowns, size sorting, empty-registry no-op.
+- **Full A3, 3 phases.** A3 **replaces** the current sectioned-paper layout.
+- **Timeline = honest deel-nodes** — real editions the storyline appeared in; **no
+  fake UPDATE/ANALYSE tags**, no AI node-typing.
+- **Impact map = reuse `WereldKaart` + geo-chips** (place-typed entities from the
+  F1–F5 registry + item `regio`).
+- **Ignore** the mockup's Tweaks/Kleurschema panel (design-tool artifact; the app
+  themes via `ThemaKiezer`). **Edition "nr."** derived from `edition.date`.
+- **Keep every feature:** ItemRating, follows-first ordering, ripples, Vooruitblik +
+  certainty chip, source + match%, image-or-hatch, empty-list grace, Dutch copy,
+  light+dark.
 
-### Scope call worth flagging (Siem agreed, 2 Jul 2026)
+## Standing autonomy rules (every session)
 
-- **Only `composeDailyPaper` gets the actor context this phase.**
-  `writeDailyDigest` has no callers anymore; `composeSectionIntros` is per-section
-  and actor cross-ref is inherently cross-section — both deliberately left.
-- **No test added to `redactie.test.ts`.** The real new logic is `clusterByActor`
-  (fully tested); the `composeDailyPaper` change is prompt-wiring glue and that
-  module has no AI-mocking harness. Didn't introduce one just for string
-  assembly. Revisit if Siem wants belt-and-braces coverage there.
+- **Idle branch only — never push `main`.** Close each session with
+  `/push-idle-branche` (pushes to this branch only).
+- **Migration files only — never apply live.** Author numbered SQL under
+  `supabase/migrations/`; Siem applies in the morning. (Phases 1–3 expect **no**
+  migration.)
+- **Idle "done" = code written + gate green + migration files authored** — NOT
+  live-verified (no localhost/DB/paid pipeline at night):
+  `npm run lint && npx tsc --noEmit && npm test && npm run build`.
+- Budget under the edition ceiling; bug-backup before risky edits; if blocked,
+  checkpoint + honest HANDOFF — **never fake green**.
+- Architecture rules still bind: pure `modules/`, step-machine pipeline, every AI
+  call via `askAI()` (none needed here), types in sync.
 
-## What's open
-
-- **Live-verify F5 on localhost (the review gate).** On a real edition with
-  recurring actors, confirm the front-page summary + general roundup draw
-  actor-level through-lines (an actor named across its storylines) rather than
-  walking topic by topic. It only fires when **≥2 of the day's threads share an
-  actor**, so a quiet day correctly shows no change.
-- **Verify the F2 scan saving live** (carried over) — spot-check `usage_log` on
-  the next real edition to confirm scan cost dropped as the registry matured.
-- **Pre-F3 thread cleanup — still deliberately LEFT.** The 4 pre-F3 product/event
-  umbrellas (`fable 5`, `world cup`, `onlyfans`, `ai native games`) + 2 sibling
-  facets stay in the DB until they age out. F4's dry-run confirmed there's no
-  clean automated re-parent for them — revisit only if it still bothers.
-- **The entity-typing arc is complete** — with F5 reviewed, the whole F1–F5 arc
-  closes. No further phases planned; next direction is Siem's call.
-
-## Known gotchas
+## Gotchas carried over
 
 - `.next/types/… 2.*` duplicate files break `tsc` with bogus "Duplicate
-  identifier". Fix: `find .next -name "* 2.*" -delete` then re-run.
-- Following is thread-level (`follow_marks`, `target_type`/`target_id`/`active`).
-- AI provider = Grok (xAI) via `askAI()`; Anthropic switchable. All model IDs /
-  prices live in `modules/shared/config.ts`.
-- The `entities` table is live; `0018_entity_parent` is the latest applied
-  migration. Claude/Fable carry `parent_entity_id` → Anthropic.
-- All F4/F5 helpers default to today's behaviour when the registry is empty or
-  has no parent links — existing callers/tests unaffected. `clusterByActor`
-  returns `[]` on an empty registry, and `composeDailyPaper`'s new param is
-  optional, so the digest degrades gracefully to its old topic-only behaviour.
-- **Untracked, deliberately not committed:** `Morning Report design/` (standalone
-  HTML/JSX mockups) and 5 throwaway DB-mutation `scripts/*.ts`
-  (`rebuild-threads`, `split-storylines`, `backfill-threads`, `regen-phase5`,
-  `reparent-entities`) — kept for reuse; not part of the app.
+  identifier". Fix: `find .next -name "* 2.*" -delete`, then re-run.
+- Data lives in `front_page` (`dp_summary`, `dp_sections`, `markten.indices`,
+  `regios`) and `EditionView.sections[].items[]`. Storyline history is
+  reconstructable from `thread_items` → `editions.date` (no migration).
+- Place typing already shipped (F1–F5); `entities` table is live. `WereldKaart` /
+  `MarktenKaart` / `wereldGrid.ts` + `modules/shared/regios.ts` are the map assets.
 
-## Next actions for Siem
+## For Siem in the morning
 
-1. **Review F5 on localhost** — on an edition where an actor recurs across
-   storylines, does the front-page summary / general roundup now cross-reference
-   at the actor level? If good, F5 (and the whole entity-typing arc) is closed.
-2. **Decide the next direction** — the F1–F5 arc is done. Open candidates from
-   memory: the news-threads build, the daily-paper re-imagination (Phase C/B/D),
-   or the deep-research Phase 5 (Tavily grounding, needs a `TAVILY_API_KEY`).
+Apply any authored migrations (expected: none), `npm run dev`, Jesse profile →
+"Lees de krant", verify A3 renders with the timeline + impact map and that every
+old feature still works, then decide on merging this branch → `main` (see
+`/merge-idle-to-main`).

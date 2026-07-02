@@ -9,7 +9,22 @@
 // thread's entities are the denormalized union of the entities it has absorbed.
 
 import { db, unwrap } from "../shared/db";
-import type { DestepLens, Thread, ThreadStatus, ThreadUpdate } from "../shared/types";
+import {
+  buildRegistry,
+  type EntityRegistry,
+  isFacetType,
+  isUmbrellaType,
+  resolveCanonical,
+  typeOf,
+} from "../entities";
+import type {
+  DestepLens,
+  Entity,
+  EntityType,
+  Thread,
+  ThreadStatus,
+  ThreadUpdate,
+} from "../shared/types";
 
 /**
  * Curated alias map: surface-string variants of the SAME real-world entity that
@@ -81,6 +96,36 @@ export const DATELINE_STOPLIST = new Set<string>([
 /** Whether a (normalized) entity is allowed to anchor a thread — false for datelines. */
 export function isAnchorableEntity(norm: string): boolean {
   return norm.length > 0 && !DATELINE_STOPLIST.has(norm);
+}
+
+/**
+ * Registry-aware type of a normalized entity key. Folds registry aliases first
+ * (so a variant resolves to its canonical entry's type), then reads the type;
+ * unknown keys are 'other'. The single lookup path shared by the F3 predicates.
+ */
+export function resolveEntityType(normKey: string, registry: EntityRegistry): EntityType {
+  return typeOf(resolveCanonical(normKey, registry), registry);
+}
+
+/**
+ * Phase F3 — may this (normalized) entity anchor an UMBRELLA thread? Lenient
+ * policy (Siem, 2 Jul 2026): only *facet types* (product/event) are blocked, so
+ * a product like "Claude" can no longer open a sibling umbrella next to its
+ * actor. Actors, persons, places and still-untyped ('other') entities may anchor
+ * — this targets the fragmentation bug without regressing new/untyped actors.
+ */
+export function canAnchorUmbrella(normKey: string, registry: EntityRegistry): boolean {
+  return !isFacetType(resolveEntityType(normKey, registry));
+}
+
+/**
+ * Phase F3 — may this (normalized) entity be a STORYLINE facet under an actor
+ * umbrella? The mirror of canAnchorUmbrella: umbrella types (actor/person) are
+ * excluded (they're sibling umbrellas, never facets of one another); products,
+ * events, places and untyped ('other') entities are eligible facets.
+ */
+export function canBeFacet(normKey: string, registry: EntityRegistry): boolean {
+  return !isUmbrellaType(resolveEntityType(normKey, registry));
 }
 
 /** Jaccard overlap between two entity sets, 0..1. Empty either side → 0. */
@@ -334,8 +379,24 @@ export interface AnchorSpec {
   reason: AnchorReason;
 }
 
-/** The first usable entity of an item (its most salient), display + normalized; null if none. */
-export function primaryEntity(entities: string[]): { entity: string; display: string } | null {
+/**
+ * The most salient entity of an item, display + normalized; null if none. By
+ * default this is the first usable entity (scan order = salience). Phase F3:
+ * when a `registry` is supplied, prefer the first UMBRELLA-typed (actor/person)
+ * entity so "Anthropic ships Claude" anchors on Anthropic, not the product —
+ * falling back to the first usable entity when the item names no actor/person.
+ */
+export function primaryEntity(
+  entities: string[],
+  registry?: EntityRegistry,
+): { entity: string; display: string } | null {
+  if (registry) {
+    for (const raw of entities) {
+      const display = raw.trim();
+      const entity = normalizeEntity(display);
+      if (entity && isUmbrellaType(resolveEntityType(entity, registry))) return { entity, display };
+    }
+  }
   for (const raw of entities) {
     const display = raw.trim();
     const entity = normalizeEntity(display);
@@ -347,10 +408,14 @@ export function primaryEntity(entities: string[]): { entity: string; display: st
 /**
  * The most frequent normalized entity across a set of items, with a display
  * form. Ties break toward the entity seen first (stable order). Null when no
- * item carries any entity.
+ * item carries any entity. Phase F3: when a `registry` is supplied, the most
+ * frequent UMBRELLA-typed (actor/person) entity wins — so a cluster where a
+ * product dominates by count still anchors on its actor — falling back to the
+ * overall most frequent entity when the cluster names no actor/person.
  */
 export function dominantEntity(
   items: { entities: string[] }[],
+  registry?: EntityRegistry,
 ): { entity: string; display: string } | null {
   const count = new Map<string, number>();
   const display = new Map<string, string>();
@@ -368,15 +433,22 @@ export function dominantEntity(
       count.set(norm, count.get(norm)! + 1);
     }
   }
-  let best: string | null = null;
-  let bestN = 0;
-  for (const e of order) {
-    const n = count.get(e)!;
-    if (n > bestN) {
-      bestN = n;
-      best = e;
+  const pickBest = (eligible: (norm: string) => boolean): string | null => {
+    let best: string | null = null;
+    let bestN = 0;
+    for (const e of order) {
+      if (!eligible(e)) continue;
+      const n = count.get(e)!;
+      if (n > bestN) {
+        bestN = n;
+        best = e;
+      }
     }
-  }
+    return best;
+  };
+  const best =
+    (registry && pickBest((e) => isUmbrellaType(resolveEntityType(e, registry)))) ||
+    pickBest(() => true);
   return best ? { entity: best, display: display.get(best)! } : null;
 }
 
@@ -390,12 +462,15 @@ export function bigTopicAnchors(
   items: { id: string; entities: string[] }[],
   minOverlap: number,
   minCluster: number,
+  registry?: EntityRegistry,
 ): AnchorSpec[] {
   const byId = new Map(items.map((it) => [it.id, it]));
   const out: AnchorSpec[] = [];
   for (const cluster of clusterByEntities(items, minOverlap, minCluster)) {
     const members = cluster.map((id) => byId.get(id)!).filter(Boolean);
-    const dom = dominantEntity(members);
+    // Phase F3: registry-aware — a cluster anchors on its dominant actor/person,
+    // not a product that happens to appear in every article of the cluster.
+    const dom = dominantEntity(members, registry);
     if (dom) out.push({ entity: dom.entity, display: dom.display, reason: "big_topic" });
   }
   return out;
@@ -412,6 +487,7 @@ export function personalAnchors(
   followedTopicIds: Set<string>,
   followedCategoryIds: Set<string>,
   trackedTopicIds: Set<string>,
+  registry?: EntityRegistry,
 ): AnchorSpec[] {
   const out: AnchorSpec[] = [];
   for (const c of candidates) {
@@ -421,7 +497,9 @@ export function personalAnchors(
       ((c.topicId != null && followedTopicIds.has(c.topicId)) ||
         (c.categoryId != null && followedCategoryIds.has(c.categoryId)));
     if (!tracked && !followed) continue;
-    const p = primaryEntity(c.entities);
+    // Phase F3: registry-aware — the item's actor/person becomes the anchor when
+    // it names one, so a followed product item threads under its actor umbrella.
+    const p = primaryEntity(c.entities, registry);
     if (p) out.push({ entity: p.entity, display: p.display, reason: tracked ? "tracked" : "followed" });
   }
   return out;
@@ -509,6 +587,7 @@ export function storylineFacets(
   items: { entities: string[] }[],
   minItems: number,
   exclude?: Set<string>,
+  registry?: EntityRegistry,
 ): StorylineFacet[] {
   const count = new Map<string, number>();
   const display = new Map<string, string>();
@@ -522,6 +601,9 @@ export function storylineFacets(
       // Another actor that is itself a big-thread anchor is a sibling umbrella,
       // not a sub-storyline of this one — skip it (avoids circular nesting).
       if (exclude?.has(norm)) continue;
+      // Phase F3: an actor/person co-occurring under this umbrella is a sibling
+      // umbrella too (even when it isn't itself a big anchor yet) — never a facet.
+      if (registry && !canBeFacet(norm, registry)) continue;
       seen.add(norm);
       if (!count.has(norm)) {
         count.set(norm, 0);
@@ -691,6 +773,12 @@ export function detectAnchors(
 // ============================================================
 // DB helpers (Supabase) — only the pipeline step calls these
 // ============================================================
+
+/** The full entity registry as an in-memory Map — the type prior for F3 threading. */
+export async function loadRegistry(): Promise<EntityRegistry> {
+  const rows = unwrap(await db().from("entities").select("*")) as Entity[];
+  return buildRegistry(rows);
+}
 
 /** Active (non-closed) threads of a profile, with what matching + anchoring need. */
 export async function loadActiveThreads(

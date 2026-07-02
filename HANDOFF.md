@@ -18,77 +18,67 @@ Five phases:
 
 - **F1** ✅ — `entities` registry table (migration) + seed + pure `modules/entities/` helpers.
 - **F2** ✅ — Scan tags each entity with a type (registry-as-memory + write-back loop).
-- **F3** — Threading uses the type (actors=umbrellas, products/events=facets). **The visible reader fix.** ← next
-- **F4** — Relationships (product→actor) + variant canonicalization (deep layer).
+- **F3** ✅ — Threading uses the type (actors=umbrellas, products/events=facets). **The visible reader fix — shipped.**
+- **F4** — Relationships (product→actor) + variant canonicalization (deep layer). ← next
 - **F5** — Feed typed entities + relationships into Sol/redactie (actor-level cross-ref).
 
 ## Where we stand (this session)
 
-**F1 + F2 are now LIVE, and the F3 gate is fully clear.** This session did not
-write F3 code — it took F1/F2 from "merged but dormant" to "running against the
-live DB," and verified the result:
+**F3 is done, on main, and verified.** The shallow fix is complete: from the
+next edition on, a product/event can no longer open its own umbrella next to its
+actor — it nests as a storyline facet instead. Live-verified by Siem on
+`localhost:3000` ("perfect like this").
 
-- **Migration `0017_entities.sql` applied** to the live Supabase project
-  (`iqhyndhrlhjfdrwjvmjv`) — it is now the latest migration
-  (`20260702094459_0017_entities`). Enums + `entities` table + index + RLS +
-  seed rows all committed in one transaction.
-- **Permission change (Siem's call):** `.claude/settings.json` had a hard
-  `deny` on the Supabase `apply_migration` tool — this blocked the migration
-  with no prompt to approve. Siem chose to **drop that rail permanently** (the
-  other four rails — `execute_sql`, `deploy_edge_function`, `merge_branch`,
-  `reset_branch` — stay denied). This is why the settings change is in this
-  commit; it must persist so future interactive sessions can apply migrations.
-- **F2 write-back ran** via one full `npm run pipeline` (a complete edition for
-  today, all steps green). The `entities` table grew from **25 seed rows →
-  313 rows** (286 `ai_high`, 2 `ai_low`, 25 seeds preserved with their `seed`
-  confidence). Type spread: product 109, place 75, actor 54, other 42,
-  person 29, event 4.
-- **Fragmentation-critical entities verified correctly typed and seed-protected:**
-  Anthropic/OpenAI/SpaceX/NASA/Federal Reserve/Warner Bros = `actor/seed`;
-  Claude (8 aliases) & Fable (3 aliases) = `product/seed`; Trump = `person/seed`.
-  The write-back did not clobber the trusted seed core.
+What this session built (all in three tracked files, no schema change):
 
-### Cost check (⚠️ scan slightly over target)
+- **Pure predicates** in `modules/threads/index.ts`: `resolveEntityType`
+  (registry-aware type of a normalized key, folding aliases), `canAnchorUmbrella`
+  (blocks `product`/`event` from anchoring), `canBeFacet` (blocks `actor`/`person`
+  from being a facet).
+- **Registry-aware branches** added to `primaryEntity`, `dominantEntity`,
+  `bigTopicAnchors`, `personalAnchors`, `storylineFacets` — each takes an
+  **optional** `registry` and falls back to the exact old behaviour when it's
+  absent, so nothing outside the thread-plan step changed.
+- **Lenient policy (Siem's call):** only facet types (product/event) are blocked
+  from anchoring; actors, persons, places **and still-untyped (`other`)**
+  entities may still anchor. This targets the fragmentation bug without starving
+  new/untyped actors of their own umbrella.
+- **Wiring** in `modules/pipeline/steps.ts`: the thread-plan step loads the
+  registry once via the new `loadRegistry()` DB helper and threads it through
+  anchor + facet selection, plus a `canAnchorUmbrella` filter next to the
+  existing dateline filter.
+- **Tests:** 20 new F3 cases in `modules/threads/threads.test.ts`. Full suite
+  **253 pass**. Gate green (lint, tsc, test, build).
 
-From `usage_log` for the run (45 AI calls, full edition €0.2321):
+### Dry-run preview (read-only, live DB)
 
-| Step | Cost | Calls |
-|---|---|---|
-| `scan_rank` | **€0.1251** | 8 |
-| `generate` | €0.0955 | 33 |
-| `daily_paper` | €0.0115 | 4 |
+`scripts/verify-f3.ts` (throwaway, uncommitted) confirmed the effect against the
+live registry (313 rows, 121 umbrellas, 32 storylines):
 
-Scan came in **~25% over the €0.10/edition target**. Cause: the `maxTokens`
-3500→5000 raise plus richer output (each entity is now a `{name,type,confidence}`
-object, not a bare string), and this edition ingested a large two-wave batch
-(8 scan calls). Not blocking — the registry is a growing asset, so future runs
-should mostly hit existing rows and trend cheaper. **Parked as a tuning item**
-(options: emit type/confidence only for non-place entities, or drop `maxTokens`
-back once the registry matures).
+- **4 existing umbrellas are really facet types** and would collapse under the
+  new rules: `fable 5` (product — the exact double-up), `world cup` (event),
+  `onlyfans` (product), `ai native games` (product).
+- **2 existing facets are really actors** (siblings): `sk hynix`, `fifa`.
+- Umbrella-anchor type spread: `other=88, actor=17, place=9, person=3,
+  product=3, event=1` — the 88 untyped stay anchoring, as the lenient policy
+  intends.
 
-## What's next — Phase F3 (gate is now clear)
+## What's open
 
-**First unchecked box on the sprint board: Phase F3.** Everything F3 reads is now
-in place (typed registry populated, migration live). No plan has been agreed yet
-— draft one before writing code.
-
-What F3 needs:
-- **`modules/threads/index.ts`**: anchor selection uses `isUmbrellaType`
-  (actor/person only may anchor an umbrella). Products/events become storyline
-  facets, never sibling umbrellas — this directly fixes the "Claude" / "Fable"
-  fragmentation.
-- `primaryEntity` / `resolveThreadMeta` prefer the actor as umbrella identity;
-  the salient product/event as the facet eyebrow.
-- No schema change — reuses `parent_thread_id` / `anchor_entity` from migration 0009.
-- A dry-run rebuild script (throwaway, not committed) to preview the re-derived
-  umbrella/storyline assignment under the new typed rules.
-- F3 is the last phase of the shallow fix — the visible payoff.
-
-## Backup checkpoint after F3 (Siem's call)
-
-F3 completes the *shallow* fix — the natural review point. **At the start of
-Phase F4, the session must first create and push `idle-work/2026-07-02-after-f3`
-from the current HEAD** (snapshotting F1–F3), then write F4 code.
+- **Existing-thread cleanup — Siem chose to LEAVE them (option 1).** F3 is
+  go-forward only; the 4 pre-F3 product/event umbrellas above (and the 2 sibling
+  facets) stay in the DB until they age out. A re-parenting `--apply` rebuild was
+  deliberately *not* run — that's closer to F4's canonicalization pass and would
+  rewrite live thread data. Revisit during F4 if it still bothers.
+- **Phase F4 — the next box.** Relationships (`parent_entity_id`, product→actor)
+  + full variant canonicalization. **Backup checkpoint first:** at the start of
+  F4, create and push `idle-work/2026-07-02-after-f3` from HEAD (snapshotting
+  F1–F3) *before* writing any F4 code — Siem's standing call, so the shallow-fix
+  state stays cleanly reviewable.
+- **Scan-cost tuning (parked since F2).** Scan ran ~25% over the €0.10/edition
+  target after the F2 `maxTokens` raise + richer entity output. Not blocking;
+  should trend cheaper as the registry matures. Options: emit type/confidence
+  only for non-place entities, or drop `maxTokens` back.
 
 ## Known gotchas
 
@@ -97,17 +87,19 @@ from the current HEAD** (snapshotting F1–F3), then write F4 code.
 - Following is thread-level (`follow_marks`, `target_type`/`target_id`/`active`).
 - AI provider = Grok (xAI) via `askAI()`; Anthropic switchable. All model IDs /
   prices live in `modules/shared/config.ts`.
-- The `entities` table is now live and populated — the earlier "table does not
-  exist until applied" caveat no longer applies.
+- The `entities` table is live and populated (313 rows); migration
+  `0017_entities` is the latest applied migration.
+- F3's registry-aware pure functions all default to the pre-F3 behaviour when no
+  registry is passed — existing callers/tests are unaffected; only the pipeline
+  thread-plan step passes the registry.
 - **Untracked, deliberately not committed:** `Morning Report design/` (6.8M of
   standalone HTML/JSX mockups — referenced by CLAUDE.md but not yet tracked;
   a separate decision) and several throwaway `scripts/*.ts` (verify/rebuild
-  dry-run helpers from prior sessions).
+  dry-run helpers, including this session's `scripts/verify-f3.ts`).
 
 ## Next actions for Siem
 
-1. **Start Phase F3** — agree a short plan first (per working agreements), then
-   implement in `modules/threads/index.ts` with a throwaway dry-run rebuild to
-   preview the re-derived umbrellas.
-2. Live verification of the reader fix (F3 payoff) on `localhost:3000`.
-3. Decide whether to act on the scan-cost tuning item now or after F3.
+1. **Start Phase F4** — first push the `idle-work/2026-07-02-after-f3` backup
+   branch from HEAD, then agree a short plan (per working agreements) before
+   writing the relationships + canonicalization code.
+2. Decide whether the scan-cost tuning item is worth acting on before/within F4.

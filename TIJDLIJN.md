@@ -3,6 +3,21 @@
 Chronologisch logboek van het project. Eén regel (of kort blok) per
 werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
 
+- **2 July 2026 — Phase F3: typed threading, the shallow reader fix shipped.**
+  Threading now reads the entity registry: products/events can no longer open a
+  sibling umbrella next to their actor — they nest as storyline facets. Added
+  pure predicates `resolveEntityType` / `canAnchorUmbrella` / `canBeFacet` +
+  registry-aware branches on `primaryEntity`/`dominantEntity`/`bigTopicAnchors`/
+  `personalAnchors`/`storylineFacets` (all optional-registry, old behaviour
+  preserved), and a `loadRegistry()` helper wired into the thread-plan step. No
+  schema change. **Lenient policy** (Siem's call): only product/event are blocked
+  from anchoring; untyped `other` still may. Dry-run against the live registry
+  (313 rows) showed 4 product/event umbrellas that would collapse (incl. the
+  `fable 5` double-up). Siem live-verified on localhost ("perfect") and chose to
+  leave the 4 pre-F3 threads to age out (no `--apply` rebuild). Gate green, 253
+  tests. Next: F4 (relationships + canonicalization), after the
+  `idle-work/2026-07-02-after-f3` backup branch.
+
 - **2 July 2026 — Entity typing F1/F2 went live + F3 gate cleared.** Applied
   migration `0017_entities.sql` to the live Supabase project (now the latest
   migration). Dropped the `apply_migration` deny rail from `.claude/settings.json`

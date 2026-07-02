@@ -23,11 +23,16 @@ import {
   selectNextThreadJob,
   aggregateUmbrellaState,
   isAnchorableEntity,
+  canAnchorUmbrella,
+  canBeFacet,
+  resolveEntityType,
   type ThreadCandidate,
   type ThreadJobCandidate,
   type AnchorSpec,
   type EntityDays,
 } from "./index";
+import { buildRegistry, type EntityRegistry } from "../entities";
+import type { Entity } from "../shared/types";
 
 describe("normalizeEntity", () => {
   it("lowercases, trims and folds punctuation to spaces", () => {
@@ -557,3 +562,152 @@ describe("aggregateUmbrellaState (Phase D3 read-side rollup)", () => {
   });
 });
 
+
+// ---------------------------------------------------------------------------
+// Phase F3 — entity-type-aware threading (lenient policy)
+// ---------------------------------------------------------------------------
+
+function ent(overrides: Partial<Entity> & Pick<Entity, "norm_key" | "type">): Entity {
+  return {
+    id: "00000000-0000-0000-0000-000000000001",
+    canonical_name: overrides.norm_key,
+    aliases: [],
+    confidence: "seed",
+    first_seen_edition: null,
+    created_at: "2026-07-02T00:00:00Z",
+    updated_at: "2026-07-02T00:00:00Z",
+    ...overrides,
+  };
+}
+
+// Anthropic=actor, Trump=person, Claude/Fable=product (with variant aliases),
+// SpaceX=actor, an IPO=event, US=place. Untyped entities (e.g. "newco") default
+// to 'other' via typeOf.
+const F3_REGISTRY: EntityRegistry = buildRegistry([
+  ent({ norm_key: "anthropic", type: "actor", canonical_name: "Anthropic" }),
+  ent({ norm_key: "spacex", type: "actor", canonical_name: "SpaceX" }),
+  ent({ norm_key: "trump", type: "person", canonical_name: "Trump" }),
+  ent({ norm_key: "claude", type: "product", canonical_name: "Claude", aliases: ["claude science", "claude sonnet 5"] }),
+  ent({ norm_key: "fable", type: "product", canonical_name: "Fable", aliases: ["claude fable 5"] }),
+  ent({ norm_key: "ipo", type: "event", canonical_name: "IPO" }),
+  ent({ norm_key: "us", type: "place", canonical_name: "US" }),
+]);
+
+describe("resolveEntityType (F3)", () => {
+  it("reads the registry type, folding aliases to the canonical entry", () => {
+    expect(resolveEntityType("anthropic", F3_REGISTRY)).toBe("actor");
+    expect(resolveEntityType("claude", F3_REGISTRY)).toBe("product");
+    expect(resolveEntityType("claude sonnet 5", F3_REGISTRY)).toBe("product"); // alias → claude
+  });
+  it("returns 'other' for unknown entities", () => {
+    expect(resolveEntityType("newco", F3_REGISTRY)).toBe("other");
+  });
+});
+
+describe("canAnchorUmbrella (F3, lenient)", () => {
+  it("blocks product/event (facet) types from anchoring an umbrella", () => {
+    expect(canAnchorUmbrella("claude", F3_REGISTRY)).toBe(false);
+    expect(canAnchorUmbrella("claude fable 5", F3_REGISTRY)).toBe(false); // alias → fable (product)
+    expect(canAnchorUmbrella("ipo", F3_REGISTRY)).toBe(false);
+  });
+  it("allows actor/person/place and untyped ('other') entities to anchor", () => {
+    expect(canAnchorUmbrella("anthropic", F3_REGISTRY)).toBe(true);
+    expect(canAnchorUmbrella("trump", F3_REGISTRY)).toBe(true);
+    expect(canAnchorUmbrella("us", F3_REGISTRY)).toBe(true);
+    expect(canAnchorUmbrella("newco", F3_REGISTRY)).toBe(true); // lenient: untyped may anchor
+  });
+});
+
+describe("canBeFacet (F3)", () => {
+  it("blocks actor/person (umbrella) types from being a facet", () => {
+    expect(canBeFacet("anthropic", F3_REGISTRY)).toBe(false);
+    expect(canBeFacet("trump", F3_REGISTRY)).toBe(false);
+  });
+  it("allows product/event/place and untyped entities as facets", () => {
+    expect(canBeFacet("claude", F3_REGISTRY)).toBe(true);
+    expect(canBeFacet("ipo", F3_REGISTRY)).toBe(true);
+    expect(canBeFacet("newco", F3_REGISTRY)).toBe(true);
+  });
+});
+
+describe("primaryEntity (F3 registry-aware)", () => {
+  it("prefers the actor/person over a product listed first", () => {
+    expect(primaryEntity(["Claude", "Anthropic"], F3_REGISTRY)).toEqual({
+      entity: "anthropic",
+      display: "Anthropic",
+    });
+  });
+  it("falls back to the first usable entity when no actor/person is named", () => {
+    expect(primaryEntity(["Claude", "Fable"], F3_REGISTRY)).toEqual({
+      entity: "claude",
+      display: "Claude",
+    });
+  });
+  it("keeps first-usable behavior when no registry is supplied", () => {
+    expect(primaryEntity(["Claude", "Anthropic"])).toEqual({ entity: "claude", display: "Claude" });
+  });
+});
+
+describe("dominantEntity (F3 registry-aware)", () => {
+  it("anchors on the dominant actor even when a product appears more often", () => {
+    // Claude appears in all 3 items, Anthropic in 2 — without a registry Claude
+    // would win; with it, the actor Anthropic anchors the cluster.
+    const items = [
+      { entities: ["Claude", "Anthropic"] },
+      { entities: ["Claude", "Anthropic"] },
+      { entities: ["Claude"] },
+    ];
+    expect(dominantEntity(items, F3_REGISTRY)).toEqual({ entity: "anthropic", display: "Anthropic" });
+    expect(dominantEntity(items)).toEqual({ entity: "claude", display: "Claude" });
+  });
+  it("falls back to overall dominant when no actor/person is present", () => {
+    const items = [{ entities: ["Claude", "Fable"] }, { entities: ["Claude"] }];
+    expect(dominantEntity(items, F3_REGISTRY)).toEqual({ entity: "claude", display: "Claude" });
+  });
+});
+
+describe("bigTopicAnchors (F3 registry-aware)", () => {
+  it("anchors a product-heavy cluster on its actor, not the product", () => {
+    const items = [
+      { id: "a", entities: ["Claude", "Anthropic"] },
+      { id: "b", entities: ["Claude", "Anthropic"] },
+      { id: "c", entities: ["Claude", "Anthropic"] },
+    ];
+    const out = bigTopicAnchors(items, 0.3, 3, F3_REGISTRY);
+    expect(out).toEqual([{ entity: "anthropic", display: "Anthropic", reason: "big_topic" }]);
+  });
+});
+
+describe("personalAnchors (F3 registry-aware)", () => {
+  it("threads a tracked product item under its actor", () => {
+    const candidates: ThreadCandidate[] = [
+      {
+        itemId: "i1",
+        title: "Anthropic ships Claude Sonnet 5",
+        topicId: "t1",
+        categoryId: "c1",
+        entities: ["Claude", "Anthropic"],
+        importance: 5,
+        deep: false,
+      },
+    ];
+    const out = personalAnchors(candidates, new Set(), new Set(), new Set(["t1"]), F3_REGISTRY);
+    expect(out).toEqual([{ entity: "anthropic", display: "Anthropic", reason: "tracked" }]);
+  });
+});
+
+describe("storylineFacets (F3 registry-aware)", () => {
+  it("keeps products/events as facets but drops co-occurring actors (siblings)", () => {
+    // Under the Anthropic umbrella: Claude (product) and the IPO (event) are
+    // facets; OpenAI-like actor SpaceX co-occurs but must not become a facet.
+    const items = [
+      { entities: ["Anthropic", "Claude", "IPO"] },
+      { entities: ["Anthropic", "Claude", "SpaceX"] },
+    ];
+    const facets = storylineFacets("anthropic", items, 1, new Set(), F3_REGISTRY);
+    const names = facets.map((f) => f.entity);
+    expect(names).toContain("claude");
+    expect(names).toContain("ipo");
+    expect(names).not.toContain("spacex"); // actor → sibling, never a facet
+  });
+});

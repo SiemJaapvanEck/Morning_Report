@@ -39,7 +39,9 @@ import {
   matchByAnchor,
   resolveThreadMeta,
   isAnchorableEntity,
+  canAnchorUmbrella,
   loadEntityDays,
+  loadRegistry,
   storylineFacets,
   matchStorylines,
   shouldPromote,
@@ -434,12 +436,13 @@ const selectStep: StepHandler = async ({ edition }) => {
 // en thread_items heeft unique(thread_id,item_id) — opnieuw draaien is een no-op.
 
 const threadsStep: StepHandler = async ({ edition }) => {
-  const [candidates, threads, linked, userCtx, entityDays] = await Promise.all([
+  const [candidates, threads, linked, userCtx, entityDays, registry] = await Promise.all([
     loadEditionCandidates(edition.id),
     loadActiveThreads(edition.profile_id),
     loadLinkedItemIds(edition.id),
     assembleUserContext(edition.profile_id),
     loadEntityDays(edition.profile_id, config.threads.anchorWindowDays),
+    loadRegistry(),
   ]);
 
   const now = new Date().toISOString();
@@ -462,15 +465,22 @@ const threadsStep: StepHandler = async ({ edition }) => {
     candidates.map((c) => ({ id: c.itemId, entities: c.entities })),
     config.threads.bigTopicMinOverlap,
     config.threads.bigTopicMinCluster,
+    registry,
   );
   const personal = personalAnchors(
     candidates,
     userCtx.followedTopicIds,
     userCtx.followedCategoryIds,
     userCtx.trackedTopicIds,
+    registry,
   );
-  // Drop bare datelines (US, France…) so they don't open catch-all threads.
-  const anchors = mergeAnchors(recurring, big, personal).filter((a) => isAnchorableEntity(a.entity));
+  // Drop bare datelines (US, France…) so they don't open catch-all threads, and
+  // (Phase F3) product/event entities so a product never opens a sibling umbrella
+  // next to its actor — it becomes a storyline facet instead. Lenient: untyped
+  // ('other') entities still anchor, so new/untyped actors aren't starved.
+  const anchors = mergeAnchors(recurring, big, personal).filter(
+    (a) => isAnchorableEntity(a.entity) && canAnchorUmbrella(a.entity, registry),
+  );
 
   // Existing BIG-thread anchors (umbrellas, parent_thread_id null) — the only
   // threads items match against as an anchor. Storyline children carry an
@@ -539,7 +549,7 @@ const threadsStep: StepHandler = async ({ edition }) => {
       .filter((c) => bigByItem.get(c.itemId) === bigId && !linked.has(c.itemId))
       .map((c) => ({ entities: c.entities }));
     const histEnts = (history.get(bigId) ?? []).map((entities) => ({ entities }));
-    const facets = storylineFacets(anchor, [...histEnts, ...todayEnts], config.threads.facetMinItems, bigAnchorSet);
+    const facets = storylineFacets(anchor, [...histEnts, ...todayEnts], config.threads.facetMinItems, bigAnchorSet, registry);
     if (!shouldPromote(facets, config.threads.promoteMinFacets)) continue;
     const parent = bigThreads.find((t) => t.id === bigId)!;
     const have = existingFacetsByBig.get(bigId) ?? new Set<string>();

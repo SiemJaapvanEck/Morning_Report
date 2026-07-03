@@ -8,6 +8,7 @@ import { Archivo, Space_Grotesk, Space_Mono } from "next/font/google";
 import type { EditionView, SectionView } from "@/app/lib/queries";
 import { orderSectionsFollowedFirst } from "@/app/lib/krant";
 import { dayOfYear, formatMarktDelta, regioBarData } from "@/app/lib/krant-a3";
+import { storyGeography } from "@/app/lib/stories";
 import type {
   CalendarEventCertainty,
   FrontPage,
@@ -17,6 +18,7 @@ import type {
   WeatherSnapshot,
 } from "@/modules/shared/types";
 import { ItemRating } from "./ItemRating";
+import { WereldKaart } from "./WereldKaart";
 
 const archivo = Archivo({ subsets: ["latin"], weight: ["600", "700", "800"], variable: "--font-archivo" });
 const grotesk = Space_Grotesk({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-space-grotesk" });
@@ -301,6 +303,37 @@ function TimelineCard({ storyline }: { storyline: NonNullable<Item["storyline"]>
   );
 }
 
+// ── Impact map card (P3) ──────────────────────────────────────────────────────
+
+function ImpactMapCard({ regio, places }: { regio: string | null; places: string[] }) {
+  const { counts, chips } = storyGeography(regio, places);
+  if (Object.keys(counts).length === 0 && chips.length === 0) return null;
+
+  return (
+    <div className="mt-4 border-t border-stone-100 pt-4 dark:border-stone-800">
+      <span className="font-[family-name:var(--font-space-mono)] text-[10px] font-bold uppercase tracking-widest text-stone-400">
+        Waar het speelt
+      </span>
+      {/* pointer-events-none: map is purely informational in the aside context */}
+      <div className="mt-2 h-20 w-full pointer-events-none">
+        <WereldKaart counts={counts} selectedRegio={regio} tint="blue" />
+      </div>
+      {chips.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {chips.map((chip) => (
+            <span
+              key={chip}
+              className="rounded-full border border-stone-200 bg-white px-2 py-0.5 font-[family-name:var(--font-space-mono)] text-[10px] text-stone-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-400"
+            >
+              {chip}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // The aside slot for P2/P3. Shows the full TimelineCard when the storyline has
 // ≥2 past instalments; falls back to VerhaallijnLabel + Vooruitblik otherwise.
 // Returns null when a story has no storyline or prediction (grid collapses cleanly).
@@ -319,7 +352,7 @@ function VerhaallijnAside({ item }: { item: Item }) {
           {item.prediction && <Vooruitblik prediction={item.prediction} />}
         </>
       )}
-      {/* P3: <ImpactMapCard regio={item.regio} /> */}
+      <ImpactMapCard regio={item.regio} places={item.storyline?.places ?? []} />
     </aside>
   );
 }

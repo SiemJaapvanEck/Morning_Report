@@ -14,6 +14,7 @@ import {
   threadSubject,
   titleCaseEntity,
   buildStorylineTimeline,
+  storyGeography,
   type TimelineLink,
 } from "./stories";
 import { entityOverlap } from "../../modules/threads";
@@ -352,5 +353,60 @@ describe("buildStorylineTimeline", () => {
       null,
     );
     expect(nodes).toEqual([]);
+  });
+});
+
+// ── storyGeography (A3 Phase 3) ───────────────────────────────────────────────
+
+describe("storyGeography", () => {
+  it("returns empty counts and chips for null regio and no place entities", () => {
+    const result = storyGeography(null, []);
+    expect(result).toEqual({ counts: {}, chips: [] });
+  });
+
+  it("maps a valid regio to counts with weight 1", () => {
+    const result = storyGeography("eu", []);
+    expect(result.counts).toEqual({ eu: 1 });
+    expect(result.chips).toEqual([]);
+  });
+
+  it("ignores unknown regio gracefully", () => {
+    const result = storyGeography("xyz", []);
+    expect(result.counts).toEqual({});
+  });
+
+  it("returns empty counts when regio is null", () => {
+    const result = storyGeography(null, ["Amsterdam", "Rotterdam"]);
+    expect(result.counts).toEqual({});
+    expect(result.chips).toHaveLength(2);
+  });
+
+  it("title-cases place entity names in chips", () => {
+    const result = storyGeography(null, ["amsterdam", "new york"]);
+    expect(result.chips).toEqual(["Amsterdam", "New York"]);
+  });
+
+  it("de-dupes place entities case-insensitively", () => {
+    const result = storyGeography(null, ["Amsterdam", "amsterdam", "AMSTERDAM"]);
+    expect(result.chips).toHaveLength(1);
+    expect(result.chips[0]).toBe("Amsterdam");
+  });
+
+  it("caps chips at 6", () => {
+    const places = ["A", "B", "C", "D", "E", "F", "G", "H"];
+    const result = storyGeography("na", places);
+    expect(result.chips).toHaveLength(6);
+    expect(result.chips).not.toContain("G");
+  });
+
+  it("handles both regio and place entities together", () => {
+    const result = storyGeography("ap", ["Tokyo", "Seoul"]);
+    expect(result.counts).toEqual({ ap: 1 });
+    expect(result.chips).toEqual(["Tokyo", "Seoul"]);
+  });
+
+  it("skips empty strings in place entities", () => {
+    const result = storyGeography(null, ["", "Paris", ""]);
+    expect(result.chips).toEqual(["Paris"]);
   });
 });

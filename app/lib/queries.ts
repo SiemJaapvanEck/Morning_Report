@@ -45,6 +45,8 @@ export interface StorylineRef {
   part: number;
   /** Ordered timeline nodes for the A3 aside: past instalments + optional future node. */
   timeline: TimelineNode[];
+  /** Place-typed entity canonical names for the storyline thread (A3 Phase 3 impact map). */
+  places: string[];
 }
 
 export interface SectionView {
@@ -133,9 +135,29 @@ export async function getEdition(profileId: string, date: string): Promise<Editi
     const threadIds = [...new Set(links.map((l) => l.thread_id))];
     if (threadIds.length > 0) {
       const threads = unwrap(
-        await db().from("threads").select("id, title, prediction").in("id", threadIds),
-      ) as { id: string; title: string; prediction: ThreadPrediction | null }[];
+        await db().from("threads").select("id, title, prediction, entities").in("id", threadIds),
+      ) as { id: string; title: string; prediction: ThreadPrediction | null; entities: string[] | null }[];
       const threadById = new Map(threads.map((t) => [t.id, t]));
+
+      // Resolve place-typed entities for each thread (A3 Phase 3 impact map).
+      // Collect all unique norm_keys from threads' entity arrays, look up only
+      // those that are type "place" — one targeted select, no full registry load.
+      const allNormKeys = [
+        ...new Set(threads.flatMap((t) => (t.entities ?? []).map(normalizeEntity).filter(Boolean))),
+      ];
+      const placeRows = allNormKeys.length
+        ? (unwrap(
+            await db().from("entities").select("norm_key, canonical_name").in("norm_key", allNormKeys).eq("type", "place"),
+          ) as { norm_key: string; canonical_name: string }[])
+        : [];
+      const placeCanonical = new Map(placeRows.map((r) => [r.norm_key, r.canonical_name]));
+      const placesByThread = new Map<string, string[]>();
+      for (const t of threads) {
+        const places = (t.entities ?? [])
+          .map((e) => { const n = normalizeEntity(e); return n ? placeCanonical.get(n) : undefined; })
+          .filter((name): name is string => Boolean(name));
+        if (places.length > 0) placesByThread.set(t.id, places);
+      }
 
       // "deel N": distinct editions (on or before today's date) this thread has
       // appeared in. Also pulls each linked item's title + source so the A3
@@ -203,6 +225,7 @@ export async function getEdition(profileId: string, date: string): Promise<Editi
           title: thread.title,
           part: partByThread.get(thread.id) ?? 1,
           timeline: buildStorylineTimeline(rawLinksByThread.get(thread.id) ?? [], date, thread.prediction ?? null),
+          places: placesByThread.get(thread.id) ?? [],
         });
         if (thread.prediction) predictionByItem.set(itemId, thread.prediction);
       }

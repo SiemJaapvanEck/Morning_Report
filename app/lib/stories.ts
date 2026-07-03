@@ -4,6 +4,7 @@
 
 import type { Story } from "@/app/lib/queries";
 import type { ThreadPrediction, ThreadStatus, TimelineNode } from "@/modules/shared/types";
+import { isRegioCode } from "../../modules/shared/regios";
 
 export type StorySort = "latest" | "longest" | "active";
 
@@ -311,5 +312,37 @@ export function buildStorylineTimeline(
   }
 
   return nodes;
+}
+
+// ── Impact map geography helper (A3 Phase 3) ─────────────────────────────────
+
+/**
+ * Derive a story's geography for the ImpactMapCard:
+ * - `counts` maps the item's region code to weight 1 for the map's dot intensity
+ *   (null/unknown regio ⇒ empty counts; map falls back to a dark background).
+ * - `chips` = de-duped title-cased place-entity canonical names, capped at 6.
+ * Empty/null input ⇒ `{counts:{}, chips:[]}` (card hides).
+ */
+export function storyGeography(
+  regio: string | null,
+  placeEntities: string[],
+): { counts: Record<string, number>; chips: string[] } {
+  const counts: Record<string, number> = {};
+  if (regio && isRegioCode(regio)) {
+    counts[regio] = 1;
+  }
+
+  const seen = new Set<string>();
+  const chips: string[] = [];
+  for (const p of placeEntities) {
+    if (!p) continue;
+    const key = p.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    chips.push(titleCaseEntity(p));
+    if (chips.length >= 6) break;
+  }
+
+  return { counts, chips };
 }
 

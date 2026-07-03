@@ -61,7 +61,7 @@ summary cards → the **"Ook in het nieuws"** brief list.
 
 - [x] **Phase 1 — A3 shell + topzone + card restyle** (frontend only, no backend)
 - [x] **Phase 2 — Verhaallijn timeline** (pure builder + query extension + card)
-- [ ] **Phase 3 — Impact map "WAAR HET SPEELT"** (pure geo helper + query + card)
+- [x] **Phase 3 — Impact map "WAAR HET SPEELT"** (pure geo helper + query + card)
 
 Standing rule for every phase: idle branch only, **never push main**, **migration
 files only — never applied live** (Siem applies in the morning), budget under the

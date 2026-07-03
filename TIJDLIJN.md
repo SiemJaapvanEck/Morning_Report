@@ -3,6 +3,19 @@
 Chronologisch logboek van het project. Eén regel (of kort blok) per
 werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
 
+- **3 July 2026 — Idle-run: Krant A3 Phase 3 — Impact map "WAAR HET SPEELT".**
+  Pure helper `storyGeography(regio, placeEntities)` added to `app/lib/stories.ts`:
+  maps item regio to `counts` (weight 1 for the world map dot intensity) and builds
+  de-duped title-cased `chips` from place-typed entity canonical names (cap 6).
+  9 new tests (total 315). `StorylineRef` gains `places: string[]`; `getEdition` in
+  `queries.ts` extended: threads select now pulls `entities`, one targeted `entities`
+  table select (filtered to `type='place'`) resolves canonical names per thread.
+  `ImpactMapCard` component added to `EditieWeergave.tsx`: reuses `WereldKaart`
+  (pointer-events-none for display-only in aside), shows `WAAR HET SPEELT` label +
+  map + geo-chip badges. Slots into `VerhaallijnAside` below the TimelineCard.
+  Hides cleanly when story has no geography. Gate green. Not yet live-verified.
+  A3 redesign arc complete — all three phases done.
+
 - **2 July 2026 — Idle-run: Krant A3 Phase 2 — Verhaallijn timeline.**
   Pure builder `buildStorylineTimeline` in `app/lib/stories.ts` (10 new tests; total 306):
   deduplicates links per edition, orders ascending, numbers deel 1…N, marks latest `isNow`,

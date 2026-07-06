@@ -7,11 +7,13 @@ import { getProfiles } from "@/app/lib/queries";
 import { ServiceWorkerRegistratie } from "./components/ServiceWorkerRegistratie";
 import { ThemaKiezer } from "./components/ThemaKiezer";
 import { AccountWisselaar } from "./components/AccountWisselaar";
+import { schemeCss, schemeBootstrapScript } from "@/app/lib/schemes";
 import "./globals.css";
 
-// Vóór de eerste paint: opgeslagen thema toepassen (geen flits). Zonder
-// keuze volgt het thema het OS (donker → Nacht).
-const themaScript = `(function(){try{var t=localStorage.getItem("mr_thema");if(!t){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"nacht":"krant";}var h=document.documentElement;h.dataset.theme=t;h.classList.toggle("dark",t==="nacht");}catch(e){}})();`;
+// Before first paint: apply the stored color scheme (no flash). Without a
+// stored choice the scheme follows the OS. Both the scheme CSS and the
+// bootstrap script are generated from app/lib/schemes.ts (single source).
+const themaScript = schemeBootstrapScript();
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -64,6 +66,7 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <style id="mr-schemes" dangerouslySetInnerHTML={{ __html: schemeCss() }} />
         <script dangerouslySetInnerHTML={{ __html: themaScript }} />
         <header className="border-b border-stone-200 dark:border-stone-800">
           <nav className="flex w-full items-center justify-between px-4 py-3 sm:px-6 lg:px-8">

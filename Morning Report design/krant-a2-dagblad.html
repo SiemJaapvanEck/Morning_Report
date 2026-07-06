@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="nl"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>De Krant — Richting A2 · Dagblad + Verhaallijn</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<style>/* vietnamese */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 500;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("9ec1ad23-2b18-4547-96fe-19d294d36fb3") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 500;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("85be35bd-637c-4072-8865-363dc7d4a345") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 500;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("e2749bf3-c6d7-4b51-9b81-095af982a35d") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("9ec1ad23-2b18-4547-96fe-19d294d36fb3") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("85be35bd-637c-4072-8865-363dc7d4a345") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 600;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("e2749bf3-c6d7-4b51-9b81-095af982a35d") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 700;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("9ec1ad23-2b18-4547-96fe-19d294d36fb3") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 700;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("85be35bd-637c-4072-8865-363dc7d4a345") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 700;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("e2749bf3-c6d7-4b51-9b81-095af982a35d") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 800;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("9ec1ad23-2b18-4547-96fe-19d294d36fb3") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 800;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("85be35bd-637c-4072-8865-363dc7d4a345") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 800;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("e2749bf3-c6d7-4b51-9b81-095af982a35d") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 900;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("9ec1ad23-2b18-4547-96fe-19d294d36fb3") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 900;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("85be35bd-637c-4072-8865-363dc7d4a345") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 900;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("e2749bf3-c6d7-4b51-9b81-095af982a35d") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("98d8800f-332d-4b4d-a37e-25670f324921") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("92d8a0ff-1472-4e2a-aabd-9ff5ea2c9069") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("05c883c3-1dcb-4e33-a542-b19a77be01d7") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("98d8800f-332d-4b4d-a37e-25670f324921") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("92d8a0ff-1472-4e2a-aabd-9ff5ea2c9069") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("05c883c3-1dcb-4e33-a542-b19a77be01d7") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("98d8800f-332d-4b4d-a37e-25670f324921") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("92d8a0ff-1472-4e2a-aabd-9ff5ea2c9069") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("05c883c3-1dcb-4e33-a542-b19a77be01d7") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("98d8800f-332d-4b4d-a37e-25670f324921") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("92d8a0ff-1472-4e2a-aabd-9ff5ea2c9069") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("05c883c3-1dcb-4e33-a542-b19a77be01d7") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Space Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("82d09bb7-b53f-4d21-b3f4-63628bddd8de") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Space Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("d5ef4a08-9c63-4c5b-8439-9ef1c73b9510") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Space Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("3e2a1de8-923b-48af-b133-e65425ac00f2") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Space Mono';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("ad2184c8-e83c-4516-a280-855d0ede248f") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Space Mono';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("a868c38a-25b3-44f9-b771-ad30dec34b83") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Space Mono';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("414116ef-5fd4-41fe-84fd-810b09569cc1") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+</style>
+<script src="bf156063-266a-4217-9bee-0f6108d4a8c4"></script>
+<script src="ce7c97ce-dcb2-4271-a1ae-1d07d3ee9d17"></script>
+<script src="1b96241b-27b8-4297-84be-03ded3e25be1"></script>
+<style>
+  :root{
+    --accent:#2f6df0; --accent-deep:#1f57d6; --accent-tint:#eef3fe;
+    --map-bg:#f5f4f1; --map-ocean:rgba(28,25,23,0.07); --map-land:rgba(28,25,23,0.12); --util-bg:rgba(247,246,243,.9);
+    --bg:#f7f6f3; --paper:#ffffff;
+    --ink:#1c1917; --ink2:#292524; --muted:#57534e; --faint:#a8a29e;
+    --line:#e7e5e0; --line2:#efedea; --hatch:#ece9e3;
+    --emer-t:#0f7a4f; --emer-b:#d8f0e2;
+    --amber-t:#9a6b15; --amber-b:#f6eccf;
+    --stone-t:#78716c; --stone-b:#eceae6;
+    --rose:#e0364f;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--bg);color:var(--ink);font-family:'Space Grotesk',system-ui,sans-serif;-webkit-font-smoothing:antialiased;}
+  .mono{font-family:'Space Mono',monospace;}
+  .arch{font-family:'Archivo',sans-serif;}
+  a{color:inherit;text-decoration:none;}
+  .wrap{max-width:1200px;margin:0 auto;padding:0 40px;}
+  .col{max-width:720px;}
+
+  /* ── utility bar ── */
+  .util{position:sticky;top:0;z-index:20;background:var(--util-bg);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);}
+  .util-in{max-width:1680px;margin:0 auto;display:flex;align-items:center;gap:18px;padding:14px 40px;}
+  .back{display:inline-flex;align-items:center;gap:9px;font-weight:600;font-size:13.5px;}
+  .back svg{transition:transform .15s;}.back:hover svg{transform:translateX(-4px);}
+  .util .nm{flex:1;text-align:center;font-family:'Archivo';font-weight:800;letter-spacing:.04em;font-size:14px;}
+  .util .ed{font-family:'Space Mono';font-size:11.5px;color:var(--muted);letter-spacing:.06em;}
+
+  /* ── masthead band (daily-paper header) ── */
+  .mast{border-bottom:2px solid var(--ink);}
+  .mast-in{max-width:1680px;margin:0 auto;padding:32px 40px 24px;display:flex;align-items:flex-end;gap:24px;flex-wrap:wrap;}
+  .mast-in h1{font-family:'Archivo';font-weight:900;font-size:64px;letter-spacing:-.04em;line-height:.85;margin:0;}
+  .mast-in .meta{font-family:'Space Mono';font-size:12px;color:var(--muted);letter-spacing:.04em;line-height:1.7;}
+  .mast-in .meta b{color:var(--ink);}
+  .mast-in .spacer{flex:1;}
+  .wxbar{display:flex;gap:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--paper);}
+  .wxbar .s{padding:9px 16px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:2px;}
+  .wxbar .s:last-child{border-right:none;}
+  .wxbar .v{font-family:'Archivo';font-weight:700;font-size:15px;}
+  .wxbar .k{font-family:'Space Mono';font-size:10px;color:var(--faint);letter-spacing:.04em;}
+
+  /* ── top zone: sol + data tiles (full width) ── */
+  .topzone{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:20px;padding:0 40px;max-width:1680px;margin:34px auto 0;align-items:stretch;}
+  .sol{background:var(--accent);color:#fff;border-radius:18px;padding:30px 34px;position:relative;overflow:hidden;}
+  .sol::after{content:"";position:absolute;inset:0;background:radial-gradient(120% 90% at 100% 0,rgba(255,255,255,.12),transparent 55%);pointer-events:none;}
+  .sol .h{display:flex;align-items:center;gap:11px;font-family:'Space Mono';font-size:12px;letter-spacing:.16em;font-weight:700;}
+  .sol .h .star{width:18px;height:18px;display:inline-flex;}
+  .sol p{font-size:19px;line-height:1.55;margin:15px 0 0;position:relative;z-index:1;}
+  .data{display:flex;flex-direction:column;gap:16px;}
+  .tile{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:18px 20px;}
+  .tile .th{display:flex;align-items:center;justify-content:space-between;font-family:'Space Mono';font-size:11px;letter-spacing:.14em;color:var(--muted);margin-bottom:13px;}
+  .mk{display:grid;grid-template-columns:1fr 1fr;gap:9px 22px;}
+  .mk .row{display:flex;align-items:center;gap:8px;}
+  .mk .nm{font-family:'Space Mono';font-size:12px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .mk .pc{font-family:'Space Mono';font-weight:700;font-size:12.5px;}
+  .mk .up{color:var(--emer-t);}.mk .dn{color:var(--rose);}
+  .rg .row{display:grid;grid-template-columns:104px 1fr 28px;gap:9px;align-items:center;margin:6px 0;}
+  .rg .nm{font-family:'Space Mono';font-size:11.5px;color:var(--muted);white-space:nowrap;}
+  .rg .bar{height:8px;border-radius:4px;background:var(--accent);}
+  .rg .n{font-family:'Space Mono';font-size:11.5px;font-weight:700;text-align:right;}
+  @media(max-width:1080px){ .topzone{grid-template-columns:1fr;} }
+
+  /* ── section divider ── */
+  .secdiv{display:flex;align-items:baseline;gap:18px;margin:0;padding:54px 0 0;}
+  .secdiv .nm{font-family:'Archivo';font-weight:900;font-size:42px;letter-spacing:-.03em;}
+  .secdiv .ln{flex:1;height:2px;background:var(--ink);transform:translateY(-8px);}
+  .secdiv .ct{font-family:'Space Mono';font-size:12px;color:var(--muted);letter-spacing:.04em;white-space:nowrap;transform:translateY(-6px);}
+  .secsum{margin:10px 0 0;padding:0;}
+  .secsum p{font-size:16.5px;color:var(--muted);line-height:1.5;max-width:78ch;margin:0;}
+
+  /* ── lead story ── */
+  .lead{margin:40px 0 0;padding:0;}
+  .leadtag{display:inline-flex;align-items:center;gap:10px;font-family:'Space Mono';font-size:12px;font-weight:700;letter-spacing:.12em;color:var(--accent);text-transform:uppercase;}
+  .leadtag .pct{background:var(--accent);color:#fff;border-radius:6px;padding:3px 8px;letter-spacing:.04em;}
+  .lead h2{font-family:'Archivo';font-weight:800;font-size:58px;line-height:1.0;letter-spacing:-.03em;margin:16px 0 0;max-width:20ch;text-wrap:balance;}
+  .lead-hero{margin:28px 0 0;}
+  .lead-hero image-slot{width:100%;height:520px;display:block;border-radius:18px;overflow:hidden;}
+  .lead-grid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:54px;margin:34px 0 0;align-items:start;}
+
+  .article p{font-size:20px;line-height:1.62;color:var(--ink2);margin:0 0 24px;}
+  .article.lead-body p:first-child::first-letter{font-family:'Archivo';font-weight:900;font-size:78px;line-height:.72;float:left;padding:6px 14px 0 0;color:var(--ink);}
+
+  /* verhaallijn ribbon */
+  .thread{display:flex;align-items:stretch;gap:0;border:1.5px solid var(--accent);border-radius:12px;overflow:hidden;margin:0 0 22px;}
+  .thread .deel{background:var(--accent);color:#fff;font-family:'Space Mono';font-weight:700;font-size:12px;letter-spacing:.06em;padding:12px 15px;display:flex;flex-direction:column;justify-content:center;align-items:center;line-height:1.2;white-space:nowrap;}
+  .thread .deel b{font-family:'Archivo';font-size:22px;font-weight:900;}
+  .thread .desc{padding:11px 16px;display:flex;flex-direction:column;justify-content:center;}
+  .thread .desc .lab{font-family:'Space Mono';font-size:10px;letter-spacing:.16em;color:var(--accent);font-weight:700;}
+  .thread .desc .tt{font-size:14px;font-weight:600;line-height:1.3;margin-top:3px;color:var(--ink);}
+
+  /* ripples */
+  .ripples{margin:6px 0 26px;border-top:1px solid var(--line);}
+  .ripple{display:grid;grid-template-columns:30px 1fr;gap:16px;padding:18px 0;border-bottom:1px solid var(--line);}
+  .ripple .rn{font-family:'Space Mono';font-size:12px;color:var(--accent);font-weight:700;padding-top:3px;}
+  .ripple .rl{font-family:'Archivo';font-weight:700;font-size:16px;letter-spacing:-.01em;}
+  .ripple .rt{font-size:14.5px;line-height:1.5;color:var(--muted);margin-top:5px;}
+  .ripples-h{display:flex;align-items:center;gap:9px;font-family:'Space Mono';font-size:11px;letter-spacing:.16em;color:var(--faint);margin:0 0 2px;padding-top:20px;}
+
+  /* vooruitblik feature card */
+  .vooruit{border:1.5px solid var(--line);border-radius:16px;overflow:hidden;margin:0 0 26px;background:var(--paper);}
+  .vooruit .top{display:flex;align-items:center;gap:10px;padding:13px 18px;background:var(--ink);color:#fff;}
+  .vooruit .top .ic{width:17px;height:17px;display:inline-flex;}
+  .vooruit .top .ti{font-family:'Space Mono';font-size:12px;letter-spacing:.14em;font-weight:700;}
+  .vooruit .top .dt{margin-left:auto;font-family:'Space Mono';font-size:12px;color:rgba(255,255,255,.75);}
+  .vooruit .bd{padding:16px 18px 17px;display:flex;gap:14px;align-items:flex-start;}
+  .vooruit .bd p{font-size:15.5px;line-height:1.46;margin:0;color:var(--ink2);flex:1;}
+  .certchip{font-family:'Space Mono';font-size:10.5px;font-weight:700;letter-spacing:.08em;padding:5px 10px;border-radius:999px;white-space:nowrap;text-transform:uppercase;flex:0 0 auto;}
+  .cert-bevestigd{color:var(--emer-t);background:var(--emer-b);}
+  .cert-verwacht{color:var(--amber-t);background:var(--amber-b);}
+  .cert-gerucht{color:var(--stone-t);background:var(--stone-b);}
+
+  /* meta + rating */
+  .ameta{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-family:'Space Mono';font-size:12px;color:var(--muted);margin:0 0 22px;}
+  .ameta .src{color:var(--ink);font-weight:700;}
+  .ameta .dot{width:4px;height:4px;border-radius:50%;background:var(--faint);}
+  .rating{display:inline-flex;align-items:center;gap:9px;}
+  .rating .rl{font-family:'Space Mono';font-size:10.5px;letter-spacing:.1em;color:var(--faint);}
+  .rating .seg{display:flex;gap:4px;}
+  .rating .seg b{width:18px;height:6px;border-radius:3px;background:var(--line);cursor:pointer;transition:.12s;display:block;}
+  .rating .seg b:hover{background:var(--accent);}
+  .rating .seg b.pos{background:var(--emer-t);}.rating .seg b.neg{background:var(--rose);}
+
+  /* sidebar */
+  .side{position:sticky;top:74px;display:flex;flex-direction:column;gap:24px;}
+  .side .box{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:22px;}
+  .side .bh{font-family:'Space Mono';font-size:11px;letter-spacing:.14em;color:var(--muted);margin:0 0 16px;}
+
+  /* verhaallijn timeline card */
+  .bh-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 6px;}
+  .tl-card .bh{margin:0;}
+  .dur{font-family:'Space Mono';font-size:10.5px;font-weight:700;letter-spacing:.03em;color:var(--accent);background:var(--accent-tint);padding:4px 9px;border-radius:999px;white-space:nowrap;}
+  .tl-stat{font-family:'Space Mono';font-size:12px;color:var(--muted);margin:0 0 18px;}
+  .tl-stat b{font-family:'Archivo';font-weight:900;font-size:15px;color:var(--ink);}
+  .tl{position:relative;}
+  .tn{position:relative;display:grid;grid-template-columns:14px 1fr;gap:12px;padding:0 0 17px;}
+  .tn:last-child{padding-bottom:0;}
+  .tn::before{content:"";position:absolute;left:5px;top:14px;bottom:-3px;width:2px;background:var(--line);}
+  .tn:last-child::before{display:none;}
+  .tn.now::before{background:repeating-linear-gradient(to bottom,var(--accent) 0 3px,transparent 3px 7px);}
+  .tdot{width:12px;height:12px;border-radius:50%;background:var(--paper);border:2.5px solid var(--line);margin-top:2px;z-index:1;}
+  .tn.now .tdot{border-color:var(--accent);background:var(--accent);box-shadow:0 0 0 4px var(--accent-tint);}
+  .tn.future .tdot{border-color:var(--accent);border-style:dashed;background:var(--paper);}
+  .tmeta{display:flex;flex-direction:column;gap:3px;min-width:0;}
+  .tdate{font-family:'Space Mono';font-size:11px;font-weight:700;color:var(--ink);letter-spacing:.02em;}
+  .tn.future .tdate{color:var(--accent);}
+  .tlab{font-family:'Space Mono';font-size:9.5px;color:var(--faint);letter-spacing:.1em;text-transform:uppercase;}
+  .tthread{font-size:13px;line-height:1.42;color:var(--ink2);margin-top:1px;}
+  .tl .cc{align-self:flex-start;font-family:'Space Mono';font-size:9.5px;font-weight:700;letter-spacing:.08em;padding:3px 8px;border-radius:999px;text-transform:uppercase;margin-top:1px;}
+
+  /* impact map card */
+  .map-card .bh{margin:0 0 12px;}
+  .mapwrap{width:100%;aspect-ratio:46 / 22;background:var(--map-bg);border:1px solid var(--line2);border-radius:10px;padding:7px;}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px;}
+  .geo-chip{font-family:'Space Mono';font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-tint);padding:4px 10px;border-radius:999px;}
+  .map-foot{font-family:'Space Mono';font-size:10px;color:var(--faint);letter-spacing:.04em;margin-top:11px;line-height:1.4;}
+
+  /* summary cards */
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:16px;overflow:hidden;margin:34px 0 0;}
+  .scard{background:var(--paper);padding:22px 24px;display:flex;flex-direction:column;}
+  .scard .sh{font-family:'Archivo';font-weight:700;font-size:18px;line-height:1.18;letter-spacing:-.01em;}
+  .scard .sb{font-size:14px;line-height:1.5;color:var(--muted);margin:9px 0 0;}
+  .scard .ss{font-family:'Space Mono';font-size:11px;color:var(--faint);margin-top:auto;padding-top:14px;letter-spacing:.04em;}
+
+  /* brief list */
+  .brief{margin:30px 0 0;border-top:2px solid var(--ink);}
+  .brief-h{display:flex;align-items:center;justify-content:space-between;padding:14px 0 4px;}
+  .brief-h .t{font-family:'Archivo';font-weight:800;font-size:15px;letter-spacing:.02em;text-transform:uppercase;}
+  .brief-h .c{font-family:'Space Mono';font-size:11px;color:var(--faint);}
+  .brief-grid{columns:2;column-gap:40px;}
+  .brief-item{break-inside:avoid;display:flex;gap:12px;padding:11px 0;border-top:1px solid var(--line2);align-items:baseline;}
+  .brief-item .bd{width:5px;height:5px;border-radius:50%;background:var(--accent);flex:0 0 auto;transform:translateY(-2px);}
+  .brief-item .bt{font-size:14.5px;line-height:1.35;}
+  .brief-item .bs{font-family:'Space Mono';font-size:11px;color:var(--faint);margin-left:6px;}
+  .brief-more{font-family:'Space Mono';font-size:12px;color:var(--accent);padding:14px 0 0;font-weight:700;}
+
+  .featimg image-slot, .hatch{width:100%;height:340px;display:block;border-radius:16px;overflow:hidden;}
+  .hatch{background:repeating-linear-gradient(135deg,var(--hatch),var(--hatch) 13px,var(--paper) 13px,var(--paper) 26px);border:1px solid var(--line);position:relative;}
+  .hatch span{position:absolute;left:16px;bottom:14px;font-family:'Space Mono';font-size:11px;color:var(--faint);background:var(--paper);padding:5px 9px;border-radius:6px;letter-spacing:.04em;}
+
+  .feat{margin:34px 0 0;}
+  .feat h3{font-family:'Archivo';font-weight:800;font-size:34px;line-height:1.04;letter-spacing:-.02em;margin:20px 0 0;max-width:22ch;text-wrap:balance;}
+  .feat-grid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:54px;margin:22px 0 0;align-items:start;}
+
+  /* ── per-category row: article · map+details · verhaallijn ── */
+  .krow{max-width:1680px;margin:0 auto;padding:0 40px;display:grid;grid-template-columns:minmax(0,1fr) 340px 360px;gap:44px;align-items:start;}
+  .kmain{min-width:0;display:flex;flex-direction:column;}
+  .kmain .wrap{max-width:none;margin:0;padding:0;}
+  .kmid{position:sticky;top:90px;align-self:start;display:flex;flex-direction:column;gap:16px;}
+  .knews{position:sticky;top:90px;align-self:start;display:flex;flex-direction:column;gap:16px;}
+  /* divider between topic categories */
+  .krow + .krow{margin-top:40px;padding-top:44px;border-top:2px solid var(--ink);}
+  .krow + .krow .secdiv{padding-top:0;}
+
+  /* ── stretched verhaallijn rail ── */
+  .vrail{background:var(--paper);border:1.5px solid var(--accent);border-radius:18px;overflow:hidden;}
+  .vrail-top{background:var(--accent);color:#fff;padding:18px 20px 16px;position:relative;overflow:hidden;}
+  .vrail-top::after{content:"";position:absolute;inset:0;background:radial-gradient(120% 100% at 100% 0,rgba(255,255,255,.14),transparent 55%);pointer-events:none;}
+  .vrail-lab{font-family:'Space Mono';font-size:10.5px;letter-spacing:.18em;font-weight:700;opacity:.85;}
+  .vrail-th{font-family:'Archivo';font-weight:800;font-size:21px;line-height:1.12;letter-spacing:-.01em;margin:9px 0 0;position:relative;z-index:1;text-wrap:balance;}
+  .vrail-stat{display:flex;gap:18px;margin:15px 0 0;position:relative;z-index:1;}
+  .vrail-stat .s{display:flex;flex-direction:column;gap:1px;}
+  .vrail-stat .s b{font-family:'Archivo';font-weight:900;font-size:24px;line-height:1;}
+  .vrail-stat .s span{font-family:'Space Mono';font-size:10px;letter-spacing:.08em;opacity:.8;text-transform:uppercase;}
+
+  .vtl{padding:20px 20px 22px;}
+  .vn{position:relative;display:grid;grid-template-columns:14px 1fr;gap:14px;padding:0 0 20px;}
+  .vn:last-child{padding-bottom:0;}
+  .vn::before{content:"";position:absolute;left:6px;top:15px;bottom:-2px;width:2px;background:var(--line);}
+  .vn:last-child::before{display:none;}
+  .vn.now::before{background:repeating-linear-gradient(to bottom,var(--accent) 0 3px,transparent 3px 7px);}
+  .vdot{width:13px;height:13px;border-radius:50%;background:var(--paper);border:2.5px solid var(--line);margin-top:2px;z-index:1;}
+  .vn.now .vdot{border-color:var(--accent);background:var(--accent);box-shadow:0 0 0 4px var(--accent-tint);}
+  .vn.future .vdot{border-color:var(--accent);border-style:dashed;background:var(--paper);}
+  .vmeta{min-width:0;}
+  .vtop{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:5px;}
+  .vdate{font-family:'Space Mono';font-size:11px;font-weight:700;color:var(--ink);letter-spacing:.02em;}
+  .vn.future .vdate,.vn.now .vdate{color:var(--accent);}
+  .vtag{font-family:'Space Mono';font-size:9px;font-weight:700;letter-spacing:.1em;padding:3px 7px;border-radius:999px;text-transform:uppercase;}
+  .vtag.deel{color:var(--accent);background:var(--accent-tint);}
+  .vtag.update{color:var(--stone-t);background:var(--stone-b);}
+  .vtag.analyse{color:var(--amber-t);background:var(--amber-b);}
+  .vtag.now{color:#fff;background:var(--accent);}
+  .vtag.vooruit{color:var(--emer-t);background:var(--emer-b);}
+  .vtitle{font-size:14px;line-height:1.34;color:var(--ink2);font-weight:500;}
+  .vn.now .vtitle{font-weight:700;color:var(--ink);}
+  .vsrc{font-family:'Space Mono';font-size:10px;color:var(--faint);letter-spacing:.03em;margin-top:5px;}
+  /* category details block */
+  .det-card .bh{margin:0 0 14px;}
+  .det{display:flex;align-items:baseline;gap:13px;padding:13px 0;border-top:1px solid var(--line2);}
+  .det:first-of-type{border-top:none;padding-top:0;}
+  .det b{font-family:'Archivo';font-weight:900;font-size:30px;line-height:.95;color:var(--ink);min-width:52px;text-align:right;}
+  .det .dl{font-size:13.5px;color:var(--muted);line-height:1.32;}
+  .det.tav b{color:var(--accent);}
+  .det.tav .dl b{display:inline;font-size:inherit;min-width:0;}
+  .src-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:16px;padding-top:15px;border-top:1px solid var(--line);}
+  .src-chips .lab{flex-basis:100%;font-family:'Space Mono';font-size:9.5px;letter-spacing:.14em;color:var(--faint);text-transform:uppercase;margin-bottom:2px;}
+  .src-chip{font-family:'Space Mono';font-size:10.5px;font-weight:700;color:var(--muted);background:var(--stone-b);padding:4px 9px;border-radius:999px;}
+  .src-chip.tav{color:var(--accent);background:var(--accent-tint);}
+  @media(max-width:1240px){
+    .krow{grid-template-columns:1fr;gap:24px;}
+    .knews,.kmid{position:static;}
+  }
+
+  footer{max-width:1680px;margin:50px auto 0;padding:40px;border-top:1px solid var(--line);text-align:center;font-family:'Space Mono';font-size:12px;color:var(--faint);letter-spacing:.06em;}
+
+  @media(max-width:980px){
+    .lead-grid,.feat-grid{grid-template-columns:1fr;gap:30px;}
+    .side{position:static;flex-direction:row;flex-wrap:wrap;}
+    .side .box{flex:1;min-width:240px;}
+    .mast h1{font-size:58px;}
+    .lead h2{font-size:38px;}.feat h3{font-size:27px;}
+    .lead-hero image-slot{height:340px;}
+    .cards{grid-template-columns:1fr;}
+    .brief-grid{columns:1;}
+  }
+  @media(max-width:560px){
+    .wrap,.util-in,.mast,.sol,.secdiv,.secsum,.lead,.feat,footer{padding-left:18px;padding-right:18px;}
+    .mast h1{font-size:42px;}.article p{font-size:18px;}
+    .wx{gap:8px 0;}
+  }
+
+  /* ── Tweaks panel ── */
+  #tweaks{position:fixed;right:20px;bottom:20px;z-index:60;width:268px;background:var(--paper);border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.16);padding:16px 16px 18px;display:none;font-family:'Space Grotesk',sans-serif;}
+  #tweaks.on{display:block;}
+  #tweaks .tw-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:13px;}
+  #tweaks .tw-t{font-family:'Space Mono';font-size:11px;letter-spacing:.16em;font-weight:700;color:var(--muted);}
+  #tweaks .tw-x{cursor:pointer;width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--faint);border:1px solid var(--line);background:none;font-size:14px;line-height:1;}
+  #tweaks .tw-x:hover{color:var(--ink);}
+  #tweaks .tw-lab{font-family:'Space Mono';font-size:9.5px;letter-spacing:.14em;color:var(--faint);text-transform:uppercase;margin:0 0 9px;}
+  .sch-grid{display:flex;flex-direction:column;gap:7px;max-height:62vh;overflow-y:auto;padding-right:4px;margin:0 -2px;}
+  .sch-grid::-webkit-scrollbar{width:7px;}
+  .sch-grid::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px;}
+  .sch-gh{font-family:'Space Mono';font-size:9px;letter-spacing:.16em;color:var(--faint);text-transform:uppercase;padding:8px 2px 2px;}
+  .sch-gh:first-child{padding-top:0;}
+  .sch{display:flex;align-items:center;gap:11px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;cursor:pointer;transition:border-color .12s,background .12s;}
+  .sch:hover{background:var(--accent-tint);}
+  .sch.sel{border-color:var(--ink);}
+  .sch .sw{width:26px;height:26px;border-radius:7px;flex:0 0 auto;position:relative;border:1px solid rgba(0,0,0,.12);}
+  .sch .sw i{position:absolute;right:3px;bottom:3px;width:9px;height:9px;border-radius:2px;}
+  .sch .nm{font-size:13px;font-weight:600;color:var(--ink);}
+  .sch.sel .nm::after{content:"✓";margin-left:6px;color:var(--accent);font-weight:700;}
+</style>
+</head>
+
+<body>
+  <div class="util"><div class="util-in">
+    <a class="back" href="Morning Report - Voorpagina.html"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg>Overzicht</a>
+    <span class="nm">MORNING REPORT</span>
+    <span class="ed" id="ued"></span>
+  </div></div>
+
+  <main id="app"></main>
+
+  <footer>MORNING REPORT · RICHTING A2 — "DAGBLAD + VERHAALLIJN" · TIJDLIJN &amp; IMPACTKAART</footer>
+
+  <div id="tweaks">
+    <div class="tw-h"><span class="tw-t">TWEAKS</span><button class="tw-x" id="twClose">✕</button></div>
+    <p class="tw-lab">Kleurschema</p>
+    <div class="sch-grid" id="schGrid"></div>
+  </div>
+
+<script>
+const K = window.KRANT;
+const $ = (h) => { const t=document.createElement('template'); t.innerHTML=h.trim(); return t.content.firstChild; };
+const esc = (s) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+
+const STAR = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.5 6.5L21 11l-6.5 2.5L12 22l-2.5-8.5L3 11l6.5-2.5z"/></svg>';
+const FWD = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15M13 6l6 6-6 6"/></svg>';
+
+function ratingEl(){
+  const r = $(`<div class="rating"><span class="rl">JOUW OORDEEL</span><div class="seg"></div></div>`);
+  const seg = r.querySelector('.seg');
+  for(let i=-2;i<=2;i++){ const b=document.createElement('b'); b.dataset.v=i;
+    b.onclick=()=>{ [...seg.children].forEach(c=>{c.className=''; const v=+c.dataset.v;
+      if(v<0&&v>=i&&i<0)c.classList.add('neg'); if(v>0&&v<=i&&i>0)c.classList.add('pos'); if(i===0)c.className=''; }); };
+    seg.appendChild(b); }
+  return r;
+}
+function threadEl(v){
+  return $(`<div class="thread"><div class="deel">DEEL<b>${v.deel}</b></div>
+    <div class="desc"><span class="lab">VERHAALLIJN</span><span class="tt">${esc(v.thread)}</span></div></div>`);
+}
+function vooruitEl(v){
+  return $(`<div class="vooruit"><div class="top"><span class="ic">${FWD}</span>
+    <span class="ti">VOORUITBLIK</span><span class="dt">${v.date}</span></div>
+    <div class="bd"><p>${esc(v.text)}</p><span class="certchip cert-${v.certainty}">${v.certainty}</span></div></div>`);
+}
+function ripplesEl(rs){
+  if(!rs||!rs.length) return null;
+  const w = $(`<div><div class="ripples-h">GEVOLGEN · ${rs.length}</div><div class="ripples"></div></div>`);
+  const box = w.querySelector('.ripples');
+  rs.forEach((r,i)=> box.appendChild($(`<div class="ripple"><span class="rn">0${i+1}</span>
+    <div><div class="rl">${esc(r.label)}</div><div class="rt">${esc(r.text)}</div></div></div>`)));
+  return w;
+}
+function imgOrHatch(id, has, label){
+  return has ? $(`<div class="featimg"><image-slot id="${id}" shape="rounded" radius="16" placeholder="Sleep een foto"></image-slot></div>`)
+             : $(`<div class="hatch"><span>${label}</span></div>`);
+}
+function metaEl(a){
+  const m = $(`<div class="ameta"><span class="src">${esc(a.source)}</span><span class="dot"></span>
+    <span>${a.match}% match</span><span class="dot"></span></div>`);
+  m.appendChild(ratingEl());
+  return m;
+}
+
+function timelineCard(a){
+  const t = KE.deriveTimeline(a);
+  const card = $(`<div class="box tl-card"></div>`);
+  card.appendChild($(`<div class="bh-row"><span class="bh">VERHAALLIJN</span><span class="dur">${KE.durationLabel(t)}</span></div>`));
+  card.appendChild($(`<div class="tl-stat"><b>${t.parts}</b> ${t.parts===1?'deel':'delen'}${t.days>0?` · sinds ${KE.fmt(t.start)}`:''}</div>`));
+  const tl = $(`<div class="tl"></div>`);
+  t.nodes.forEach(n=>{
+    const isNow = n.kind==='now';
+    const row = $(`<div class="tn ${isNow?'now':'past'}"><span class="tdot"></span><div class="tmeta"></div></div>`);
+    const meta = row.querySelector('.tmeta');
+    meta.appendChild($(`<span class="tdate">${KE.fmt(n.date)}</span>`));
+    meta.appendChild($(`<span class="tlab">deel ${n.deel}${isNow?' · vandaag':''}</span>`));
+    if(isNow) meta.appendChild($(`<span class="tthread">${esc(a.verhaallijn.thread)}</span>`));
+    tl.appendChild(row);
+  });
+  if(t.future){
+    const row = $(`<div class="tn future"><span class="tdot"></span><div class="tmeta"></div></div>`);
+    const meta = row.querySelector('.tmeta');
+    meta.appendChild($(`<span class="tdate">${KE.fmt(t.future.date)} · vooruitblik</span>`));
+    meta.appendChild($(`<span class="cc cert-${t.future.certainty}">${t.future.certainty}</span>`));
+    meta.appendChild($(`<span class="tthread">${esc(t.future.text)}</span>`));
+    tl.appendChild(row);
+  }
+  card.appendChild(tl);
+  return card;
+}
+function mapCard(a, sectionName){
+  const impact = KE.deriveCountries(a, sectionName);
+  const pins = KE.impactPins(impact);
+  const card = $(`<div class="box map-card"></div>`);
+  card.appendChild($(`<span class="bh">WAAR HET SPEELT</span>`));
+  const mw = $(`<div class="mapwrap"></div>`);
+  mw.innerHTML = KE.worldMapSVG({regions: impact.regions, pins, accent:'var(--accent)', ocean:'var(--map-ocean)', land:'var(--map-land)'});
+  card.appendChild(mw);
+  const chips = $(`<div class="chips"></div>`);
+  impact.countries.forEach(c=> chips.appendChild($(`<span class="geo-chip">${esc(c)}</span>`)));
+  card.appendChild(chips);
+  return card;
+}
+function sideEl(a, sectionName){
+  const side = $(`<aside class="side"></aside>`);
+  side.appendChild(timelineCard(a));
+  side.appendChild(mapCard(a, sectionName));
+  return side;
+}
+
+/* ── render ── */
+const app = document.getElementById('app');
+document.getElementById('ued').textContent = K.masthead.date.toUpperCase()+' · '+K.masthead.edition.toUpperCase();
+
+// masthead band — daily-paper header (title + meta + weather bar)
+const wx = K.weather;
+app.appendChild($(`<div class="mast"><div class="mast-in">
+  <h1>${esc(K.masthead.title)}</h1>
+  <div class="meta"><b>${esc(K.masthead.date)}</b><br>${esc(K.masthead.edition)} · nr. ${K.masthead.nr}</div>
+  <div class="spacer"></div>
+  <div class="wxbar">
+    <div class="s"><span class="v">${wx.temp}</span><span class="k">${esc(wx.place)}</span></div>
+    <div class="s"><span class="v">${esc(wx.cond)}</span><span class="k">${wx.lo}/${wx.hi}</span></div>
+    <div class="s"><span class="v">${wx.rain}</span><span class="k">neerslag</span></div>
+    <div class="s"><span class="v">${wx.wind}</span><span class="k">wind</span></div>
+  </div></div></div>`));
+
+// top zone: sol + data tiles (full width)
+const tz = $(`<div class="topzone"></div>`);
+tz.appendChild($(`<div class="sol"><div class="h"><span class="star">${STAR}</span>SOL · VANDAAG IN HET KORT</div><p>${esc(K.sol)}</p></div>`));
+const data = $(`<div class="data"></div>`);
+const mk = $(`<div class="tile"><div class="th"><span>MARKTEN · INTRADAG</span><span>${K.markets.length} INDICES</span></div><div class="mk"></div></div>`);
+const mkb = mk.querySelector('.mk');
+K.markets.forEach(m=>{ const up=m.d>=0; mkb.appendChild($(`<div class="row"><span class="nm">${esc(m.idx)}</span><span class="pc ${up?'up':'dn'}">${up?'+':''}${m.d.toFixed(2)}%</span></div>`)); });
+data.appendChild(mk);
+const mx = Math.max(...K.regions.map(r=>r.n));
+const rg = $(`<div class="tile"><div class="th"><span>ARTIKELEN PER REGIO</span><span>VANDAAG</span></div><div class="rg"></div></div>`);
+const rgb = rg.querySelector('.rg');
+K.regions.forEach(r=> rgb.appendChild($(`<div class="row"><span class="nm">${esc(r.name)}</span><span class="bar" style="width:${Math.max(8,r.n/mx*100)}%"></span><span class="n">${r.n}</span></div>`)));
+data.appendChild(rg);
+tz.appendChild(data);
+app.appendChild(tz);
+
+// ── per-category storylines (design fake data, stretched out) ──
+const STORYLINES = {
+  'Tech': { title:'De AI-onderklasse', weeks:10, nodes:[
+    { date:'18 apr', tag:'DEEL 1', cls:'deel', title:'Intern Ford-memo lekt: 600 kwaliteitsfuncties wijken voor AI-inspectie', src:'r/technology' },
+    { date:'29 apr', tag:'UPDATE', cls:'update', title:'Vakbond UAW eist opheldering over volledig autonome eindcontrole', src:'Detroit Free Press' },
+    { date:'7 mei', tag:'DEEL 2', cls:'deel', title:'Eerste terugroepactie: AI-systeem miste laswerkdefecten op drie modellen', src:'Reuters' },
+    { date:'19 mei', tag:'ANALYSE', cls:'analyse', title:'Studie: 1 op de 5 instapbanen in de maakindustrie nu ‘AI-geschikt’', src:'Stanford Digital Economy Lab' },
+    { date:'2 jun', tag:'DEEL 3', cls:'deel', title:'Ford bevestigt herinhuur van 350 ingenieurs na opeenstapeling incidenten', src:'Bloomberg' },
+    { date:'14 jun', tag:'UPDATE', cls:'update', title:'Concurrenten GM en Stellantis pauzeren vergelijkbare AI-uitrol', src:'Automotive News' },
+    { date:'28 jun', tag:'VANDAAG', cls:'now', now:true, title:'Ford rehired 350 engineers na AI-fouten in voertuigkwaliteit', src:'r/technology' },
+  ], future:{ date:'10 jul', tag:'VOORUITBLIK', cls:'vooruit', title:'Senaatshoorzitting over AI en werkgelegenheid in de maakindustrie gepland', src:'verwacht' } },
+
+  'Wereldtoneel': { title:'Hormuz & het Libanon-akkoord', weeks:8, nodes:[
+    { date:'2 mei', tag:'DEEL 1', cls:'deel', title:'Eerste indirecte staakt-het-vuren-gesprekken tussen Israël en Hezbollah via Caïro', src:'Al Jazeera' },
+    { date:'14 mei', tag:'UPDATE', cls:'update', title:'IRGC weigert voorgestelde de-escalatie-hotline in Straat van Hormuz', src:'Reuters' },
+    { date:'27 mei', tag:'DEEL 2', cls:'deel', title:'Drone treft tanker; VS kondigt eerste nachtelijke aanval op Iran aan', src:'Al Jazeera' },
+    { date:'9 jun', tag:'ANALYSE', cls:'analyse', title:'Brentolie piekt 12% op blokkadevrees rond de Straat van Hormuz', src:'MarketWatch' },
+    { date:'21 jun', tag:'DEEL 3', cls:'deel', title:'Netanyahu presenteert ontwerp-akkoord; Hezbollah verwerpt kernclausules', src:'France 24' },
+    { date:'28 jun', tag:'VANDAAG', cls:'now', now:true, title:'Netanyahu prijst Libanon-deal als klap voor Iran terwijl Hezbollah akkoord afwijst', src:'France 24' },
+  ], future:{ date:'29 jun', tag:'VOORUITBLIK', cls:'vooruit', title:'Israëlische troepen bereiden zich voor op langdurig verblijf in zuidelijk Libanon', src:'verwacht' } },
+
+  'Financieel': { title:'SpaceX naar de Nasdaq-100', weeks:10, nodes:[
+    { date:'20 apr', tag:'DEEL 1', cls:'deel', title:'SpaceX kondigt $11 miljard softwarepivot aan naast lanceeractiviteiten', src:'MarketWatch' },
+    { date:'3 mei', tag:'UPDATE', cls:'update', title:'Analisten verdeeld over waardering na de aangekondigde koerswijziging', src:'Bloomberg' },
+    { date:'16 mei', tag:'DEEL 2', cls:'deel', title:'Onderhandelingen over overname in enterprise-software lekken uit', src:'The Information' },
+    { date:'30 mei', tag:'DEEL 3', cls:'deel', title:'Indexcommissie zet SpaceX op shortlist voor versnelde Nasdaq-100-opname', src:'Reuters' },
+    { date:'12 jun', tag:'ANALYSE', cls:'analyse', title:'Wat een versnelde indexopname betekent voor passieve fondsen', src:'MarketWatch' },
+    { date:'28 jun', tag:'VANDAAG', cls:'now', now:true, title:'SpaceX versneld naar Nasdaq-100 na $11 miljard pivot', src:'MarketWatch Top' },
+  ], future:{ date:'20 aug', tag:'VOORUITBLIK', cls:'vooruit', title:'SpaceX publiceert de eerste kwartaalcijfers na de beursgang', src:'verwacht' } },
+
+  'Games': { title:'PlayStation & digitale rechten', weeks:6, nodes:[
+    { date:'22 mei', tag:'DEEL 1', cls:'deel', title:'Sony stuurt e-mails over verlopen StudioCanal-licenties naar gebruikers', src:'Eurogamer' },
+    { date:'4 jun', tag:'UPDATE', cls:'update', title:'Consumentenbonden eisen restitutie voor straks verdwenen films', src:'The Verge' },
+    { date:'18 jun', tag:'ANALYSE', cls:'analyse', title:'Wat ‘eerder gekochte’ content juridisch eigenlijk waard is', src:'Ars Technica' },
+    { date:'28 jun', tag:'VANDAAG', cls:'now', now:true, title:'PlayStation verwijdert per 1 september StudioCanal-content uit bibliotheken', src:'Eurogamer' },
+  ], future:{ date:'1 sep', tag:'VOORUITBLIK', cls:'vooruit', title:'De StudioCanal-content wordt definitief uit de bibliotheken verwijderd', src:'bevestigd' } },
+
+  'Wetenschap': { title:'De LHC gaat vier jaar dicht', weeks:7, nodes:[
+    { date:'12 mei', tag:'DEEL 1', cls:'deel', title:'CERN bevestigt langdurige stop voor de High-Luminosity-upgrade', src:'Phys.org' },
+    { date:'28 mei', tag:'UPDATE', cls:'update', title:'Onderzoeksgroepen herplannen experimenten rond donkere materie', src:'Nature' },
+    { date:'14 jun', tag:'ANALYSE', cls:'analyse', title:'Wat de High-Luminosity LHC moet opleveren voor de deeltjesfysica', src:'Quanta' },
+    { date:'28 jun', tag:'VANDAAG', cls:'now', now:true, title:'LHC stopt maandag vier jaar voor upgrade om jacht op donkere materie te versterken', src:'Phys.org' },
+  ], future:{ date:'29 jun', tag:'VOORUITBLIK', cls:'vooruit', title:'De versneller gaat maandag offline; eerste data pas eind 2030 verwacht', src:'bevestigd' } },
+
+  'Frontier': { title:'Supernova nabij het galactisch centrum', weeks:4, nodes:[
+    { date:'2 jun', tag:'DEEL 1', cls:'deel', title:'Radio-array registreert ongewone boogstructuur nabij Sgr A*', src:'Universe Today' },
+    { date:'16 jun', tag:'UPDATE', cls:'update', title:'Tweede observatieronde bevestigt schokgolf-signatuur', src:'NASA' },
+    { date:'28 jun', tag:'VANDAAG', cls:'now', now:true, title:'Astronomen spotten mogelijk supernova-restant nabij superzwaar zwart gat', src:'Universe Today' },
+  ], future:{ date:'14 jul', tag:'VOORUITBLIK', cls:'vooruit', title:'Vervolgwaarnemingen met de VLA en JWST staan gepland', src:'verwacht' } },
+
+  'Lokaal NL': { title:'Anthropic & overheidstoegang', weeks:5, nodes:[
+    { date:'6 jun', tag:'DEEL 1', cls:'deel', title:'VS overweegt uitzondering op exportbeperking voor selecte AI-modellen', src:'NOS' },
+    { date:'20 jun', tag:'UPDATE', cls:'update', title:'Tweede Kamer stelt vragen over Nederlandse toegang tot de modellen', src:'NU.nl' },
+    { date:'28 jun', tag:'VANDAAG', cls:'now', now:true, title:'Anthropic mag Mythos toch delen met selecte Amerikaanse overheidsinstanties', src:'NOS Algemeen' },
+  ], future:{ date:'28 jul', tag:'VOORUITBLIK', cls:'vooruit', title:'VS behoudt 30 dagen exclusieve overheidstoegang voordat bredere release volgt', src:'verwacht' } },
+
+  'Goed nieuws': { title:'De marmeren bustes van Kent', weeks:3, nodes:[
+    { date:'10 jun', tag:'DEEL 1', cls:'deel', title:'Taxateur betwijfelt of ‘betonnen’ tuinbeelden in Kent echt waardeloos zijn', src:'Good News Network' },
+    { date:'28 jun', tag:'VANDAAG', cls:'now', now:true, title:'Tuinornamenten in Kent blijken zeldzame 18e-eeuwse Italiaanse marmeren bustes', src:'Good News Network' },
+  ], future:{ date:'12 jul', tag:'VOORUITBLIK', cls:'vooruit', title:'De bustes gaan onder de hamer bij een veilinghuis in Londen', src:'verwacht' } },
+};
+
+function vrailEl(sectionName, primaryArticle){
+  const sl = STORYLINES[sectionName];
+  const rail = $(`<div class="vrail"></div>`);
+  if(!sl){
+    rail.appendChild($(`<div class="vrail-top"><div class="vrail-lab">VERHAALLIJN · ${esc(sectionName.toUpperCase())}</div>
+      <div class="vrail-th">${esc(sectionName)}</div></div>`));
+    return rail;
+  }
+  const srcCount = new Set(sl.nodes.map(n=>n.src)).size;
+  rail.appendChild($(`<div class="vrail-top">
+    <div class="vrail-lab">VERHAALLIJN · ${esc(sectionName.toUpperCase())}</div>
+    <div class="vrail-th">${esc(sl.title)}</div>
+    <div class="vrail-stat">
+      <div class="s"><b>${sl.nodes.length}</b><span>delen</span></div>
+      <div class="s"><b>${sl.weeks}</b><span>weken</span></div>
+      <div class="s"><b>${srcCount}</b><span>bronnen</span></div>
+    </div></div>`));
+  const tl = $(`<div class="vtl"></div>`);
+  const render = (n, future)=>{
+    const row = $(`<div class="vn ${future?'future':(n.now?'now':'past')}"><span class="vdot"></span><div class="vmeta"></div></div>`);
+    const m = row.querySelector('.vmeta');
+    m.appendChild($(`<div class="vtop"><span class="vdate">${n.date}</span><span class="vtag ${n.cls}">${n.tag}</span></div>`));
+    m.appendChild($(`<div class="vtitle">${esc(n.title)}</div>`));
+    m.appendChild($(`<div class="vsrc">${esc(n.src)}</div>`));
+    tl.appendChild(row);
+  };
+  sl.nodes.forEach(n=> render(n,false));
+  if(sl.future) render(sl.future, true);
+  rail.appendChild(tl);
+  return rail;
+}
+
+function hashStr(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
+function detailsCard(s, si){
+  const articleCount = (si===0?1:0) + (s.featured?(s.featured.length):0) + (s.cards?s.cards.length:0) + (s.brief?s.brief.length:0) + (s.briefMore||0);
+  const sources = new Set();
+  if(si===0 && K.lead.source) sources.add(K.lead.source);
+  (s.featured||[]).forEach(a=> a.source && sources.add(a.source));
+  (s.cards||[]).forEach(c=> c.source && sources.add(c.source));
+  (s.brief||[]).forEach(b=> b.source && sources.add(b.source));
+  const srcList = [...sources];
+  const tavily = 4 + (hashStr(s.name) % 13); // 4..16 aanvullende bronnen
+
+  const card = $(`<div class="box det-card"></div>`);
+  card.appendChild($(`<span class="bh">RUBRIEK IN CIJFERS</span>`));
+  card.appendChild($(`<div class="det"><b>${articleCount}</b><div class="dl">artikelen in deze rubriek</div></div>`));
+  card.appendChild($(`<div class="det"><b>${srcList.length}</b><div class="dl">verschillende bronnen geraadpleegd</div></div>`));
+  card.appendChild($(`<div class="det tav"><b>+${tavily}</b><div class="dl">extra bronnen verzameld via <b>Tavily</b></div></div>`));
+  const chips = $(`<div class="src-chips"><span class="lab">Bronnen in deze rubriek</span></div>`);
+  srcList.slice(0,8).forEach(src=> chips.appendChild($(`<span class="src-chip">${esc(src)}</span>`)));
+  chips.appendChild($(`<span class="src-chip tav">+${tavily} via Tavily</span>`));
+  card.appendChild(chips);
+  return card;
+}
+
+// ── render: one row per category, articles left, that category's verhaallijn right ──
+K.sections.forEach((s, si)=>{
+  const row = $(`<section class="krow"></section>`);
+  const main = $(`<div class="kmain"></div>`);
+  const mid = $(`<aside class="kmid"></aside>`);
+  const rail = $(`<aside class="knews"></aside>`);
+  row.appendChild(main); row.appendChild(mid); row.appendChild(rail);
+  app.appendChild(row);
+
+  // the lead leads the first category (Tech)
+  if(si===0){
+    const L = K.lead;
+    const lead = $(`<section class="lead"></section>`);
+    lead.appendChild($(`<span class="leadtag"><span class="pct">HOOFDVERHAAL · ${L.match}%</span> ${esc(L.section)} · ${esc(L.source)}</span>`));
+    lead.appendChild($(`<h2>${esc(L.headline)}</h2>`));
+    lead.appendChild($(`<div class="lead-hero"><image-slot id="lead-hero" shape="rounded" radius="18" placeholder="Sleep de hoofdfoto"></image-slot></div>`));
+    const art = $(`<div class="article lead-body"></div>`);
+    art.appendChild(threadEl(L.verhaallijn));
+    art.appendChild(metaEl(L));
+    L.body.forEach(p=> art.appendChild($(`<p>${esc(p)}</p>`)));
+    const rp = ripplesEl(L.ripples); if(rp) art.appendChild(rp);
+    lead.appendChild(art);
+    main.appendChild(lead);
+  }
+
+  main.appendChild($(`<div class="secdiv"><span class="nm">${esc(s.name)}</span><span class="ln"></span><span class="ct">${esc(s.caption)}</span></div>`));
+  main.appendChild($(`<div class="secsum"><p>${esc(s.summary)}</p></div>`));
+
+  s.featured.forEach((a, ai)=>{
+    const feat = $(`<section class="feat"></section>`);
+    feat.appendChild(imgOrHatchWrap(a, si, ai));
+    feat.appendChild($(`<h3>${esc(a.headline)}</h3>`));
+    const art = $(`<div class="article"></div>`);
+    art.appendChild(metaEl(a));
+    a.body.forEach(p=> art.appendChild($(`<p>${esc(p)}</p>`)));
+    const rp = ripplesEl(a.ripples); if(rp) art.appendChild(rp);
+    feat.appendChild(art);
+    main.appendChild(feat);
+  });
+
+  if(s.cards && s.cards.length){
+    const cards = $(`<div class="cards"></div>`);
+    s.cards.forEach(c=> cards.appendChild($(`<div class="scard"><div class="sh">${esc(c.headline)}</div>
+      <div class="sb">${esc(c.body)}</div><div class="ss">${esc(c.source)}</div></div>`)));
+    main.appendChild(cards);
+  }
+
+  const primary = si===0 ? K.lead : (s.featured[0]||null);
+  if(primary) mid.appendChild(mapCard(primary, s.name));
+  mid.appendChild(detailsCard(s, si));
+  rail.appendChild(vrailEl(s.name, primary));
+});
+
+function imgOrHatchWrap(a, si, ai){
+  return imgOrHatch(`feat-${si}-${ai}`, a.hasImage, esc(a.source));
+}
+</script>
+
+<script>
+/* ── Tweaks: color schemes ── */
+const TWEAKS = /*EDITMODE-BEGIN*/{
+  "scheme": "blue"
+}/*EDITMODE-END*/;
+
+const NEUTRAL_LIGHT = {
+  '--paper':'#ffffff','--ink':'#1c1917','--ink2':'#292524','--muted':'#57534e','--faint':'#a8a29e',
+  '--line':'#e7e5e0','--line2':'#efedea','--hatch':'#ece9e3','--util-bg':'rgba(247,246,243,.9)',
+  '--map-bg':'#f5f4f1','--map-ocean':'rgba(28,25,23,0.07)','--map-land':'rgba(28,25,23,0.12)'
+};
+const NEUTRAL_DARK = {
+  '--paper':'#1c1c20','--ink':'#f4f4f5','--ink2':'#d4d4d8','--muted':'#a1a1aa','--faint':'#71717a',
+  '--line':'#2f2f36','--line2':'#26262c','--hatch':'#26262c','--util-bg':'rgba(15,15,17,.9)',
+  '--map-bg':'#18181b','--map-ocean':'rgba(255,255,255,0.07)','--map-land':'rgba(255,255,255,0.16)'
+};
+const L = (accent,deep,tint,bg)=>({ ...NEUTRAL_LIGHT,'--accent':accent,'--accent-deep':deep,'--accent-tint':tint,'--bg':bg });
+const D = (accent,deep,tint,bg)=>({ ...NEUTRAL_DARK,'--accent':accent,'--accent-deep':deep,'--accent-tint':tint,'--bg':bg });
+const SCHEMES = [
+  { id:'blue',    name:'Signaalblauw',   group:'Licht', sw:'#2f6df0', vars:L('#2f6df0','#1f57d6','#eef3fe','#f7f6f3') },
+  { id:'sky',     name:'Hemelsblauw',    group:'Licht', sw:'#1186d6', vars:L('#1186d6','#0e6fb3','#e2f0fb','#f4f6f8') },
+  { id:'cyan',    name:'Cyaan',          group:'Licht', sw:'#0e8d96', vars:L('#0e8d96','#0b727a','#ddf2f3','#f1f6f6') },
+  { id:'green',   name:'Diepgroen',      group:'Licht', sw:'#1f8a5b', vars:L('#1f8a5b','#15704a','#e4f3ec','#f3f6f2') },
+  { id:'olive',   name:'Olijf',          group:'Licht', sw:'#5f7d10', vars:L('#5f7d10','#4d660d','#eef2d9','#f6f6ef') },
+  { id:'amber',   name:'Oker',           group:'Licht', sw:'#b07d12', vars:L('#b07d12','#8f640e','#f6ecce','#f8f5ec') },
+  { id:'orange',  name:'Oranjegloed',    group:'Licht', sw:'#e2620f', vars:L('#e2620f','#be520c','#fcebdd','#f8f5f1') },
+  { id:'terra',   name:'Terracotta',     group:'Licht', sw:'#c2553d', vars:L('#c2553d','#a44530','#f8e8e2','#f7f4f0') },
+  { id:'red',     name:'Redactierood',   group:'Licht', sw:'#d23f34', vars:L('#d23f34','#b1322a','#fbe9e7','#f7f4f1') },
+  { id:'wine',    name:'Bordeaux',       group:'Licht', sw:'#8e2741', vars:L('#8e2741','#761f35','#f6e2e7','#f7f3f4') },
+  { id:'rose',    name:'Roze',           group:'Licht', sw:'#e0567f', vars:L('#e0567f','#c2456a','#fce6ed','#f8f5f6') },
+  { id:'magenta', name:'Fuchsia',        group:'Licht', sw:'#c2256f', vars:L('#c2256f','#a01d5c','#fbe3ef','#f8f4f6') },
+  { id:'violet',  name:'Koningsviolet',  group:'Licht', sw:'#6b4ef0', vars:L('#6b4ef0','#573dd0','#efeafe','#f6f5f4') },
+  { id:'indigo',  name:'Indigo',         group:'Licht', sw:'#4f46e5', vars:L('#4f46e5','#3f38c4','#eceafd','#f5f5f7') },
+  { id:'navy',    name:'Marine',         group:'Licht', sw:'#243b73', vars:L('#243b73','#1b2d59','#e6ebf5','#f5f6f8') },
+  { id:'espresso',name:'Espresso',       group:'Licht', sw:'#6b4a2f', vars:L('#6b4a2f','#553a25','#efe6dd','#f6f4f1') },
+  { id:'mono',    name:'Grafiet',        group:'Licht', sw:'#3f3f46', vars:L('#3f3f46','#27272a','#ededf0','#f4f3f1') },
+
+  { id:'dark',    name:'Middernacht',    group:'Donker', sw:'#5b8cff', dark:true, vars:D('#5b8cff','#3f6fe0','#1f2a44','#12161d') },
+  { id:'dteal',   name:'Diep teal',      group:'Donker', sw:'#2dd4bf', dark:true, vars:D('#2dd4bf','#1fae9d','#0f312d','#0f1413') },
+  { id:'dgreen',  name:'Neongroen',      group:'Donker', sw:'#36d399', dark:true, vars:D('#36d399','#28b07f','#103326','#0f1512') },
+  { id:'damber',  name:'Houtskool & oker',group:'Donker', sw:'#f0a830', dark:true, vars:D('#f0a830','#d18f1f','#3a2e12','#141210') },
+  { id:'dred',    name:'Gloeiend rood',  group:'Donker', sw:'#f87171', dark:true, vars:D('#f87171','#ea5455','#3a1a1a','#151011') },
+  { id:'dmagenta',name:'Donker fuchsia', group:'Donker', sw:'#ec4899', dark:true, vars:D('#ec4899','#d12d80','#3a1428','#141016') },
+  { id:'dviolet', name:'Donker violet',  group:'Donker', sw:'#a78bfa', dark:true, vars:D('#a78bfa','#8b6df0','#271f44','#131218') },
+];
+
+function applyScheme(id){
+  const s = SCHEMES.find(x=>x.id===id) || SCHEMES[0];
+  const root = document.documentElement;
+  Object.entries(s.vars).forEach(([k,v])=> root.style.setProperty(k,v));
+  TWEAKS.scheme = s.id;
+  document.querySelectorAll('.sch').forEach(el=> el.classList.toggle('sel', el.dataset.id===s.id));
+}
+
+// build the swatch list
+(function(){
+  const grid = document.getElementById('schGrid');
+  let lastGroup = null;
+  SCHEMES.forEach(s=>{
+    if(s.group !== lastGroup){ grid.appendChild($(`<div class="sch-gh">${s.group}</div>`)); lastGroup = s.group; }
+    const row = $(`<div class="sch" data-id="${s.id}"><span class="sw" style="background:${s.dark?s.vars['--paper']:'#fff'}"><i style="background:${s.sw}"></i></span><span class="nm">${s.name}</span></div>`);
+    row.onclick = ()=>{ applyScheme(s.id); window.parent.postMessage({type:'__edit_mode_set_keys', edits:{scheme:s.id}}, '*'); };
+    grid.appendChild(row);
+  });
+  applyScheme(TWEAKS.scheme);
+})();
+
+// Tweaks host protocol
+const twPanel = document.getElementById('tweaks');
+window.addEventListener('message', (e)=>{
+  const t = e.data && e.data.type;
+  if(t==='__activate_edit_mode') twPanel.classList.add('on');
+  else if(t==='__deactivate_edit_mode') twPanel.classList.remove('on');
+});
+document.getElementById('twClose').onclick = ()=>{
+  twPanel.classList.remove('on');
+  window.parent.postMessage({type:'__edit_mode_dismissed'}, '*');
+};
+window.parent.postMessage({type:'__edit_mode_available'}, '*');
+</script>
+
+
+</body></html>

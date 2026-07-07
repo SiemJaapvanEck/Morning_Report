@@ -606,3 +606,18 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   element is backed by existing data, and wrote `docs/krant-a3-plan.md` — 3 phases
   (shell+topzone restyle · timeline · impact map). Opened `idle-work/2026-07-02-krant-a3`,
   seeded HANDOFF + plan + idle skills. Scheduled locally: P1 20:00, P2 21:30, P3 01:00.
+
+- **7 July 2026 — Krant rebuilt to "A2 · Dagblad + Verhaallijn" + brandbook.**
+  Siem rejected the A3 idle-run layout on review and supplied his own Claude
+  design (checked in as `Morning Report design/krant-a2-dagblad.html`). Built in
+  3 steps on the same branch: (1) scheme token system — `app/lib/schemes.ts`
+  with 24 color schemes on CSS variables (generated CSS + anti-flash script,
+  `mr_thema` → `mr_scheme` migration) and a grouped scheme picker; plus
+  `docs/brandbook.md`, the whole-app visual system that supersedes
+  `docs/design.md`. (2) `EditieWeergave.tsx` rewritten to the design:
+  per-rubriek rows (articles | sticky map + rubriek-in-cijfers | sticky
+  Verhaallijn rail with delen/weken/bronnen stats), lead with drop cap, thread
+  ribbon, GEVOLGEN list; new pure helper `storylineStats`. (3) Docs updated
+  (ontwerp §8, CLAUDE.md design section). Gate green (330 tests), verified
+  against the 2026-07-06 edition in a production render. Also ran the daily
+  pipeline (2× runner, 0 failed steps).

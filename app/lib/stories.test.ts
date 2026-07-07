@@ -15,6 +15,7 @@ import {
   titleCaseEntity,
   buildStorylineTimeline,
   storyGeography,
+  storylineStats,
   type TimelineLink,
 } from "./stories";
 import { entityOverlap } from "../../modules/threads";
@@ -408,5 +409,47 @@ describe("storyGeography", () => {
   it("skips empty strings in place entities", () => {
     const result = storyGeography(null, ["", "Paris", ""]);
     expect(result.chips).toEqual(["Paris"]);
+  });
+});
+
+// ── storylineStats (brandbook rail header) ────────────────────────────────────
+
+describe("storylineStats", () => {
+  const past = (date: string, source: string | null, deel: number) =>
+    ({ kind: "past", date, title: "t", source, deel, isNow: false }) as const;
+
+  it("returns zeros for an empty timeline", () => {
+    expect(storylineStats([])).toEqual({ parts: 0, weeks: 0, sources: 0 });
+  });
+
+  it("ignores future nodes entirely", () => {
+    const stats = storylineStats([
+      past("2026-06-01", "NOS", 1),
+      { kind: "future", date: "2026-07-20", text: "x", certainty: "verwacht" },
+    ]);
+    expect(stats.parts).toBe(1);
+  });
+
+  it("counts a single dated instalment as one week", () => {
+    expect(storylineStats([past("2026-06-01", "NOS", 1)]).weeks).toBe(1);
+  });
+
+  it("rounds the first→last span to whole weeks, minimum one", () => {
+    const stats = storylineStats([
+      past("2026-04-18", "r/technology", 1),
+      past("2026-05-07", "Reuters", 2),
+      past("2026-06-28", "Bloomberg", 3),
+    ]);
+    expect(stats.weeks).toBe(10); // 71 days ≈ 10 weeks
+  });
+
+  it("counts distinct sources, skipping null", () => {
+    const stats = storylineStats([
+      past("2026-06-01", "NOS", 1),
+      past("2026-06-08", "NOS", 2),
+      past("2026-06-15", null, 3),
+      past("2026-06-22", "Reuters", 4),
+    ]);
+    expect(stats.sources).toBe(2);
   });
 });

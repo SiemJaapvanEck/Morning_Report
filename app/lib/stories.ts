@@ -28,6 +28,29 @@ export function recencyTier(iso: string | null, now: number): Recency {
   return "dormant";
 }
 
+/**
+ * Header stats for the Verhaallijn rail (brandbook §4): instalments so far,
+ * running time in whole weeks (≥1 as soon as there is a dated instalment),
+ * and the number of distinct named sources. Pure over the timeline nodes.
+ */
+export function storylineStats(timeline: TimelineNode[]): {
+  parts: number;
+  weeks: number;
+  sources: number;
+} {
+  const past = timeline.filter((n) => n.kind === "past");
+  const dates = past
+    .map((n) => Date.parse(n.date + "T00:00:00Z"))
+    .filter((t) => !Number.isNaN(t));
+  let weeks = 0;
+  if (dates.length > 0) {
+    const span = Math.max(...dates) - Math.min(...dates);
+    weeks = Math.max(1, Math.round(span / (7 * MS_PER_DAY)));
+  }
+  const sources = new Set(past.map((n) => n.source).filter((s): s is string => Boolean(s)));
+  return { parts: past.length, weeks, sources: sources.size };
+}
+
 /** Time span in whole days, first → latest event. 0 when undated. */
 export function spanDays(s: { firstDate: string | null; lastDate: string | null }): number {
   if (!s.firstDate || !s.lastDate) return 0;

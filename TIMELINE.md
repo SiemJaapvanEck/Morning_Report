@@ -3,6 +3,16 @@
 Chronologisch logboek van het project. Eén regel (of kort blok) per
 werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
 
+- **21 July 2026 — dispatched: MOR-4 + MOR-5 (Finance foundation + math core), gate green.**
+  Built on branch `MOR-4-finance-foundation-2026-07-21`: `0019_finance.sql`
+  (holdings/holding_buys/incomes/expenses/finance_goals/finance_settings,
+  RLS-enabled, file only), matching `modules/shared/types.ts` interfaces,
+  `app/lib/geld.ts` (formatEuro/formatPct/parseAmount); then
+  `modules/finance/index.ts` (costBasisSeries, quantityAsOf,
+  portfolioValueEur, monthlySurplus, projectCompound, etaMonthsToTarget) +
+  `modules/markten` extended with keyless `fetchQuotes`/`fetchFxToEur`. 42
+  new vitest cases, gate green (lint+tsc+vitest+build). PR opened covering
+  both issues; migration `0019` awaits Siem's live apply.
 - **21 July 2026 — Planned 3 initiatives + dispatched Wave 1.** Wrote & approved
   3 PRDs (`docs/prd/finance.md`, `research-tracking.md`, `settings-tabs.md`) and
   planned them into the single Morning Report Linear project as MOR-4…MOR-18

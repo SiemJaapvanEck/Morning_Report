@@ -194,6 +194,19 @@ export interface DeepArticle {
   lead: string;
   /** up to 3 grounded consequences, each a labelled mini-section */
   ripples: ArticleRipple[];
+  /**
+   * Phase 5 — the extra web sources (Tavily grounding) this article was built on,
+   * beyond its own RSS source. Omitted when grounding was off or returned nothing;
+   * surfaced as the "+N extra bronnen via Tavily" cijfers row. Persisted in the
+   * `edition_items.article` JSONB, so this is additive (no migration).
+   */
+  groundingSources?: GroundingSource[];
+}
+
+/** A single web source used to ground a deep article (from Tavily grounding). */
+export interface GroundingSource {
+  title: string;
+  url: string;
 }
 
 /**

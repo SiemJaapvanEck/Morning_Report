@@ -12,7 +12,7 @@ import { Archivo, Space_Grotesk, Space_Mono } from "next/font/google";
 import type { EditionView, SectionView } from "@/app/lib/queries";
 import { orderSectionsFollowedFirst } from "@/app/lib/krant";
 import { dayOfYear, formatMarktDelta, regioBarData } from "@/app/lib/krant-a3";
-import { storyGeography, storylineStats } from "@/app/lib/stories";
+import { storyGeography, storylineStats, tavilyBronCount } from "@/app/lib/stories";
 import type {
   CalendarEventCertainty,
   FrontPage,
@@ -568,6 +568,9 @@ function MapCard({ regio, places }: { regio: string | null; places: string[] }) 
 function CijfersCard({ items }: { items: Item[] }) {
   if (items.length === 0) return null;
   const sources = [...new Set(items.map((i) => i.source_name).filter((s): s is string => Boolean(s)))];
+  // Extra web sources (Tavily grounding) behind this rubriek's deep articles.
+  // 0 until grounding runs live (TAVILY_API_KEY set + a pipeline) → row hidden.
+  const tavily = tavilyBronCount(items);
   return (
     <AsideBox>
       <AsideLabel>RUBRIEK IN CIJFERS</AsideLabel>
@@ -588,6 +591,16 @@ function CijfersCard({ items }: { items: Item[] }) {
             verschillende bronnen geraadpleegd
           </span>
         </div>
+        {tavily > 0 && (
+          <div className="flex items-baseline gap-[13px] border-t border-[var(--line2)] py-[13px]">
+            <b className={`${ARCH} min-w-[52px] text-right text-[30px] leading-[.95] font-black text-[var(--accent)]`}>
+              +{tavily}
+            </b>
+            <span className="text-[13.5px] leading-[1.32] text-[var(--accent)]">
+              extra bronnen via Tavily
+            </span>
+          </div>
+        )}
       </div>
       {sources.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-1.5 border-t border-[var(--line)] pt-[15px]">

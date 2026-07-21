@@ -3,7 +3,7 @@
 // category → color map. Kept pure (no React) so they're unit-testable.
 
 import type { Story } from "@/app/lib/queries";
-import type { ThreadPrediction, ThreadStatus, TimelineNode } from "@/modules/shared/types";
+import type { DeepArticle, ThreadPrediction, ThreadStatus, TimelineNode } from "@/modules/shared/types";
 import { isRegioCode } from "../../modules/shared/regios";
 
 export type StorySort = "latest" | "longest" | "active";
@@ -264,6 +264,23 @@ export function seriesPoints(series: number[], maxActivity: number): LinePoint[]
 /** Stroke width (px) for a storyline line by recency — live lines read heavier. */
 export function lineWeight(recency: Recency): number {
   return recency === "live" ? 3 : recency === "week" ? 2 : 1.25;
+}
+
+/**
+ * Count the distinct extra web sources (Tavily grounding) behind a rubriek's
+ * deep articles — the "+N extra bronnen via Tavily" cijfers row. Deduped by URL
+ * across every article in the section, so a source cited by two articles counts
+ * once. Articles without grounding (the field is optional / absent until Tavily
+ * runs live) contribute nothing, so this is 0 whenever grounding is off.
+ */
+export function tavilyBronCount(items: { article: DeepArticle | null }[]): number {
+  const urls = new Set<string>();
+  for (const it of items) {
+    for (const s of it.article?.groundingSources ?? []) {
+      if (s.url) urls.add(s.url);
+    }
+  }
+  return urls.size;
 }
 
 // ── Verhaallijn timeline builder (A3 Phase 2) ────────────────────────────────

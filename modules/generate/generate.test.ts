@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { cleanPrediction, excerptForPrompt, cleanArticle, flattenArticle, storylineFraming } from "./index";
+import {
+  cleanPrediction,
+  excerptForPrompt,
+  cleanArticle,
+  flattenArticle,
+  storylineFraming,
+  groundingSourcesFrom,
+} from "./index";
+import type { Grounding } from "../tavily";
 
 const TODAY = "2026-06-19";
 
@@ -112,6 +120,40 @@ describe("cleanArticle (two-layer article: bounded grounded ripples)", () => {
   it("handles a missing/empty object", () => {
     expect(cleanArticle(null)).toEqual({ lead: "", ripples: [] });
     expect(cleanArticle({ lead: "L" })).toEqual({ lead: "L", ripples: [] });
+  });
+});
+
+describe("groundingSourcesFrom (Tavily snippets → stored article sources)", () => {
+  const g = (snips: { title: string; url: string; content?: string }[]): Grounding => ({
+    query: "q",
+    snippets: snips.map((s) => ({ title: s.title, url: s.url, content: s.content ?? "body" })),
+  });
+
+  it("is undefined when grounding is absent or empty (field stays off)", () => {
+    expect(groundingSourcesFrom(undefined)).toBeUndefined();
+    expect(groundingSourcesFrom(g([]))).toBeUndefined();
+  });
+
+  it("maps snippets to {title, url}, dropping content", () => {
+    expect(groundingSourcesFrom(g([{ title: "T1", url: "https://a.com", content: "x" }]))).toEqual([
+      { title: "T1", url: "https://a.com" },
+    ]);
+  });
+
+  it("dedupes by url and skips empty urls", () => {
+    expect(
+      groundingSourcesFrom(
+        g([
+          { title: "T1", url: "https://a.com" },
+          { title: "dup", url: "https://a.com" },
+          { title: "empty", url: "" },
+          { title: "T2", url: "https://b.com" },
+        ]),
+      ),
+    ).toEqual([
+      { title: "T1", url: "https://a.com" },
+      { title: "T2", url: "https://b.com" },
+    ]);
   });
 });
 

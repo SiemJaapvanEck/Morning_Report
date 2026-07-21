@@ -221,8 +221,12 @@ Page anatomy, top to bottom:
 - **Cijfers card ("RUBRIEK IN CIJFERS")**: `bh` label → stat rows (baseline
   grid: Archivo 900 30px number right-aligned min 52px + 13.5px `--muted`
   description, `--line2` separators). Real counts only: articles in the
-  rubriek, distinct sources. **The Tavily row (`+N extra bronnen via Tavily`,
-  accent-colored) appears only once Tavily grounding ships** — never stub it.
+  rubriek, distinct sources. **The Tavily row (`+N extra bronnen via Tavily`)
+  is the same baseline stat row but accent-colored** (`--accent` on both the
+  `+N` number and the description). It renders only when
+  `tavilyBronCount(items) > 0` — the count of distinct Tavily grounding-source
+  URLs across the rubriek's deep articles (`app/lib/stories.ts`), which is 0
+  until `TAVILY_API_KEY` is set and a pipeline runs. Data-gated, never stubbed.
   Below: source chips (Space Mono 10.5px/700 `--muted` on `--stone-b`), max 8,
   with a `Bronnen in deze rubriek` micro-label.
 

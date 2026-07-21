@@ -3,6 +3,14 @@
 Chronologisch logboek van het project. Eén regel (of kort blok) per
 werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
 
+- **21 July 2026 — MOR-3: Tavily citation UI (in review).** First real board
+  issue. Tavily grounding sources were fed into the prompt then discarded; now
+  persisted on `DeepArticle.groundingSources` (JSONB, no migration) via
+  `deepArticle`/`generateThreadUpdate` + pure `groundingSourcesFrom`, aggregated
+  per rubriek by `tavilyBronCount`, and rendered as the "+N extra bronnen via
+  Tavily" accent row in RUBRIEK IN CIJFERS (hidden until `TAVILY_API_KEY` is set).
+  Commit `89b80a8`, gate green, 8 new tests. Backlog investigation this session
+  found the umbrella-viz D3→E arc + entity-typing F5 already shipped (docs stale).
 - **21 July 2026 — Merged `idle-work/2026-07-02-krant-a3` → main.** Siem
   live-reviewed the krant "A2 · Dagblad + Verhaallijn" rebuild on localhost
   and approved. Lands together: orchestrator workflow v2 (skills/agents/

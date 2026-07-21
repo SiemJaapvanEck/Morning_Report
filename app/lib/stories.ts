@@ -3,7 +3,8 @@
 // category → color map. Kept pure (no React) so they're unit-testable.
 
 import type { Story } from "@/app/lib/queries";
-import type { ThreadStatus } from "@/modules/shared/types";
+import type { ThreadPrediction, ThreadStatus, TimelineNode } from "@/modules/shared/types";
+import { isRegioCode } from "../../modules/shared/regios";
 
 export type StorySort = "latest" | "longest" | "active";
 
@@ -25,6 +26,29 @@ export function recencyTier(iso: string | null, now: number): Recency {
   if (days <= 2) return "live";
   if (days <= 7) return "week";
   return "dormant";
+}
+
+/**
+ * Header stats for the Verhaallijn rail (brandbook §4): instalments so far,
+ * running time in whole weeks (≥1 as soon as there is a dated instalment),
+ * and the number of distinct named sources. Pure over the timeline nodes.
+ */
+export function storylineStats(timeline: TimelineNode[]): {
+  parts: number;
+  weeks: number;
+  sources: number;
+} {
+  const past = timeline.filter((n) => n.kind === "past");
+  const dates = past
+    .map((n) => Date.parse(n.date + "T00:00:00Z"))
+    .filter((t) => !Number.isNaN(t));
+  let weeks = 0;
+  if (dates.length > 0) {
+    const span = Math.max(...dates) - Math.min(...dates);
+    weeks = Math.max(1, Math.round(span / (7 * MS_PER_DAY)));
+  }
+  const sources = new Set(past.map((n) => n.source).filter((s): s is string => Boolean(s)));
+  return { parts: past.length, weeks, sources: sources.size };
 }
 
 /** Time span in whole days, first → latest event. 0 when undated. */
@@ -241,3 +265,107 @@ export function seriesPoints(series: number[], maxActivity: number): LinePoint[]
 export function lineWeight(recency: Recency): number {
   return recency === "live" ? 3 : recency === "week" ? 2 : 1.25;
 }
+
+// ── Verhaallijn timeline builder (A3 Phase 2) ────────────────────────────────
+
+/** Raw link record from thread_items enriched with edition date + item metadata. */
+export interface TimelineLink {
+  edition_id: string;
+  date: string;
+  title: string;
+  source: string | null;
+  item_id: string;
+}
+
+/**
+ * Assemble the A3 Verhaallijn timeline from raw links for one thread.
+ *
+ * One `TimelineNode` per distinct edition on/before `today` (ascending date),
+ * the latest marked `isNow`. An optional `future` node from `prediction` is
+ * appended at the end. Returns `[]` when `links` is empty.
+ *
+ * Per-edition dedup: the first link seen for a given `edition_id` wins
+ * (callers iterate in whatever order the DB returns; ordering by date is done
+ * here from the deduplicated set).
+ */
+export function buildStorylineTimeline(
+  links: TimelineLink[],
+  today: string,
+  prediction: ThreadPrediction | null,
+): TimelineNode[] {
+  // Dedup: one entry per edition_id, on/before today
+  const seen = new Set<string>();
+  const byEdition: { edition_id: string; date: string; title: string; source: string | null }[] = [];
+  for (const l of links) {
+    if (l.date > today) continue;
+    if (seen.has(l.edition_id)) continue;
+    seen.add(l.edition_id);
+    byEdition.push({ edition_id: l.edition_id, date: l.date, title: l.title, source: l.source });
+  }
+
+  if (byEdition.length === 0) return [];
+
+  // Ascending by date so deel numbering is chronological
+  byEdition.sort((a, b) => a.date.localeCompare(b.date));
+
+  const nodes: TimelineNode[] = byEdition.map((e, i) => ({
+    kind: "past" as const,
+    date: e.date,
+    title: e.title,
+    source: e.source,
+    deel: i + 1,
+    isNow: false,
+  }));
+
+  // Mark the latest past node as "vandaag"
+  const lastIdx = nodes.length - 1;
+  const last = nodes[lastIdx];
+  if (last.kind === "past") {
+    nodes[lastIdx] = { ...last, isNow: true };
+  }
+
+  // Append future node from prediction
+  if (prediction) {
+    nodes.push({
+      kind: "future",
+      date: prediction.target_date,
+      text: prediction.text,
+      certainty: prediction.confidence,
+    });
+  }
+
+  return nodes;
+}
+
+// ── Impact map geography helper (A3 Phase 3) ─────────────────────────────────
+
+/**
+ * Derive a story's geography for the ImpactMapCard:
+ * - `counts` maps the item's region code to weight 1 for the map's dot intensity
+ *   (null/unknown regio ⇒ empty counts; map falls back to a dark background).
+ * - `chips` = de-duped title-cased place-entity canonical names, capped at 6.
+ * Empty/null input ⇒ `{counts:{}, chips:[]}` (card hides).
+ */
+export function storyGeography(
+  regio: string | null,
+  placeEntities: string[],
+): { counts: Record<string, number>; chips: string[] } {
+  const counts: Record<string, number> = {};
+  if (regio && isRegioCode(regio)) {
+    counts[regio] = 1;
+  }
+
+  const seen = new Set<string>();
+  const chips: string[] = [];
+  for (const p of placeEntities) {
+    if (!p) continue;
+    const key = p.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    chips.push(titleCaseEntity(p));
+    if (chips.length >= 6) break;
+  }
+
+  return { counts, chips };
+}
+

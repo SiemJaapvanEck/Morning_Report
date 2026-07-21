@@ -3,6 +3,52 @@
 Chronologisch logboek van het project. Eén regel (of kort blok) per
 werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
 
+- **21 July 2026 — Merged `idle-work/2026-07-02-krant-a3` → main.** Siem
+  live-reviewed the krant "A2 · Dagblad + Verhaallijn" rebuild on localhost
+  and approved. Lands together: orchestrator workflow v2 (skills/agents/
+  rules/gate + Linear integration, labels created, TIJDLIJN→TIMELINE, old
+  idle skills retired) and the krant A2 rebuild + brandbook (scheme tokens,
+  full page rewrite, docs). Double gate green (330 tests).
+- **21 July 2026 — Cowork session:** Installed orchestrator workflow v2 (skills/agents/rules/gate + Linear integration, labels created, TIJDLIJN→TIMELINE). Old idle skills retired.
+- **3 July 2026 — Idle-run: Krant A3 Phase 3 — Impact map "WAAR HET SPEELT".**
+  Pure helper `storyGeography(regio, placeEntities)` added to `app/lib/stories.ts`:
+  maps item regio to `counts` (weight 1 for the world map dot intensity) and builds
+  de-duped title-cased `chips` from place-typed entity canonical names (cap 6).
+  9 new tests (total 315). `StorylineRef` gains `places: string[]`; `getEdition` in
+  `queries.ts` extended: threads select now pulls `entities`, one targeted `entities`
+  table select (filtered to `type='place'`) resolves canonical names per thread.
+  `ImpactMapCard` component added to `EditieWeergave.tsx`: reuses `WereldKaart`
+  (pointer-events-none for display-only in aside), shows `WAAR HET SPEELT` label +
+  map + geo-chip badges. Slots into `VerhaallijnAside` below the TimelineCard.
+  Hides cleanly when story has no geography. Gate green. Not yet live-verified.
+  A3 redesign arc complete — all three phases done.
+
+- **2 July 2026 — Idle-run: Krant A3 Phase 2 — Verhaallijn timeline.**
+  Pure builder `buildStorylineTimeline` in `app/lib/stories.ts` (10 new tests; total 306):
+  deduplicates links per edition, orders ascending, numbers deel 1…N, marks latest `isNow`,
+  appends optional `kind:"future"` node from the thread's prediction. `TimelineNode`
+  discriminated union added to `modules/shared/types.ts`. `getEdition` in `queries.ts`
+  enriched: `partLinks` select extended to pull `item_id + items(title, sources(name))`
+  in one select (no extra round-trips); `rawLinksByThread` map feeds `buildStorylineTimeline`
+  so each `StorylineRef` now carries a full `timeline: TimelineNode[]`. New `TimelineCard`
+  component in `EditieWeergave.tsx`: vertical timeline with blue VANDAAG dot, past nodes
+  (date + deel N + headline + source), dashed future node (date + certainty chip + prediction
+  text). `VerhaallijnAside` shows `TimelineCard` when ≥2 past instalments, falls back to
+  compact `VerhaallijnLabel + Vooruitblik` for 1-instalment stories. Gate green.
+  Not yet live-verified.
+
+- **2 July 2026 — Idle-run: Krant A3 Phase 1 — A3 shell + topzone + card restyle.**
+  Rewrote `EditieWeergave.tsx` to the A3 "Dagblad + Verhaallijn" layout:
+  masthead band (title + long Dutch date + ochtendeditie + nr. derived as day-of-year),
+  horizontal weather bar, topzone (Sol blue block + Markten tile with signed delta in
+  emerald/rose + Regio tile with scaled progress bars), image-or-hatch placeholder on
+  each lead/featured card (135° diagonal hatch when `image_url` is null), reserved aside
+  slot (VerhaallijnAside with VerhaallijnLabel + Vooruitblik in P1; P2 timeline + P3 map
+  inject here without container changes), summary cards and brief list restyled to
+  `rounded-2xl border` cards, Space Grotesk added as body font. Pure helpers in
+  `app/lib/krant-a3.ts` + 15 tests (DST-safe `dayOfYear` via `Date.UTC`). Every current
+  feature preserved. Gate green: 296 tests, lint + tsc + build all green. Not yet live-verified.
+
 - **2 July 2026 (later) — Scan-cost tuning + script cleanup (parked items cleared).**
   Post-F3 housekeeping session, no schema change. Made the scan emit
   `type`/`confidence` only for entities NOT already in the registry (known ones
@@ -559,3 +605,26 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   new AI call, no schema change. Scoped to `composeDailyPaper` only (per-section
   intros left) per Siem. Gate green, tests **274 → 281**. The whole F1–F5
   entity-typing arc is now code-complete; awaiting Siem's localhost review of F5.
+
+- **2 July 2026 — Krant A3 idle run: setup.** F1–F5 reviews closed. Siem handed a
+  standalone A3 "Dagblad + Verhaallijn" HTML mockup and asked to fold **all** current
+  krant functionality into it. Decoded the design (signature = per-story Verhaallijn
+  timeline + "WAAR HET SPEELT" impact map on a daily-paper shell), confirmed every
+  element is backed by existing data, and wrote `docs/krant-a3-plan.md` — 3 phases
+  (shell+topzone restyle · timeline · impact map). Opened `idle-work/2026-07-02-krant-a3`,
+  seeded HANDOFF + plan + idle skills. Scheduled locally: P1 20:00, P2 21:30, P3 01:00.
+
+- **7 July 2026 — Krant rebuilt to "A2 · Dagblad + Verhaallijn" + brandbook.**
+  Siem rejected the A3 idle-run layout on review and supplied his own Claude
+  design (checked in as `Morning Report design/krant-a2-dagblad.html`). Built in
+  3 steps on the same branch: (1) scheme token system — `app/lib/schemes.ts`
+  with 24 color schemes on CSS variables (generated CSS + anti-flash script,
+  `mr_thema` → `mr_scheme` migration) and a grouped scheme picker; plus
+  `docs/brandbook.md`, the whole-app visual system that supersedes
+  `docs/design.md`. (2) `EditieWeergave.tsx` rewritten to the design:
+  per-rubriek rows (articles | sticky map + rubriek-in-cijfers | sticky
+  Verhaallijn rail with delen/weken/bronnen stats), lead with drop cap, thread
+  ribbon, GEVOLGEN list; new pure helper `storylineStats`. (3) Docs updated
+  (ontwerp §8, CLAUDE.md design section). Gate green (330 tests), verified
+  against the 2026-07-06 edition in a production render. Also ran the daily
+  pipeline (2× runner, 0 failed steps).

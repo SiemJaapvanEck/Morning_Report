@@ -11,7 +11,9 @@ import {
   dailyActivitySeries,
   threadSubject,
   titleCaseEntity,
+  buildStorylineTimeline,
   type Recency,
+  type TimelineLink,
 } from "@/app/lib/stories";
 import type {
   CalendarEventCertainty,
@@ -24,6 +26,7 @@ import type {
   Profile,
   ThreadPrediction,
   ThreadStatus,
+  TimelineNode,
   WeatherSnapshot,
 } from "@/modules/shared/types";
 
@@ -40,6 +43,10 @@ export interface StorylineRef {
   title: string;
   /** "deel N": how many editions this storyline has appeared in, up to this one */
   part: number;
+  /** Ordered timeline nodes for the A3 aside: past instalments + optional future node. */
+  timeline: TimelineNode[];
+  /** Place-typed entity canonical names for the storyline thread (A3 Phase 3 impact map). */
+  places: string[];
 }
 
 export interface SectionView {
@@ -128,15 +135,44 @@ export async function getEdition(profileId: string, date: string): Promise<Editi
     const threadIds = [...new Set(links.map((l) => l.thread_id))];
     if (threadIds.length > 0) {
       const threads = unwrap(
-        await db().from("threads").select("id, title, prediction").in("id", threadIds),
-      ) as { id: string; title: string; prediction: ThreadPrediction | null }[];
+        await db().from("threads").select("id, title, prediction, entities").in("id", threadIds),
+      ) as { id: string; title: string; prediction: ThreadPrediction | null; entities: string[] | null }[];
       const threadById = new Map(threads.map((t) => [t.id, t]));
 
+      // Resolve place-typed entities for each thread (A3 Phase 3 impact map).
+      // Collect all unique norm_keys from threads' entity arrays, look up only
+      // those that are type "place" — one targeted select, no full registry load.
+      const allNormKeys = [
+        ...new Set(threads.flatMap((t) => (t.entities ?? []).map(normalizeEntity).filter(Boolean))),
+      ];
+      const placeRows = allNormKeys.length
+        ? (unwrap(
+            await db().from("entities").select("norm_key, canonical_name").in("norm_key", allNormKeys).eq("type", "place"),
+          ) as { norm_key: string; canonical_name: string }[])
+        : [];
+      const placeCanonical = new Map(placeRows.map((r) => [r.norm_key, r.canonical_name]));
+      const placesByThread = new Map<string, string[]>();
+      for (const t of threads) {
+        const places = (t.entities ?? [])
+          .map((e) => { const n = normalizeEntity(e); return n ? placeCanonical.get(n) : undefined; })
+          .filter((name): name is string => Boolean(name));
+        if (places.length > 0) placesByThread.set(t.id, places);
+      }
+
       // "deel N": distinct editions (on or before today's date) this thread has
-      // appeared in. One pass over the thread's items joined to their editions.
+      // appeared in. Also pulls each linked item's title + source so the A3
+      // timeline card can show headline + byline per instalment.
       const partLinks = unwrap(
-        await db().from("thread_items").select("thread_id, edition_id").in("thread_id", threadIds),
-      ) as { thread_id: string; edition_id: string | null }[];
+        await db()
+          .from("thread_items")
+          .select("thread_id, edition_id, item_id, items(title, sources(name))")
+          .in("thread_id", threadIds),
+      ) as unknown as {
+        thread_id: string;
+        edition_id: string | null;
+        item_id: string;
+        items: { title: string; sources: { name: string } | null };
+      }[];
       const editionIds = [...new Set(partLinks.map((l) => l.edition_id).filter(Boolean))] as string[];
       const editionDates = editionIds.length
         ? ((unwrap(
@@ -151,6 +187,23 @@ export async function getEdition(profileId: string, date: string): Promise<Editi
             .map((l) => l.edition_id as string),
         );
         partByThread.set(tid, Math.max(1, eds.size));
+      }
+
+      // Build per-thread raw links for the A3 timeline (date + headline + source).
+      const rawLinksByThread = new Map<string, TimelineLink[]>();
+      for (const l of partLinks) {
+        if (!l.edition_id) continue;
+        const linkDate = editionDates.get(l.edition_id);
+        if (!linkDate) continue;
+        const arr = rawLinksByThread.get(l.thread_id) ?? [];
+        arr.push({
+          edition_id: l.edition_id,
+          date: linkDate,
+          title: l.items.title,
+          source: l.items.sources?.name ?? null,
+          item_id: l.item_id,
+        });
+        rawLinksByThread.set(l.thread_id, arr);
       }
 
       // A deep item can match several threads; pick the most-established storyline
@@ -171,6 +224,8 @@ export async function getEdition(profileId: string, date: string): Promise<Editi
           thread_id: thread.id,
           title: thread.title,
           part: partByThread.get(thread.id) ?? 1,
+          timeline: buildStorylineTimeline(rawLinksByThread.get(thread.id) ?? [], date, thread.prediction ?? null),
+          places: placesByThread.get(thread.id) ?? [],
         });
         if (thread.prediction) predictionByItem.set(itemId, thread.prediction);
       }

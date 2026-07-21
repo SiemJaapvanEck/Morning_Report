@@ -2,6 +2,7 @@
   "permissions": {
     "defaultMode": "acceptEdits",
     "allow": [
+      "Bash(.claude/hooks/gate.sh)",
       "Bash(npm run lint && npx tsc --noEmit && npm test && npm run build)",
       "Bash(git:*)",
       "Bash(npm:*)",
@@ -23,6 +24,7 @@
       "Bash(tail:*)",
       "Bash(wc:*)",
       "Bash(touch:*)",
+      "Bash(jq:*)",
       "Read",
       "Edit",
       "Write",

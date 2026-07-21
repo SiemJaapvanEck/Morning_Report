@@ -12,6 +12,13 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "start", "--", "--port", "3001"],
       "port": 3001
+    },
+    {
+      "name": "intake-app",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "exec python3 -m http.server \"${PORT:-4173}\" --directory '/Users/siemvaneck/Documents/Werk/IdSignage/Claude accusition designer/intake-app'"],
+      "port": 4173,
+      "autoPort": true
     }
   ],
   "experimentalServices": {

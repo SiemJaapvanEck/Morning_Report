@@ -13,6 +13,10 @@ import {
   lineWeight,
   threadSubject,
   titleCaseEntity,
+  buildStorylineTimeline,
+  storyGeography,
+  storylineStats,
+  type TimelineLink,
 } from "./stories";
 import { entityOverlap } from "../../modules/threads";
 import type { Story } from "./queries";
@@ -217,5 +221,235 @@ describe("threadSubject", () => {
   });
   it("falls back to the leading words when there is no anchor", () => {
     expect(threadSubject("Iran verkoopt olie met 20% premie na einde blokkade", null)).toBe("Iran verkoopt olie");
+  });
+});
+
+// ── buildStorylineTimeline (A3 Phase 2) ──────────────────────────────────────
+
+function link(overrides: Partial<TimelineLink> & { edition_id: string; date: string }): TimelineLink {
+  return {
+    item_id: overrides.edition_id + "-item",
+    title: overrides.title ?? `Artikel ${overrides.edition_id}`,
+    source: overrides.source ?? null,
+    ...overrides,
+  };
+}
+
+const TODAY = "2026-07-02";
+
+describe("buildStorylineTimeline", () => {
+  it("returns [] for empty links", () => {
+    expect(buildStorylineTimeline([], TODAY, null)).toEqual([]);
+  });
+
+  it("returns a single past node for one link", () => {
+    const nodes = buildStorylineTimeline([link({ edition_id: "e1", date: "2026-06-10" })], TODAY, null);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toMatchObject({ kind: "past", deel: 1, isNow: true });
+  });
+
+  it("excludes links after today", () => {
+    const nodes = buildStorylineTimeline(
+      [
+        link({ edition_id: "e1", date: "2026-06-10" }),
+        link({ edition_id: "e2", date: "2026-07-10" }),
+      ],
+      TODAY,
+      null,
+    );
+    expect(nodes).toHaveLength(1);
+    expect((nodes[0] as { date: string }).date).toBe("2026-06-10");
+  });
+
+  it("deduplicates links from the same edition", () => {
+    const nodes = buildStorylineTimeline(
+      [
+        link({ edition_id: "e1", date: "2026-06-10", title: "First" }),
+        link({ edition_id: "e1", date: "2026-06-10", title: "Second" }),
+      ],
+      TODAY,
+      null,
+    );
+    expect(nodes).toHaveLength(1);
+    expect((nodes[0] as { title: string }).title).toBe("First");
+  });
+
+  it("orders past nodes ascending by date", () => {
+    const nodes = buildStorylineTimeline(
+      [
+        link({ edition_id: "e2", date: "2026-06-15" }),
+        link({ edition_id: "e1", date: "2026-06-01" }),
+        link({ edition_id: "e3", date: "2026-06-30" }),
+      ],
+      TODAY,
+      null,
+    );
+    const dates = nodes.map((n) => n.date);
+    expect(dates).toEqual(["2026-06-01", "2026-06-15", "2026-06-30"]);
+  });
+
+  it("numbers deel from 1 in chronological order", () => {
+    const nodes = buildStorylineTimeline(
+      [
+        link({ edition_id: "e2", date: "2026-06-15" }),
+        link({ edition_id: "e1", date: "2026-06-01" }),
+      ],
+      TODAY,
+      null,
+    );
+    expect(nodes[0]).toMatchObject({ kind: "past", deel: 1 });
+    expect(nodes[1]).toMatchObject({ kind: "past", deel: 2 });
+  });
+
+  it("marks only the latest past node as isNow", () => {
+    const nodes = buildStorylineTimeline(
+      [
+        link({ edition_id: "e1", date: "2026-06-01" }),
+        link({ edition_id: "e2", date: "2026-06-15" }),
+        link({ edition_id: "e3", date: "2026-07-01" }),
+      ],
+      TODAY,
+      null,
+    );
+    const pastNodes = nodes.filter((n) => n.kind === "past") as { isNow: boolean }[];
+    expect(pastNodes[0].isNow).toBe(false);
+    expect(pastNodes[1].isNow).toBe(false);
+    expect(pastNodes[2].isNow).toBe(true);
+  });
+
+  it("appends a future node when prediction is given", () => {
+    const prediction = {
+      text: "Dit zal gebeuren",
+      target_date: "2026-08-01",
+      confidence: "verwacht" as const,
+      source_basis: "basis",
+    };
+    const nodes = buildStorylineTimeline(
+      [link({ edition_id: "e1", date: "2026-06-01" })],
+      TODAY,
+      prediction,
+    );
+    expect(nodes).toHaveLength(2);
+    expect(nodes[1]).toMatchObject({
+      kind: "future",
+      date: "2026-08-01",
+      text: "Dit zal gebeuren",
+      certainty: "verwacht",
+    });
+  });
+
+  it("includes no future node when prediction is null", () => {
+    const nodes = buildStorylineTimeline(
+      [link({ edition_id: "e1", date: "2026-06-01" })],
+      TODAY,
+      null,
+    );
+    expect(nodes.every((n) => n.kind === "past")).toBe(true);
+  });
+
+  it("returns [] (no today-only fallback) when all links are after today", () => {
+    const nodes = buildStorylineTimeline(
+      [link({ edition_id: "e1", date: "2026-07-10" })],
+      TODAY,
+      null,
+    );
+    expect(nodes).toEqual([]);
+  });
+});
+
+// ── storyGeography (A3 Phase 3) ───────────────────────────────────────────────
+
+describe("storyGeography", () => {
+  it("returns empty counts and chips for null regio and no place entities", () => {
+    const result = storyGeography(null, []);
+    expect(result).toEqual({ counts: {}, chips: [] });
+  });
+
+  it("maps a valid regio to counts with weight 1", () => {
+    const result = storyGeography("eu", []);
+    expect(result.counts).toEqual({ eu: 1 });
+    expect(result.chips).toEqual([]);
+  });
+
+  it("ignores unknown regio gracefully", () => {
+    const result = storyGeography("xyz", []);
+    expect(result.counts).toEqual({});
+  });
+
+  it("returns empty counts when regio is null", () => {
+    const result = storyGeography(null, ["Amsterdam", "Rotterdam"]);
+    expect(result.counts).toEqual({});
+    expect(result.chips).toHaveLength(2);
+  });
+
+  it("title-cases place entity names in chips", () => {
+    const result = storyGeography(null, ["amsterdam", "new york"]);
+    expect(result.chips).toEqual(["Amsterdam", "New York"]);
+  });
+
+  it("de-dupes place entities case-insensitively", () => {
+    const result = storyGeography(null, ["Amsterdam", "amsterdam", "AMSTERDAM"]);
+    expect(result.chips).toHaveLength(1);
+    expect(result.chips[0]).toBe("Amsterdam");
+  });
+
+  it("caps chips at 6", () => {
+    const places = ["A", "B", "C", "D", "E", "F", "G", "H"];
+    const result = storyGeography("na", places);
+    expect(result.chips).toHaveLength(6);
+    expect(result.chips).not.toContain("G");
+  });
+
+  it("handles both regio and place entities together", () => {
+    const result = storyGeography("ap", ["Tokyo", "Seoul"]);
+    expect(result.counts).toEqual({ ap: 1 });
+    expect(result.chips).toEqual(["Tokyo", "Seoul"]);
+  });
+
+  it("skips empty strings in place entities", () => {
+    const result = storyGeography(null, ["", "Paris", ""]);
+    expect(result.chips).toEqual(["Paris"]);
+  });
+});
+
+// ── storylineStats (brandbook rail header) ────────────────────────────────────
+
+describe("storylineStats", () => {
+  const past = (date: string, source: string | null, deel: number) =>
+    ({ kind: "past", date, title: "t", source, deel, isNow: false }) as const;
+
+  it("returns zeros for an empty timeline", () => {
+    expect(storylineStats([])).toEqual({ parts: 0, weeks: 0, sources: 0 });
+  });
+
+  it("ignores future nodes entirely", () => {
+    const stats = storylineStats([
+      past("2026-06-01", "NOS", 1),
+      { kind: "future", date: "2026-07-20", text: "x", certainty: "verwacht" },
+    ]);
+    expect(stats.parts).toBe(1);
+  });
+
+  it("counts a single dated instalment as one week", () => {
+    expect(storylineStats([past("2026-06-01", "NOS", 1)]).weeks).toBe(1);
+  });
+
+  it("rounds the first→last span to whole weeks, minimum one", () => {
+    const stats = storylineStats([
+      past("2026-04-18", "r/technology", 1),
+      past("2026-05-07", "Reuters", 2),
+      past("2026-06-28", "Bloomberg", 3),
+    ]);
+    expect(stats.weeks).toBe(10); // 71 days ≈ 10 weeks
+  });
+
+  it("counts distinct sources, skipping null", () => {
+    const stats = storylineStats([
+      past("2026-06-01", "NOS", 1),
+      past("2026-06-08", "NOS", 2),
+      past("2026-06-15", null, 3),
+      past("2026-06-22", "Reuters", 4),
+    ]);
+    expect(stats.sources).toBe(2);
   });
 });

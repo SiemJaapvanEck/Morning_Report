@@ -366,6 +366,11 @@ export type CalendarEventKind =
   | "overig";
 export type CalendarEventCertainty = "bevestigd" | "verwacht" | "gerucht";
 
+/** One node in a Verhaallijn aside timeline (A3 Phase 2). */
+export type TimelineNode =
+  | { kind: "past"; date: string; title: string; source: string | null; deel: number; isNow: boolean }
+  | { kind: "future"; date: string; text: string; certainty: CalendarEventCertainty };
+
 /**
  * A forward-dated event as the scan extracts it from a single item — before it
  * is validated and linked into a CalendarEvent row by the agenda step.

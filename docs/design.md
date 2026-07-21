@@ -1,5 +1,10 @@
 # Designsysteem — "Atlas"
 
+> **SUPERSEDED (7 July 2026): the visual system now lives in
+> [`docs/brandbook.md`](brandbook.md)** — tokens, type scale, component
+> recipes and layout grids for the whole app (dashboard + krant). This file
+> stays as historical context for the Atlas decision; don't extend it.
+>
 > Vastgelegd 14 juni 2026. **Overschrijft bewust de eerder voorgestelde
 > "Dispatch"-richting** (besluit van Siem). De Dispatch-spec staat nog in de
 > git-history (commit `f0ed210`) mochten we later herzien. Atlas is een bold

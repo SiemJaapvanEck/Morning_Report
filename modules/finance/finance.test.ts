@@ -3,9 +3,12 @@ import {
   costBasisSeries,
   etaMonthsToTarget,
   monthlySurplus,
+  monthlyTotals,
   portfolioValueEur,
   projectCompound,
+  projectRecurringForward,
   quantityAsOf,
+  recurringMonthlyNet,
   type CostBasisBuy,
 } from "./index";
 import { fetchFxToEur, fetchQuotes } from "../markten";
@@ -129,6 +132,82 @@ describe("monthlySurplus", () => {
 
   it("is 0 for a month with no entries", () => {
     expect(monthlySurplus(incomes, expenses, "2026-01")).toBe(0);
+  });
+});
+
+describe("monthlyTotals", () => {
+  const incomes = [
+    { received_on: "2026-06-01", amount_eur: 3000 },
+    { received_on: "2026-07-01", amount_eur: 3200 },
+  ];
+  const expenses = [
+    { spent_on: "2026-06-15", amount_eur: 1200 },
+    { spent_on: "2026-07-10", amount_eur: 1500 },
+    { spent_on: "2026-07-20", amount_eur: 300 },
+  ];
+
+  it("groups by month ascending, with per-month totals and surplus", () => {
+    expect(monthlyTotals(incomes, expenses)).toEqual([
+      { month: "2026-06", income_eur: 3000, expense_eur: 1200, surplus_eur: 1800 },
+      { month: "2026-07", income_eur: 3200, expense_eur: 1800, surplus_eur: 1400 },
+    ]);
+  });
+
+  it("includes a month with only an expense (income 0)", () => {
+    const result = monthlyTotals([], [{ spent_on: "2026-08-01", amount_eur: 50 }]);
+    expect(result).toEqual([{ month: "2026-08", income_eur: 0, expense_eur: 50, surplus_eur: -50 }]);
+  });
+
+  it("returns [] for no entries at all", () => {
+    expect(monthlyTotals([], [])).toEqual([]);
+  });
+});
+
+describe("recurringMonthlyNet", () => {
+  it("sums only recurring income minus only recurring expenses", () => {
+    const incomes = [
+      { recurring: true, amount_eur: 3000 }, // salary
+      { recurring: false, amount_eur: 500 }, // one-off bonus, excluded
+    ];
+    const expenses = [
+      { recurring: true, amount_eur: 1200 }, // rent
+      { recurring: true, amount_eur: 300 }, // subscriptions
+      { recurring: false, amount_eur: 800 }, // one-off purchase, excluded
+    ];
+    expect(recurringMonthlyNet(incomes, expenses)).toBe(3000 - 1500);
+  });
+
+  it("is 0 with no recurring entries", () => {
+    expect(recurringMonthlyNet([{ recurring: false, amount_eur: 100 }], [])).toBe(0);
+  });
+});
+
+describe("projectRecurringForward", () => {
+  const incomes = [
+    { recurring: true, amount_eur: 3000 },
+    { recurring: false, amount_eur: 500 },
+  ];
+  const expenses = [
+    { recurring: true, amount_eur: 1200 },
+    { recurring: false, amount_eur: 800 },
+  ];
+
+  it("projects only the recurring net forward, month by month", () => {
+    const rows = projectRecurringForward(incomes, expenses, "2026-07", 3);
+    expect(rows).toEqual([
+      { month: "2026-08", income_eur: 3000, expense_eur: 1200, surplus_eur: 1800 },
+      { month: "2026-09", income_eur: 3000, expense_eur: 1200, surplus_eur: 1800 },
+      { month: "2026-10", income_eur: 3000, expense_eur: 1200, surplus_eur: 1800 },
+    ]);
+  });
+
+  it("rolls over a year boundary", () => {
+    const rows = projectRecurringForward(incomes, expenses, "2026-11", 2);
+    expect(rows.map((r) => r.month)).toEqual(["2026-12", "2027-01"]);
+  });
+
+  it("returns [] for 0 months", () => {
+    expect(projectRecurringForward(incomes, expenses, "2026-07", 0)).toEqual([]);
   });
 });
 

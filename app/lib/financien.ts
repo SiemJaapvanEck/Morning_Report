@@ -9,6 +9,20 @@
 import { seriesPoints, type LinePoint } from "./stories";
 import type { CostBasisPoint } from "../../modules/finance";
 
+/**
+ * The fixed starter expense-category list (Phase 4 locked decision) —
+ * free-text `label` on top of the category. Dutch, in display order.
+ */
+export const EXPENSE_CATEGORIES = [
+  "Wonen",
+  "Boodschappen",
+  "Vervoer",
+  "Abonnementen",
+  "Vrije tijd",
+  "Zorg",
+  "Overig",
+] as const;
+
 /** "YYYY-MM-DD" -> "YYYY-MM". */
 export function monthKey(iso: string): string {
   return iso.slice(0, 7);

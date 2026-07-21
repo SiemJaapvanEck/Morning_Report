@@ -8,9 +8,11 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { hasDbConfig } from "@/modules/shared/db";
-import { getPortfolio } from "@/app/lib/queries";
+import { getCashflow, getPortfolio } from "@/app/lib/queries";
 import { fetchFxToEur, fetchQuotes } from "../../modules/markten";
+import { monthlySurplus } from "../../modules/finance";
 import { FinancienPortfolio } from "@/app/components/FinancienPortfolio";
+import { FinancienCashflow } from "@/app/components/FinancienCashflow";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +31,10 @@ export default async function FinancienPagina() {
     );
   }
 
-  const { holdings, buys, settings } = await getPortfolio(profileId);
+  const [{ holdings, buys, settings }, { incomes, expenses }] = await Promise.all([
+    getPortfolio(profileId),
+    getCashflow(profileId),
+  ]);
 
   const symbols = [...new Set(holdings.map((h) => h.symbol))];
   const currencies = [...new Set(holdings.map((h) => h.currency).filter((c) => c !== "EUR"))];
@@ -39,6 +44,15 @@ export default async function FinancienPagina() {
   ]);
 
   const todayIso = new Date().toISOString().slice(0, 10);
+  const todayMonth = todayIso.slice(0, 7);
+
+  // DCA contribution default (Phase 4 locked decision): the current month's
+  // surplus, unless the profile has set a manual override in finance_settings
+  // (the nullable column exists precisely for the future Settings Financiën
+  // tab — PRD amendment). Either way it stays overridable in the UI (P3 chart
+  // contribution input).
+  const defaultMonthlyContributionEur =
+    settings?.monthly_contribution_override ?? monthlySurplus(incomes, expenses, todayMonth);
 
   return (
     <div>
@@ -57,9 +71,11 @@ export default async function FinancienPagina() {
         quotes={quotes}
         fx={fx}
         expectedReturnPct={settings?.expected_return_pct ?? 7}
-        defaultMonthlyContributionEur={0}
+        defaultMonthlyContributionEur={defaultMonthlyContributionEur}
         todayIso={todayIso}
       />
+
+      <FinancienCashflow initialIncomes={incomes} initialExpenses={expenses} />
     </div>
   );
 }

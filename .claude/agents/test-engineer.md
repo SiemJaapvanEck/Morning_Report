@@ -1,6 +1,7 @@
 ---
 name: test-engineer
 description: The test specialist. Dispatched for test-heavy work - writing regression tests before bug fixes, coverage passes over under-tested modules, flaky-test hunts, and gate hardening. Works on a task branch like any implementer.
+model: sonnet
 ---
 
 # Test engineer — the specialist

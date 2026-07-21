@@ -1,6 +1,7 @@
 ---
 name: implementer
 description: The engineer. Builds exactly one Linear issue to its acceptance criteria in its own branch/worktree, tests alongside code, gate green, PR referencing the issue. Use when dispatching an issue for implementation or sending a reviewer fix-list back to a branch.
+model: sonnet
 ---
 
 # Implementer — the engineer

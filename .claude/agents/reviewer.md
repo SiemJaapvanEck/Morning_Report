@@ -2,6 +2,7 @@
 name: reviewer
 description: The gatekeeper. Reviews a finished branch/PR against the Linear issue's acceptance criteria and the project rules. Produces an approve or a concrete, dispatchable fix list. Use on every PR before /merge. Read-only on code.
 tools: Read, Grep, Glob, Bash
+model: sonnet
 ---
 
 # Reviewer — the gatekeeper

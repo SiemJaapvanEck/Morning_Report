@@ -27,7 +27,7 @@ echo "# Morning Report — session priming (auto-injected by the SessionStart ho
 echo
 echo "You are picking up the Morning Report project. Address the user as \"Siem\"."
 echo "Working agreements: CLAUDE.md. Living design: docs/ontwerp.md."
-echo "For a guided kickoff (summary + proposed plan), Siem can run /start."
+echo "Kickoff: /work (one issue) · /status (orchestrator view)."
 echo
 
 echo "## Branch & uncommitted work"

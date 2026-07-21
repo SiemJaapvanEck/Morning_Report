@@ -3,6 +3,7 @@
 Chronologisch logboek van het project. Eén regel (of kort blok) per
 werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
 
+- **21 July 2026 — Cowork session:** Installed orchestrator workflow v2 (skills/agents/rules/gate + Linear integration, labels created, TIJDLIJN→TIMELINE). Old idle skills retired.
 - **3 July 2026 — Idle-run: Krant A3 Phase 3 — Impact map "WAAR HET SPEELT".**
   Pure helper `storyGeography(regio, placeEntities)` added to `app/lib/stories.ts`:
   maps item regio to `counts` (weight 1 for the world map dot intensity) and builds

@@ -1,0 +1,26 @@
+{
+  "project": "Morning Report",
+  "gate": "npm run lint && npx tsc --noEmit && npm test && npm run build",
+  "mainBranch": "main",
+  "branchPattern": "<issue-id>-<slug>-<YYYY-MM-DD>",
+  "worktreeDir": "../Morning_Report-worktrees",
+  "linear": {
+    "team": "Morning Report",
+    "teamId": "1f7e3d2e-723f-4b09-98ea-5562550da40d",
+    "statuses": {
+      "backlog": "Backlog",
+      "ready": "Todo",
+      "inProgress": "In Progress",
+      "inReview": "In Review",
+      "done": "Done"
+    },
+    "inReviewFallbackLabel": "in-review",
+    "sprints": "milestones",
+    "labels": {
+      "unattendedSafe": "auto-ok",
+      "needsHuman": "needs-siem",
+      "types": ["Feature", "Bug", "Improvement", "test", "infra"]
+    }
+  },
+  "ritualFiles": ["HANDOFF.md", "TIMELINE.md"]
+}

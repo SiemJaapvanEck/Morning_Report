@@ -1,0 +1,24 @@
+# CI safety net: every PR (and every push to main) runs THE gate — the same
+# .claude/hooks/gate.sh every local session runs. If a session pushes without
+# closing properly, this catches it.
+name: gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run the gate
+        run: bash .claude/hooks/gate.sh
+        env:
+          CLAUDE_PROJECT_DIR: ${{ github.workspace }}

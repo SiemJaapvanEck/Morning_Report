@@ -1,3 +1,32 @@
+# HANDOFF — workflow v2 installed + krant A2 rebuild pending merge
+
+> **Last updated:** 21 July 2026 (Cowork session with Siem) —
+> branch `idle-work/2026-07-02-krant-a3`
+
+## Workflow v2 (NEW — read this)
+
+The orchestrator workflow template was installed this session (from
+`~/Documents/Claude/Projects/Claude code workflow template`):
+
+- **New skills:** /prd /plan /dispatch /work /close /merge /status — the old
+  idle skills are retired in `.claude/retired-skills/`.
+- **New agents:** orchestrator, implementer, reviewer, test-engineer.
+- **Config:** `.claude/project.json` (gate, Linear team, label taxonomy,
+  sprints=milestones) · rules split into `.claude/rules/workflow.md` (generic)
+  + `.claude/rules/project.md` (Morning Report specifics).
+- **Linear:** team "Morning Report" is the task source of truth; labels
+  auto-ok / needs-siem / in-review / test / infra created 21 Jul.
+- **TIJDLIJN.md renamed to TIMELINE.md** (English migration).
+- **CI:** `.github/workflows/gate.yml` runs `.claude/hooks/gate.sh` on PRs.
+- CLAUDE.md is now thin (imports the rules) and stays gitignored per
+  .gitignore's per-contributor policy.
+
+**Next actions:** (1) merge this idle branch → main via /merge (the krant A2
+rebuild below is still unmerged!), (2) run /plan to put the open phases
+(D3, E, 5c-3, entity typing) on the Linear board as the first sprints.
+
+---
+
 # HANDOFF — Krant "A2 · Dagblad + Verhaallijn" rebuild + brandbook
 
 > **Last updated:** 7 July 2026 (interactive session with Siem) —

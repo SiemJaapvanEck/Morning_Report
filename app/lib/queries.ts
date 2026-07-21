@@ -5,6 +5,18 @@ import { db, unwrap } from "@/modules/shared/db";
 import { todayLocal } from "@/modules/shared/config";
 import { entityOverlap, normalizeEntity, aggregateUmbrellaState } from "@/modules/threads";
 import {
+  computePipelineTrends,
+  computeTodayReport,
+  type EditionItemCountRow,
+  type EditionRow as PipelineEditionRow,
+  type EditionUsageRow,
+  type PipelineItemRow,
+  type PipelineStepRow,
+  type PipelineTrends,
+  type TodayPipelineReport,
+  type UsageLogRow as PipelineUsageLogRow,
+} from "@/modules/pipeline-report";
+import {
   updatedAgo,
   recencyTier,
   rankRelated,
@@ -1199,5 +1211,100 @@ export async function getCashflow(profileId: string): Promise<CashflowView> {
   return {
     incomes: unwrap(incomesResult) as Income[],
     expenses: unwrap(expensesResult) as Expense[],
+  };
+}
+
+// ============================================================
+// Pipeline-rapport tab (docs/prd/settings-tabs.md, Phase 2) — read-only.
+// Aggregation is pure (modules/pipeline-report); this just reads the rows
+// (scoped to the profile's own editions) and flattens the joins into the
+// row shapes the aggregators expect. No AI calls, no writes.
+// ============================================================
+
+/** Raw shape of one `edition_items` row joined to its item's category + source. */
+interface RawPipelineItemRow {
+  band: string;
+  sol_note: string | null;
+  article: unknown;
+  items: {
+    category_id: string | null;
+    source_id: string | null;
+    categories: { slug: string; name: string } | null;
+  } | null;
+}
+
+export interface PipelineReport {
+  /** today's date (YYYY-MM-DD, profile timezone) */
+  date: string;
+  /** false when today's edition hasn't run/finished yet — today's stats are all zero */
+  hasEdition: boolean;
+  today: TodayPipelineReport;
+  trends: PipelineTrends;
+}
+
+/**
+ * Today's edition detail (articles by category, sources, € cost, Sol/deep-
+ * research counts, per-kind step timing) plus € cost + article count trends
+ * over the last 7 and 30 editions — scoped to `profileId`'s own editions via
+ * the initial `editions` query (every later query filters by those edition
+ * ids). Bounded to the last 30 editions (PRD §5 rail): no unbounded scan.
+ */
+export async function getPipelineReport(profileId: string): Promise<PipelineReport> {
+  const date = todayLocal();
+
+  const editions = unwrap(
+    await db()
+      .from("editions")
+      .select("id, date")
+      .eq("profile_id", profileId)
+      .order("date", { ascending: false })
+      .limit(30),
+  ) as PipelineEditionRow[];
+
+  const todayEdition = editions.find((edition) => edition.date === date) ?? null;
+  const editionIds = editions.map((edition) => edition.id);
+
+  const [todayItemsResult, todayStepsResult, todayUsageResult, usageAllResult, itemsAllResult] =
+    await Promise.all([
+      todayEdition
+        ? db()
+            .from("edition_items")
+            .select("band, sol_note, article, items(category_id, source_id, categories(slug, name))")
+            .eq("edition_id", todayEdition.id)
+        : Promise.resolve({ data: [], error: null }),
+      todayEdition
+        ? db().from("pipeline_steps").select("kind, started_at, finished_at").eq("edition_id", todayEdition.id)
+        : Promise.resolve({ data: [], error: null }),
+      todayEdition
+        ? db().from("usage_log").select("cost_eur").eq("edition_id", todayEdition.id)
+        : Promise.resolve({ data: [], error: null }),
+      editionIds.length > 0
+        ? db().from("usage_log").select("edition_id, cost_eur").in("edition_id", editionIds)
+        : Promise.resolve({ data: [], error: null }),
+      editionIds.length > 0
+        ? db().from("edition_items").select("edition_id").in("edition_id", editionIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+
+  const rawTodayItems = unwrap(todayItemsResult) as unknown as RawPipelineItemRow[];
+  const todayItems: PipelineItemRow[] = rawTodayItems.map((row) => ({
+    band: row.band,
+    category_id: row.items?.category_id ?? null,
+    category_slug: row.items?.categories?.slug ?? null,
+    category_name: row.items?.categories?.name ?? null,
+    source_id: row.items?.source_id ?? null,
+    sol_note: row.sol_note,
+    has_article: row.article != null,
+  }));
+  const todaySteps = unwrap(todayStepsResult) as PipelineStepRow[];
+  const todayUsage = unwrap(todayUsageResult) as PipelineUsageLogRow[];
+  const usageAll = unwrap(usageAllResult) as EditionUsageRow[];
+  const itemsAll = unwrap(itemsAllResult) as EditionItemCountRow[];
+
+  return {
+    date,
+    hasEdition: Boolean(todayEdition),
+    today: computeTodayReport(todayItems, todaySteps, todayUsage),
+    trends: computePipelineTrends(editions, usageAll, itemsAll),
   };
 }

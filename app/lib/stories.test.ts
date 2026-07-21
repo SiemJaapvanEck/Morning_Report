@@ -16,10 +16,12 @@ import {
   buildStorylineTimeline,
   storyGeography,
   storylineStats,
+  tavilyBronCount,
   type TimelineLink,
 } from "./stories";
 import { entityOverlap } from "../../modules/threads";
 import type { Story } from "./queries";
+import type { DeepArticle } from "../../modules/shared/types";
 
 // Minimal Story stub — only the fields each helper reads matter.
 function story(p: Partial<Story> & { id: string }): Story {
@@ -451,5 +453,38 @@ describe("storylineStats", () => {
       past("2026-06-22", "Reuters", 4),
     ]);
     expect(stats.sources).toBe(2);
+  });
+});
+
+describe("tavilyBronCount", () => {
+  const article = (urls: string[]): DeepArticle => ({
+    lead: "x",
+    ripples: [],
+    groundingSources: urls.map((url) => ({ title: url, url })),
+  });
+
+  it("is 0 with no items", () => {
+    expect(tavilyBronCount([])).toBe(0);
+  });
+
+  it("is 0 when articles carry no grounding (field absent or null article)", () => {
+    expect(tavilyBronCount([{ article: null }, { article: { lead: "x", ripples: [] } }])).toBe(0);
+  });
+
+  it("counts a single article's grounding sources", () => {
+    expect(tavilyBronCount([{ article: article(["https://a.com", "https://b.com"]) }])).toBe(2);
+  });
+
+  it("dedupes the same source URL across articles", () => {
+    const count = tavilyBronCount([
+      { article: article(["https://a.com", "https://b.com"]) },
+      { article: article(["https://b.com", "https://c.com"]) },
+      { article: null },
+    ]);
+    expect(count).toBe(3); // a, b, c — b counted once
+  });
+
+  it("ignores empty urls", () => {
+    expect(tavilyBronCount([{ article: article(["", "https://a.com"]) }])).toBe(1);
   });
 });

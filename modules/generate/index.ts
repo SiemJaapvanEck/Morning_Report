@@ -9,7 +9,15 @@ import { budgetPolicy } from "../shared/budget";
 import { config, todayLocal } from "../shared/config";
 import { isValidIsoDate } from "../calendar";
 import { formatGroundingBlock, type Grounding } from "../tavily";
-import type { BudgetMode, Item, DestepLens, ThreadUpdate, ThreadPrediction, DeepArticle } from "../shared/types";
+import type {
+  BudgetMode,
+  Item,
+  DestepLens,
+  ThreadUpdate,
+  ThreadPrediction,
+  DeepArticle,
+  GroundingSource,
+} from "../shared/types";
 
 // Phase 5 — one sentence appended to a deep-research system prompt when web
 // grounding is present, so the model treats the snippets as additional source
@@ -128,6 +136,25 @@ export function cleanArticle(
     .filter((r) => r.subhead.length > 0 && r.text.length > 0)
     .slice(0, maxRipples);
   return { lead, ripples };
+}
+
+/**
+ * The distinct web sources (Tavily grounding) that fed an article, deduped by
+ * URL and stripped to `{title, url}` for storage. Returns undefined when
+ * grounding was off or empty, so callers can omit the field entirely (the
+ * "+N extra bronnen via Tavily" cijfers row stays hidden until real grounding
+ * exists — matches the brandbook's never-stub rule).
+ */
+export function groundingSourcesFrom(grounding?: Grounding): GroundingSource[] | undefined {
+  if (!grounding || grounding.snippets.length === 0) return undefined;
+  const seen = new Set<string>();
+  const out: GroundingSource[] = [];
+  for (const s of grounding.snippets) {
+    if (!s.url || seen.has(s.url)) continue;
+    seen.add(s.url);
+    out.push({ title: s.title, url: s.url });
+  }
+  return out.length ? out : undefined;
 }
 
 /** Pure: flatten a two-layer article to plain text (dashboard card + back-compat). */
@@ -283,10 +310,12 @@ export async function generateThreadUpdate(
   });
 
   const article: DeepArticle = cleanArticle(data);
+  const groundingSources = groundingSourcesFrom(input.grounding);
   return {
     headline: data.headline.trim(),
     lead: article.lead,
     ripples: article.ripples,
+    ...(groundingSources ? { groundingSources } : {}),
     newState: data.newState.trim(),
     lenses: data.lenses?.length ? data.lenses : input.lenses,
     prediction: cleanPrediction(data.prediction, todayLocal()),
@@ -358,5 +387,7 @@ export async function deepArticle(
       (groundingBlock ? `\n\n${groundingBlock}` : ""),
   });
 
-  return cleanArticle(data);
+  const article = cleanArticle(data);
+  const groundingSources = groundingSourcesFrom(grounding);
+  return groundingSources ? { ...article, groundingSources } : article;
 }

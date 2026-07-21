@@ -3,6 +3,17 @@
 Chronologisch logboek van het project. Eén regel (of kort blok) per
 werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
 
+- **22 July 2026 — Dispatched: MOR-12 (Research Phase 3 — seed & track).**
+  `createResearch`/`seedResearchThread` in `modules/research` wire a
+  submitted note into the existing threads engine (no parallel matcher):
+  opens a followed thread anchored on the primary extracted entity, sets
+  `user_research.thread_id`/`status`. `app/api/research/route.ts` adds the
+  POST create path. `researchOriginFraming` (pure, unit-tested) makes a
+  research thread's first pipeline update read as "sinds jouw onderzoek";
+  `generateStep` is the sole pipeline hook (`isResearchOriginThread`),
+  `threadsStep` untouched. Gate green (416 tests, +4 new). Branch
+  `MOR-12-seed-track-thread-2026-07-22`, commits `a57fc0f`/`408517a`.
+  `needs-siem` — live askAI/DB/pipeline verification pending.
 - **21 July 2026 — Dispatched: MOR-6 + MOR-7 (Finance Phase 3+4 — `/financien` page).**
   Holdings/buys CRUD + 3-line portfolio chart (cost basis / today marker /
   compound projection, `app/lib/financien.ts` + `FinancienChart.tsx`) and

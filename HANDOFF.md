@@ -1,53 +1,95 @@
-# HANDOFF — Wave 2 surfaces landing: Finance UI + Settings shell on main
+# HANDOFF — MOR-12: research note → seeded, auto-updated followed thread
 
-> **Last updated:** 22 July 2026 — merged `MOR-6-finance-ui` and
-> `MOR-15-settings-shell` → main (interactive session with Siem, /merge). On `main`.
+> **Last updated:** 22 July 2026 — dispatched session, branch
+> `MOR-12-seed-track-thread-2026-07-22`. Gate green, pushed, PR open.
+> `needs-siem` (live askAI + DB writes + a pipeline run) — not merged.
 
 ## Where we stand
 
-Wave 1 (finance + research foundations) is on `main`; migrations `0019` +
-`0020` are applied to the live DB. Wave 2 surfaces are landing: the
-**finance UI (MOR-6 + MOR-7)** and the **settings tab shell (MOR-15)** are
-now merged — all reviewer-approved, all double-gate green.
+`main` carries Wave 1 (finance + research foundations, migrations `0019` +
+`0020` applied) and Wave 2's finance UI (MOR-6/7) + settings shell (MOR-15).
+Research Tracking's Phase 1 (schema) and Phase 2 (pure extraction +
+`extractResearch`) were already `Done` on `main` before this session. This
+session built **Phase 3 — seed & track**: creating a research note now spawns
+a followed thread that the existing pipeline matches news to and updates.
 
-## On main now (this session)
+## This session (MOR-12)
 
-- **Finance UI (MOR-6 + MOR-7):** `/financien` page — 3-line portfolio chart
-  (cost basis / current value / compound projection), holdings + buys
-  management (inline edit/delete), income/expense forms + monthly report with
-  forward "verwacht" months; current-month surplus feeds the chart's DCA
-  default (overridable). `getPortfolio`/`getCashflow` in `app/lib/queries.ts`;
-  cookie-gated routes `app/api/{holdings,holding-buys,income,expenses}`; pure
-  math in `modules/finance` + `app/lib/financien.ts` (unit-tested). Brandbook §6.
-- **Settings shell (MOR-15):** `/instellingen` is now a three-tab client shell
-  (Account · Financiën · Pipeline-rapport). `VoorkeurenKiezer` + existing prefs
-  relocated unchanged into the Account tab; Financiën + Pipeline-rapport are
-  "komt binnenkort" placeholders filled by later phases. WAI-ARIA tabs pattern,
-  scheme tokens. Brandbook §5.1.
+- **`modules/research/index.ts`** gained a DB-helpers section (Phase 2's pure
+  extraction is untouched above it):
+  - `createResearch({ profileId, title, body })` — the full create path:
+    `extractResearch` → resolve `category_id` from the extracted slug →
+    insert `user_research` → `seedResearchThread`. Returns the note with its
+    `thread_id`/`status` set.
+  - `seedResearchThread(...)` — opens a thread via `modules/threads`'
+    `insertThread` (reused wholesale, **no parallel matcher**), anchored on
+    the first extracted entity, `title` = the research note's own title
+    (locked decision — not the AI `topicLabel`), `entities` = extracted,
+    `status: "active"`; upserts a `follow_marks` row (`target_type: "thread"`,
+    `active: true`); writes `user_research.thread_id` + `status: "gevolgd"`.
+  - `isResearchOriginThread(threadId)` — the sole "is this a research thread"
+    signal, a read of `user_research.thread_id` (no `threads`-schema change,
+    per the locked decision). Used only for framing (below), never matching.
+- **`app/api/research/route.ts`** (new file) — `POST` create path only,
+  cookie-gated (401 without `mr_profile`), same pattern as
+  `app/api/holdings/route.ts`. `GET`/`PATCH`/`DELETE` are Phase 4
+  (MijnOnderzoek, MOR-13) — not built here.
+- **`modules/generate/index.ts`** — `researchOriginFraming(isResearchOrigin,
+  isFirstUpdate)`, a pure helper mirroring `storylineFraming`: when a thread
+  originated from research (`isResearchOrigin`) AND this is its first update
+  (`thread.state == null` — the same signal the prompt already uses for "new
+  story"), it prepends a one-line frame so the update opens with a reference
+  to the reader's own research ("sinds jouw onderzoek…") instead of a cold
+  restart. `""` in every other case, including every update after the first.
+  Wired into `generateThreadUpdate`'s prompt assembly. Unit-tested
+  (`generate.test.ts`, 4 new cases).
+- **`modules/pipeline/steps.ts`** — the one hook: `generateStep` now calls
+  `isResearchOriginThread(job.threadId)` before `generateThreadUpdate` and
+  passes it through as `researchOrigin`. `threadsStep` (matching) is
+  **completely untouched** — a research thread is matched exactly like any
+  other followed thread, per the PRD's locked decision.
+- Gate green: lint clean, `tsc --noEmit` clean, **416/416 tests pass** (+4
+  new for `researchOriginFraming`), `next build` compiles
+  `/api/research` alongside the existing routes.
+- Two commits: `a57fc0f` (seed + create API), `408517a` (framing + pipeline
+  hook).
 
-## What's open / next — Wave-2 remaining (all Backlog, `needs-siem`)
+## What's open / next
 
-- **Finance:** MOR-8 (goals + ETA), MOR-9 (dashboard tiles).
-- **Research:** MOR-12 (seed & track → thread), MOR-13 (MijnOnderzoek
-  component), MOR-14 (surface in report).
-- **Settings convergence** (mount into the shell's `financien`/`pipeline`
-  panel props, no shell change): MOR-16 (pipeline-rapport tab, dep: MOR-15
-  only — dispatchable now), MOR-17 (Financiën tab ← MOR-8), MOR-18 (Account
-  tab ← MOR-13).
-
-Merged-branch cleanup: worktrees/branches for MOR-6 and MOR-15 removed this
-session; Wave-1 MOR-4/MOR-10 worktrees can still be pruned if present.
+- **Live verification (Siem, `needs-siem`)**: this issue's acceptance
+  criteria require a real `askAI` call, real DB writes, and a live pipeline
+  run to confirm — (1) POSTing a research note actually opens a thread +
+  `follow_marks` row and links back onto `user_research`; (2) that thread
+  participates in a real `threadsStep` run (entity overlap) and picks up a
+  `generateThreadUpdate`; (3) its first update in the krant/archive genuinely
+  reads with the "sinds jouw onderzoek" opening. None of this is
+  gate-checkable — no live DB, no paid pipeline in this session (rails).
+- **MOR-13** — "Mijn onderzoek" management component + API (`GET`/`PATCH`/
+  `DELETE` on `app/api/research/route.ts`, `app/components/MijnOnderzoek.tsx`,
+  `getResearch` in `app/lib/queries.ts`). Parallelizable with this phase;
+  now unblocked to build against the same `createResearch` path.
+- **MOR-14** — surface research-origin storylines in the report/archive
+  ("Uit jouw onderzoek" label). Depends on this phase; unblocked now.
+- Other Wave-2 backlog unchanged: **MOR-8/MOR-9** (finance goals + dashboard
+  tiles), **MOR-16/17/18** (settings-shell convergence for
+  pipeline-rapport/financiën/account tabs).
 
 ## Known issues / gotchas
 
-- **Finance FX (live-review item):** for non-EUR holdings, historical
-  cost-basis conversion defaults to *today's* live FX rate, not the buy-date
-  rate. Surfaced honestly by the implementer; watch real non-EUR positions.
-  Per-buy `fx_to_eur` is caller-supplied; a non-EUR buy with no rate
-  contributes 0 € (never guessed) — a settled, reviewer-approved reading.
+- `seedResearchThread` anchors on `entities[0]` (extraction/scan salience
+  order) with no registry-aware umbrella preference (unlike
+  `modules/threads`' `primaryEntity`) — a deliberate simplification per the
+  issue's "no new matching code" rail; if a research note's first entity is
+  a weak anchor, its thread may match less news than expected. Not a bug,
+  but worth watching in live review (the PRD's own risk note: "a research
+  note with no matches simply shows no updates yet — no error").
+- If `extractResearch` degrades to an empty extraction (AI failure), the
+  seeded thread has `anchor_entity: null` and empty `entities` — it still
+  gets created and followed, but can't match anything until curated. Also
+  expected/by-design, not a bug.
 - `.claude/settings.local.json` carries an uncommitted local diff (session
   permission grants) — kept out of commits (per-contributor file).
-- `modules/research` `CATEGORY_SLUGS` is a static mirror of the seeded
+- `modules/research`'s `CATEGORY_SLUGS` is a static mirror of the seeded
   `categories` table — update it if a migration changes the catalog.
 - Freshly-created worktrees have no `node_modules` — dispatched sessions
   `npm install` first.

@@ -246,7 +246,47 @@ Page anatomy, top to bottom:
   `EditionOverview` (week/month/year views).
 - Implementation: `Edition*` components + `WereldKaart`/`MarktenKaart`.
 
-## 6. Interaction & motion
+## 6. Financiën page (portfolio chart)
+
+The private `/financien` page (docs/prd/finance.md) reuses the same shell,
+type scale, and token discipline as the rest of the app — no new fonts, no
+new hardcoded colors. New recipe introduced here:
+
+- **Stat tiles**: 4-up grid (2-up ≤ mobile), `rounded-2xl` `--paper` cards,
+  border `--line`. Label: Space Mono 10.5px `--muted`, uppercase, `.1em`
+  tracking. Value: Archivo 900 24px `--ink` (rendement % colored `--emer-t`
+  positive / `--rose` negative, `--faint` when undefined). The 4th tile is
+  the **DCA-inleg input** — same label style, an inline-editable € figure
+  (Archivo 24px, underlined, focus ring `--accent`) instead of a static value.
+- **Portfolio chart** (`FinancienChart`, `app/lib/financien.ts`): a single
+  `viewBox="0 0 100 100"` SVG with three series sharing one monthly x-axis
+  (`buildPortfolioChart`) —
+  - **cost basis**: solid line, the `financieel` category amber
+    (`categoryColor("financieel")` from `app/lib/stories.ts` — reused, never
+    a new hardcoded hex), spans first-buy month → today.
+  - **current value**: a single accent-colored dot anchored at "today"
+    (token role: `--accent` covers "…, today, storylines" per §1.1) — no
+    historical backfill line (locked PRD decision).
+  - **projection**: dashed amber (60% opacity), forward from today.
+  - Gaps between series are real gaps: `toSegments()` splits a nullable
+    value array into contiguous `<polyline>` runs (via `seriesPoints()`,
+    §-shared with the krant umbrella chart) so a line never draws back to 0
+    across a null stretch.
+  - Axis labels: € via `app/lib/geld.ts` `formatEuro` (min/mid/max, Space
+    Mono 11px `--faint`); months via `Intl` short month/2-digit-year, the
+    "today" label colored `--accent`.
+  - Legend row: 3px amber dash = kostenbasis, accent dot = huidige waarde,
+    dashed amber = verwachte groei (Space Mono 11px `--muted`).
+- **Holdings list**: flat rows (border-t `--line2` between), symbol chip
+  (Space Mono, `--stone-b`/`--stone-t`, matching the existing source-chip
+  style), inline edit-in-place (no modal), `--rose` text for destructive
+  (verwijderen) actions, `--amber-t` uppercase micro-labels for data flags
+  ("koers onbekend" / "wisselkoers onbekend") — never a silently-wrong
+  number.
+- **Forms**: copy `CaptureFormulier.tsx`'s shape exactly — inline flex-wrap
+  fields, `--line` borders, `--accent` submit button, `--rose` error text.
+
+## 7. Interaction & motion
 
 - Transitions are small and fast: 0.12–0.15s on hover (color, transform).
   Back-arrow slides; rating segments recolor; no large animations.
@@ -256,7 +296,7 @@ Page anatomy, top to bottom:
   a second map.
 - Ratings, follows, selection: always accent-colored feedback.
 
-## 7. Do's & don'ts
+## 8. Do's & don'ts
 
 - **Do** reuse these recipes verbatim; extend the brandbook when a new
   pattern is genuinely new.
@@ -272,9 +312,13 @@ Page anatomy, top to bottom:
 - **Don't** add component libraries; small client components only where
   interaction demands it, the rest server components.
 
-## 8. Change log
+## 9. Change log
 
 - **6 July 2026** — Brandbook created from the "A2 · Dagblad + Verhaallijn"
   reference. Scheme system (24 schemes on CSS variables) replaces the 4
   fixed themes; `mr_thema` migrated to `mr_scheme`. Krant page rebuilt to
   the per-rubriek row layout (articles | map+cijfers | verhaallijn rail).
+- **21 July 2026** — Added §6 "Financiën page (portfolio chart)": the 3-line
+  SVG portfolio chart recipe (stat tiles, chart, holdings list, forms) for
+  `/financien` (docs/prd/finance.md, Phase 3). Old §6/§7 (Interaction &
+  motion / Do's & don'ts) renumbered to §7/§8.

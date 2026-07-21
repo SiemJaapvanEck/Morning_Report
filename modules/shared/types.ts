@@ -510,3 +510,14 @@ export interface UserResearch {
   status: ResearchStatus;
   created_at: string;
 }
+
+/**
+ * Output of modules/research's on-submit extraction (Phase 2): the anchor
+ * entities, a short topic label, and a best-guess category for the note.
+ * `categorySlug` is null when extraction found no confident match.
+ */
+export interface ResearchExtraction {
+  entities: string[];
+  topicLabel: string;
+  categorySlug: string | null;
+}

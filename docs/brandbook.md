@@ -269,7 +269,7 @@ Finance/Research/Settings PRDs. One route, client-side tab state, WAI-ARIA
   uppercase); title (Archivo 19px/800); body (14.5px `--muted`, max 46ch,
   centered); a Space Mono 11px `--faint` line naming the phase that fills it
   in. This is the one place production UI intentionally shows a placeholder —
-  it names *why* (a future phase), not a missing-data gap (§7 still applies
+  it names *why* (a future phase), not a missing-data gap (§9 still applies
   everywhere else).
 
 ## 6. Financiën page (portfolio chart)
@@ -312,7 +312,38 @@ new hardcoded colors. New recipe introduced here:
 - **Forms**: copy `CaptureFormulier.tsx`'s shape exactly — inline flex-wrap
   fields, `--line` borders, `--accent` submit button, `--rose` error text.
 
-## 7. Interaction & motion
+## 7. Pipeline-rapport tab (`/instellingen`)
+
+The Pipeline-rapport settings tab (`InstellingenPipelineTab`,
+docs/prd/settings-tabs.md Phase 2): today's edition detail + 7/30-day trends,
+read-only, server-rendered (no client state — the tab itself never mounts
+`"use client"`).
+
+- **Stat-tile row**: same recipe as §6's finance tiles (`rounded-2xl`
+  `--paper`/`--line` cards, Space Mono 10.5px uppercase label, Archivo 900 24px
+  value) but a 5-up row (`grid-cols-2 sm:grid-cols-3 lg:grid-cols-5`) for
+  kosten/artikelen/bronnen/Sol-artikelen/deep-research. Values render
+  `--faint` (not hidden) when today's edition hasn't run yet — a note above
+  the grid names why.
+- **Category breakdown**: a flat list of horizontal bars, one per category
+  with articles today — label (Space Grotesk), a `--line2` track filled to
+  the busiest category's share in `categoryColor(slug)`, and the raw count
+  (Space Mono, right-aligned). Hidden entirely when there are no articles yet
+  (§9 "hide, don't placeholder" still applies here — this is real absence,
+  unlike the tab-level "komt binnenkort" state).
+- **Step-duration list**: flat rows (`divide-y --line2`) of step kind
+  (Dutch label) → average duration (`4,0s`) or `loopt nog` when unfinished,
+  plus a `· N×` suffix when a kind ran more than once today.
+- **Trend sparklines**: `TrendCard` — a `--paper`/`--line` card per metric
+  (kosten, artikelen), each holding two compact sparklines (7 dagen / 30
+  dagen) built via `seriesPoints()` (shared with the krant umbrella chart,
+  §5) over a single `<polyline>`, no axis chrome — this is a glance metric,
+  not the Financiën portfolio chart's full read. Kosten uses the `financieel`
+  category color (`categoryColor("financieel")`); artikelen uses `--accent`.
+  An empty series (no editions yet) renders a one-line `--faint` message
+  instead of a flat/misleading zero line.
+
+## 8. Interaction & motion
 
 - Transitions are small and fast: 0.12–0.15s on hover (color, transform).
   Back-arrow slides; rating segments recolor; no large animations.
@@ -322,7 +353,7 @@ new hardcoded colors. New recipe introduced here:
   a second map.
 - Ratings, follows, selection: always accent-colored feedback.
 
-## 8. Do's & don'ts
+## 9. Do's & don'ts
 
 - **Do** reuse these recipes verbatim; extend the brandbook when a new
   pattern is genuinely new.
@@ -338,8 +369,12 @@ new hardcoded colors. New recipe introduced here:
 - **Don't** add component libraries; small client components only where
   interaction demands it, the rest server components.
 
-## 9. Change log
+## 10. Change log
 
+- **22 July 2026** — Added §7 "Pipeline-rapport tab": stat-tile row, category
+  breakdown bars, step-duration list, and `TrendCard` sparklines (via the
+  shared `seriesPoints()`), from the `/instellingen` Phase 2 build (MOR-16).
+  Renumbered §7-9 → §8-10.
 - **21 July 2026** — Added §5.1 "Settings tab shell": `InstellingenTabs`
   (pill tablist, WAI-ARIA tabs pattern) + `InstellingenLeegState` ("komt
   binnenkort" placeholder recipe), from the `/instellingen` Phase 1 rebuild

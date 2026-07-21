@@ -3,6 +3,15 @@
 Chronologisch logboek van het project. Eén regel (of kort blok) per
 werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
 
+- **21 July 2026 — Dispatched: MOR-15 (Settings P1 — tabbed settings shell).**
+  `/instellingen` restructured to a client tab shell (`InstellingenTabs`,
+  WAI-ARIA tabs pattern, scheme tokens only): Account · Financiën ·
+  Pipeline-rapport. Pre-existing preferences content (incl. `VoorkeurenKiezer`,
+  unchanged) relocated into the Account tab (`InstellingenAccountTab`); the
+  other two tabs show a "komt binnenkort" placeholder (`InstellingenLeegState`)
+  pending MOR-17/MOR-16. Brandbook §5.1 added. Gate green (394 tests). Branch
+  `MOR-15-settings-shell-2026-07-21`, commits `8f9b14e`/`d05b1a9`, PR #4 open —
+  needs-siem, awaiting live review before merge.
 - **21 July 2026 — Merged `MOR-4-finance-foundation-2026-07-21` → main.**
   MOR-4 + MOR-5 (Finance foundation + math core + keyless Yahoo quotes/FX),
   reviewer-approved (incl. the FX judgment call), rebased over the Research

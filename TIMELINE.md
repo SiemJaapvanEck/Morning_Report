@@ -10,6 +10,15 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   default. Brandbook §6 recipe added. Gate green (412 tests, +32 new).
   Branch `MOR-6-finance-ui-2026-07-21`, commits `d2cce64`/`54e4124`. Both
   `needs-siem` — not merged, awaiting Siem's live review.
+- **21 July 2026 — Dispatched: MOR-15 (Settings P1 — tabbed settings shell).**
+  `/instellingen` restructured to a client tab shell (`InstellingenTabs`,
+  WAI-ARIA tabs pattern, scheme tokens only): Account · Financiën ·
+  Pipeline-rapport. Pre-existing preferences content (incl. `VoorkeurenKiezer`,
+  unchanged) relocated into the Account tab (`InstellingenAccountTab`); the
+  other two tabs show a "komt binnenkort" placeholder (`InstellingenLeegState`)
+  pending MOR-17/MOR-16. Brandbook §5.1 added. Gate green (394 tests). Branch
+  `MOR-15-settings-shell-2026-07-21`, commits `8f9b14e`/`d05b1a9`, PR #4 open —
+  needs-siem, awaiting live review before merge.
 - **21 July 2026 — Merged `MOR-4-finance-foundation-2026-07-21` → main.**
   MOR-4 + MOR-5 (Finance foundation + math core + keyless Yahoo quotes/FX),
   reviewer-approved (incl. the FX judgment call), rebased over the Research
@@ -675,3 +684,9 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   Cookie-gated write routes, pure math in `modules/finance` + `app/lib/financien.ts`
   (all unit-tested). Reviewer-approved; double gate green (412 tests). One
   live-review note carried: non-EUR cost-basis uses today's FX rate.
+
+- **22 July 2026 — Merged `MOR-15-settings-shell-2026-07-21` → main — Settings P1.**
+  `/instellingen` three-tab shell (Account · Financiën · Pipeline-rapport),
+  prefs relocated unchanged into Account, placeholders for MOR-16/17. Landed
+  after the finance merge; conflicts (HANDOFF/TIMELINE/brandbook) resolved
+  keeping both. Reviewer-approved; double gate green.

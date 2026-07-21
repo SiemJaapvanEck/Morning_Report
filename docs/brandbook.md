@@ -311,6 +311,19 @@ new hardcoded colors. New recipe introduced here:
   number.
 - **Forms**: copy `CaptureFormulier.tsx`'s shape exactly — inline flex-wrap
   fields, `--line` borders, `--accent` submit button, `--rose` error text.
+- **Goals & progress bars** (`FinancienGoals`, docs/prd/finance.md Phase 5):
+  a flat `h-2 rounded-full` track in `--stone-b`, filled `--accent`, width =
+  `goalProgressPct()` clamped `[0, 100]` — never a hardcoded gradient. One
+  **investment goal** card (name, progress line `€ huidig / € doel · pct`,
+  and a bold `--accent` **ETA** line — `"~N jaar M mnd"` or, per the locked
+  600-month cap, `"buiten bereik"`/`"doel al bereikt"`) plus N **savings
+  goal** rows in the same flat-row-with-border-t list pattern as Holdings;
+  each row's `saved_eur` is inline-editable (no modal, `bijwerken` →
+  numeric input + Opslaan, same shape as the holding edit-in-place). The
+  **expected-return control** sits top-right of the section card: a small
+  Space Mono uppercase label + a narrow right-aligned number input + inline
+  Opslaan button, writing `finance_settings.expected_return_pct` (the same
+  figure the Phase-3 chart's projection and this section's ETA both read).
 
 ## 7. Interaction & motion
 
@@ -340,6 +353,10 @@ new hardcoded colors. New recipe introduced here:
 
 ## 9. Change log
 
+- **22 July 2026** — Added the "Goals & progress bars" recipe to §6: the
+  flat progress-bar track, the investment-goal ETA card, savings-goal rows,
+  and the expected-return control, from the `/financien` Phase 5 goals
+  build (MOR-8).
 - **21 July 2026** — Added §5.1 "Settings tab shell": `InstellingenTabs`
   (pill tablist, WAI-ARIA tabs pattern) + `InstellingenLeegState` ("komt
   binnenkort" placeholder recipe), from the `/instellingen` Phase 1 rebuild

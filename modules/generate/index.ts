@@ -220,6 +220,14 @@ export interface ThreadUpdateInput {
   grounding?: Grounding;
   /** Phase D3 — when this thread is a storyline, its facet + parent umbrella, so the update is framed to the facet ("names each storyline"); omit for flat threads/umbrellas */
   storyline?: { umbrella: string; facet: string };
+  /**
+   * Research Tracking PRD, Phase 3 — true when this thread originated from a
+   * research note (detected via `user_research.thread_id`, never matching
+   * code). Combined with `thread.state == null` (its first update), the
+   * prompt opens with "sinds jouw onderzoek" framing. Omit for ordinary
+   * threads.
+   */
+  researchOrigin?: boolean;
 }
 
 /**
@@ -233,6 +241,25 @@ export function storylineFraming(storyline?: { umbrella: string; facet: string }
   const umbrella = storyline.umbrella.trim();
   if (!facet || !umbrella) return "";
   return `Dit is de verhaallijn '${facet}' binnen het grote verhaal '${umbrella}'; schrijf de update toegespitst op deze facet.\n`;
+}
+
+/**
+ * Research Tracking PRD, Phase 3 — the one-line prompt frame for a
+ * research-origin thread's FIRST update, so it reads as "sinds jouw
+ * onderzoek" instead of a cold restart. Pure: the caller supplies both
+ * signals — `isResearchOrigin` (detected via `user_research.thread_id`, never
+ * matching code) and `isFirstUpdate` (the same `thread.state == null` signal
+ * generateThreadUpdate's prompt already uses for "new thread"). "" once
+ * either is false, so only the note's very first update carries the framing —
+ * later updates read like any other followed thread.
+ */
+export function researchOriginFraming(isResearchOrigin: boolean, isFirstUpdate: boolean): string {
+  if (!isResearchOrigin || !isFirstUpdate) return "";
+  return (
+    "Deze verhaallijn komt voort uit onderzoek dat de lezer zelf heeft aangedragen en krijgt nu " +
+    "zijn allereerste update; open de 'lead' met een verwijzing naar dat onderzoek " +
+    "(bijvoorbeeld \"Sinds jouw onderzoek naar ...\") voordat je het nieuwe nieuws behandelt.\n"
+  );
 }
 
 /**
@@ -298,6 +325,7 @@ export async function generateThreadUpdate(
       "Heb je geen concrete grond of geen datum? Laat 'text', 'target_date' en 'source_basis' dan LEEG ('')." +
       (groundingBlock ? GROUNDING_RULE : ""),
     prompt:
+      researchOriginFraming(!!input.researchOrigin, input.thread.state == null) +
       storylineFraming(input.storyline) +
       `Verhaallijn: ${input.thread.title}\n` +
       `Stand tot nu toe: ${input.thread.state ?? "(nieuw verhaal — nog geen eerdere stand)"}\n` +

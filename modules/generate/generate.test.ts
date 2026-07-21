@@ -5,6 +5,7 @@ import {
   cleanArticle,
   flattenArticle,
   storylineFraming,
+  researchOriginFraming,
   groundingSourcesFrom,
 } from "./index";
 import type { Grounding } from "../tavily";
@@ -189,5 +190,26 @@ describe("storylineFraming (Phase D3 — name the storyline)", () => {
   it("is empty when facet or umbrella is blank", () => {
     expect(storylineFraming({ umbrella: "Anthropic", facet: "  " })).toBe("");
     expect(storylineFraming({ umbrella: "", facet: "fable" })).toBe("");
+  });
+});
+
+describe("researchOriginFraming (Research Tracking PRD, Phase 3 — 'sinds jouw onderzoek')", () => {
+  it("frames a research-origin thread's first update", () => {
+    const framing = researchOriginFraming(true, true);
+    expect(framing).not.toBe("");
+    expect(framing).toContain("onderzoek");
+    expect(framing.endsWith("\n")).toBe(true);
+  });
+
+  it("is empty for a non-research thread, even on its first update", () => {
+    expect(researchOriginFraming(false, true)).toBe("");
+  });
+
+  it("is empty once a research thread already has state (not its first update)", () => {
+    expect(researchOriginFraming(true, false)).toBe("");
+  });
+
+  it("is empty when neither signal holds", () => {
+    expect(researchOriginFraming(false, false)).toBe("");
   });
 });

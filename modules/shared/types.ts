@@ -483,3 +483,41 @@ export interface Entity {
   /** updated by the application upsert on every write-back */
   updated_at: string;
 }
+
+// ============================================================
+// Research tracking (Research Tracking PRD, Phase 1 — foundation)
+// ============================================================
+
+/** Lifecycle status of a research note — Dutch vocabulary (locked in the PRD). */
+export type ResearchStatus = "nieuw" | "gevolgd" | "gearchiveerd";
+
+/**
+ * One user-submitted research note. Mirrors supabase/migrations/0020_user_research.sql.
+ * `thread_id` is the ONLY link between a research note and its seeded followed
+ * storyline (Phase 3) — no column is added to `threads`; a research thread is
+ * detected by joining back through this column.
+ */
+export interface UserResearch {
+  id: string;
+  profile_id: string;
+  title: string;
+  body: string;
+  /** extracted anchor entities (modules/research, Phase 2), capped at 8 */
+  entities: string[];
+  category_id: string | null;
+  /** the followed storyline seeded from this research (Phase 3); null until seeded */
+  thread_id: string | null;
+  status: ResearchStatus;
+  created_at: string;
+}
+
+/**
+ * Output of modules/research's on-submit extraction (Phase 2): the anchor
+ * entities, a short topic label, and a best-guess category for the note.
+ * `categorySlug` is null when extraction found no confident match.
+ */
+export interface ResearchExtraction {
+  entities: string[];
+  topicLabel: string;
+  categorySlug: string | null;
+}

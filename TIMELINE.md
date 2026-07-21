@@ -3,6 +3,12 @@
 Chronologisch logboek van het project. Eén regel (of kort blok) per
 werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
 
+- **21 July 2026 — Planned 3 initiatives + dispatched Wave 1.** Wrote & approved
+  3 PRDs (`docs/prd/finance.md`, `research-tracking.md`, `settings-tabs.md`) and
+  planned them into the single Morning Report Linear project as MOR-4…MOR-18
+  (initiative-prefixed sprint milestones; cross-issue blocks MOR-17←MOR-8,
+  MOR-18←MOR-13). Dispatched Wave 1: MOR-4 (Finance foundation) + MOR-10
+  (Research foundation), both auto-ok, separate worktree sessions.
 - **21 July 2026 — Merged `MOR-3-tavily-citation-ui-2026-07-21` → main.**
   Reviewer-approved (all criteria met), double gate green. First real board
   issue landed.

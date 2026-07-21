@@ -1,59 +1,52 @@
-# HANDOFF — MOR-3 Tavily citation UI merged to main
+# HANDOFF — three initiatives planned; Wave 1 dispatched
 
-> **Last updated:** 21 July 2026 (interactive session with Siem) —
-> merged `MOR-3-tavily-citation-ui-2026-07-21` → `main`
+> **Last updated:** 21 July 2026 (interactive session with Siem) — on `main`
 
 ## Where we stand
 
-`main` has the orchestrator workflow v2 + the krant "A2 · Dagblad +
-Verhaallijn" rebuild (`0ae2df5`) and now **MOR-3 (Tavily citation UI)**,
-reviewer-approved and double-gate merged. Next up: Siem is starting a `/prd`
-for the first substantial new initiative.
+`main` has workflow v2 + the krant A2 rebuild (`0ae2df5`) + MOR-3 Tavily
+citation UI (`6896120`). This session planned **three new initiatives** onto the
+Linear board and (about to) dispatched Wave 1.
 
-## This session
+## Board state (all in the single "Morning Report" Linear project)
 
-1. **Merged** `idle-work/2026-07-02-krant-a3` → main (double gate green,
-   `0ae2df5`); deleted that branch; pruned 16 spurious `" 2."` duplicate files.
-2. **Investigated the backlog** for `/plan` and found the docs are badly stale:
-   the entire News-Threads **D3→E umbrella-viz arc is already built, merged, and
-   live-verified** (master–detail reader, `18a50fc`), entity-typing **F5** is on
-   main, and **Tavily grounding Phase 5** is fully coded — gated only on
-   `TAVILY_API_KEY`. See `~/.claude/plans/dazzling-stargazing-sonnet.md` for the
-   corrected state-of-the-world.
-3. **Built MOR-3 — Tavily citation UI** (commit `89b80a8`). Tavily grounding was
-   fed into the synthesis prompt and then discarded; now the web sources are
-   persisted on the article and surfaced as the "+N extra bronnen via Tavily"
-   accent row in RUBRIEK IN CIJFERS. Four thin layers, **no migration**:
-   - `modules/shared/types.ts`: `DeepArticle.groundingSources?: GroundingSource[]`
-     (optional → JSONB additive, back-compat).
-   - `modules/generate/index.ts`: `deepArticle` + `generateThreadUpdate` attach
-     the snippets they already fetched via new pure `groundingSourcesFrom`
-     (dedupe by URL, zero extra AI cost).
-   - `app/lib/stories.ts`: pure `tavilyBronCount(items)` — distinct grounding
-     URLs per rubriek.
-   - `app/components/EditieWeergave.tsx`: `CijfersCard` renders the accent row
-     (`var(--accent)`) only when count > 0.
-   - `docs/brandbook.md` §7: recipe note un-gated.
-   - **Gate green**, 8 new tests (5 `tavilyBronCount` + 3 `groundingSourcesFrom`).
+Issues are separated by **initiative-prefixed sprint milestones** (Siem's rule:
+one Linear project, not separate projects):
 
-## What's open
+- **Finance** (`docs/prd/finance.md`) — MOR-4…MOR-9. Private portfolio (manual
+  holdings, free keyless Yahoo quotes, multi-currency→€), income/expense report
+  → surplus = DCA → compound projection (7%) → investment-goal ETA + savings
+  goals. New `/financien` page + dashboard tiles. No new dep / paid API / AI.
+- **Research Tracking** (`docs/prd/research-tracking.md`) — MOR-10…MOR-14.
+  Paste/write research → one askAI extraction → seeds a followed thread the
+  existing threads engine matches news to + updates daily. Embeddable
+  `MijnOnderzoek` component (mounted in Settings later).
+- **Settings Tabs** (`docs/prd/settings-tabs.md`) — MOR-15…MOR-18. Restructure
+  `/instellingen` into tabs (Account · Financiën · Pipeline-rapport); the
+  **convergence** project that mounts Finance + Research components. Cross-issue
+  blocks: MOR-17←MOR-8, MOR-18←MOR-13.
 
-1. **Siem action — set `TAVILY_API_KEY`** in `.env.local` + Vercel. Until then
-   `tavilyBronCount` is 0 everywhere and the row stays hidden (by design). Once
-   set + a pipeline runs, grounded rubrieken show the extra-source count.
-2. **Board seeding** — Siem picked "Something else" for the first substantial
-   initiative (not in current docs); a `/prd` for it is starting next.
-3. **Other Siem-queue items** (from the backlog investigation): localhost-review
-   entity-typing F4 + apply its canonicalization script; triage MOR-1 (click
-   text → references) and MOR-2 (storylines-as-card-grid — note MOR-2 likely
-   conflicts with the shipped master–detail umbrella reader).
+**Ready (`Todo`):** MOR-4, MOR-10, MOR-15. All else `Backlog` (dependency-gated).
+
+## What's open / next
+
+1. **Wave 1 dispatched:** MOR-4 (Finance foundation) + MOR-10 (Research
+   foundation) — both `auto-ok`, unattended-safe, each in its own worktree +
+   branch + implementer session. On green + review → `/merge`.
+2. **Migrations to apply (Siem):** `0019_finance.sql` (MOR-4) and
+   `0020_user_research.sql` (MOR-10) — authored by the sessions, applied by
+   Siem before the `needs-siem` surface phases can go live.
+3. **Wave 2 (needs-siem):** the finance/research surfaces + Settings shell/report
+   — after migrations applied + Siem visual review.
+4. Three now-empty **canceled** Linear projects (Personal Finance / Research
+   Tracking / Settings Tabs) can be hard-deleted from the Linear UI (the MCP has
+   no delete-project; they're already Canceled + empty).
 
 ## Known issues / gotchas
 
-- `.claude/settings.local.json` carries an uncommitted local diff (this
-  session's permission grants) — deliberately kept out of commits; it is a
-  per-contributor file.
-- The "+N extra bronnen via Tavily" row cannot be verified by the gate (needs a
-  live grounded pipeline) — it's Siem's morning-review live check.
-- Pre-existing: `.next/types/… 2.*` duplicate files can appear on macOS/iCloud —
+- `.claude/settings.local.json` carries an uncommitted local diff (session
+  permission grants) — kept out of commits (per-contributor file).
+- Tavily citation row (MOR-3, on main) only appears once `TAVILY_API_KEY` is set
+  + a pipeline runs — Siem's live check.
+- Pre-existing: `.next/types/… 2.*` duplicate files on macOS/iCloud →
   `find .next -name "* 2.*" -delete` then re-run tsc.

@@ -22,7 +22,12 @@ import type {
   Edition,
   EditionSection,
   EditionStatus,
+  Expense,
+  FinanceSettings,
   FrontPage,
+  Holding,
+  HoldingBuy,
+  Income,
   Profile,
   ThreadPrediction,
   ThreadStatus,
@@ -1148,4 +1153,51 @@ export async function getUpcomingAgenda(profileId: string, limit = 12): Promise<
     thread_id: r.thread_id,
     thread_title: r.threads?.title ?? null,
   }));
+}
+
+// ============================================================
+// Personal Finance (docs/prd/finance.md, Phase 3 + 4). Read-only: the pure
+// math lives in modules/finance, live quotes/FX in modules/markten — both
+// called from /financien's server page, not here.
+// ============================================================
+
+/** Raw DB rows for the /financien portfolio section (Phase 3). */
+export interface PortfolioView {
+  holdings: Holding[];
+  buys: HoldingBuy[];
+  /** null until the profile has ever saved a finance-settings row (defaults apply). */
+  settings: FinanceSettings | null;
+}
+
+/** Every holding + buy + the per-profile finance settings, for one profile. */
+export async function getPortfolio(profileId: string): Promise<PortfolioView> {
+  const [holdingsResult, buysResult, settingsResult] = await Promise.all([
+    db().from("holdings").select("*").eq("profile_id", profileId).order("created_at"),
+    db().from("holding_buys").select("*").eq("profile_id", profileId).order("bought_on"),
+    db().from("finance_settings").select("*").eq("profile_id", profileId).limit(1),
+  ]);
+  const settingsRows = unwrap(settingsResult) as FinanceSettings[];
+  return {
+    holdings: unwrap(holdingsResult) as Holding[],
+    buys: unwrap(buysResult) as HoldingBuy[],
+    settings: settingsRows[0] ?? null,
+  };
+}
+
+/** Raw DB rows for the /financien income/expense report (Phase 4). */
+export interface CashflowView {
+  incomes: Income[];
+  expenses: Expense[];
+}
+
+/** Every income + expense entry for one profile. */
+export async function getCashflow(profileId: string): Promise<CashflowView> {
+  const [incomesResult, expensesResult] = await Promise.all([
+    db().from("incomes").select("*").eq("profile_id", profileId).order("received_on"),
+    db().from("expenses").select("*").eq("profile_id", profileId).order("spent_on"),
+  ]);
+  return {
+    incomes: unwrap(incomesResult) as Income[],
+    expenses: unwrap(expensesResult) as Expense[],
+  };
 }

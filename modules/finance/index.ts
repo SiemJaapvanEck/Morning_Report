@@ -147,6 +147,101 @@ export function projectCompound(
   return series;
 }
 
+// ============================================================
+// Monthly income/expense report (Phase 4) — the aggregation behind the
+// /financien cashflow report. `monthlySurplus` above is the single-month
+// income-minus-expense figure (also the projection's default DCA
+// contribution, PRD locked decision); these build the report's per-month
+// rows and forward-project using only **recurring** items (locked decision:
+// recurring income/expenses auto-repeat forward, everything else does not).
+// ============================================================
+
+export interface MonthTotal {
+  /** "YYYY-MM" */
+  month: string;
+  income_eur: number;
+  expense_eur: number;
+  surplus_eur: number;
+}
+
+/**
+ * Every month with at least one income or expense entry, ascending, each
+ * with its totals and surplus. Purely a grouping of the actual entered
+ * data — no recurring-forward projection (see `projectRecurringForward`).
+ */
+export function monthlyTotals(
+  incomes: Pick<Income, "received_on" | "amount_eur">[],
+  expenses: Pick<Expense, "spent_on" | "amount_eur">[],
+): MonthTotal[] {
+  const incomeByMonth = new Map<string, number>();
+  for (const i of incomes) {
+    const month = i.received_on.slice(0, 7);
+    incomeByMonth.set(month, (incomeByMonth.get(month) ?? 0) + i.amount_eur);
+  }
+  const expenseByMonth = new Map<string, number>();
+  for (const e of expenses) {
+    const month = e.spent_on.slice(0, 7);
+    expenseByMonth.set(month, (expenseByMonth.get(month) ?? 0) + e.amount_eur);
+  }
+  const months = new Set([...incomeByMonth.keys(), ...expenseByMonth.keys()]);
+  return [...months].sort().map((month) => {
+    const income_eur = incomeByMonth.get(month) ?? 0;
+    const expense_eur = expenseByMonth.get(month) ?? 0;
+    return { month, income_eur, expense_eur, surplus_eur: income_eur - expense_eur };
+  });
+}
+
+/**
+ * The flat monthly net if every **recurring** income/expense repeats
+ * unchanged — the "structural" surplus/deficit, independent of one-off
+ * entries. Feeds `projectRecurringForward`; also useful on its own as a
+ * report stat.
+ */
+export function recurringMonthlyNet(
+  incomes: Pick<Income, "recurring" | "amount_eur">[],
+  expenses: Pick<Expense, "recurring" | "amount_eur">[],
+): number {
+  const recurringIncome = incomes.filter((i) => i.recurring).reduce((sum, i) => sum + i.amount_eur, 0);
+  const recurringExpense = expenses.filter((e) => e.recurring).reduce((sum, e) => sum + e.amount_eur, 0);
+  return recurringIncome - recurringExpense;
+}
+
+/** "YYYY-MM" shifted forward by `n` months (n >= 0 expected here). */
+function addReportMonth(month: string, n: number): string {
+  const [y, m] = month.split("-").map(Number);
+  const total = y * 12 + (m - 1) + n;
+  const ny = Math.floor(total / 12);
+  const nm = (total % 12) + 1;
+  return `${ny}-${String(nm).padStart(2, "0")}`;
+}
+
+/**
+ * The report's forward-looking rows (locked decision: recurring items
+ * auto-repeat forward for the projection): `months` rows after `fromMonth`
+ * (exclusive), each carrying the flat recurring income/expense totals —
+ * one-off (non-recurring) entries never appear in these future rows, since
+ * by definition they don't repeat.
+ */
+export function projectRecurringForward(
+  incomes: Pick<Income, "recurring" | "amount_eur">[],
+  expenses: Pick<Expense, "recurring" | "amount_eur">[],
+  fromMonth: string,
+  months: number,
+): MonthTotal[] {
+  const recurringIncome = incomes.filter((i) => i.recurring).reduce((sum, i) => sum + i.amount_eur, 0);
+  const recurringExpense = expenses.filter((e) => e.recurring).reduce((sum, e) => sum + e.amount_eur, 0);
+  const rows: MonthTotal[] = [];
+  for (let i = 1; i <= months; i++) {
+    rows.push({
+      month: addReportMonth(fromMonth, i),
+      income_eur: recurringIncome,
+      expense_eur: recurringExpense,
+      surplus_eur: recurringIncome - recurringExpense,
+    });
+  }
+  return rows;
+}
+
 /** Cap on how far `etaMonthsToTarget` searches before declaring the target unreachable. */
 export const ETA_MONTH_CAP = 600;
 

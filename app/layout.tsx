@@ -78,6 +78,9 @@ export default async function RootLayout({
               <Link href="/archief" className="hover:text-stone-900 dark:hover:text-stone-100">
                 Archief
               </Link>
+              <Link href="/financien" className="hover:text-stone-900 dark:hover:text-stone-100">
+                Financiën
+              </Link>
               <Link href="/instellingen" className="hover:text-stone-900 dark:hover:text-stone-100">
                 Instellingen
               </Link>

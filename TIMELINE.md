@@ -3,6 +3,10 @@
 Chronologisch logboek van het project. Eén regel (of kort blok) per
 werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
 
+- **21 July 2026 — Merged `MOR-4-finance-foundation-2026-07-21` → main.**
+  MOR-4 + MOR-5 (Finance foundation + math core + keyless Yahoo quotes/FX),
+  reviewer-approved (incl. the FX judgment call), rebased over the Research
+  merge, double gate green (380 tests). Migration `0019` file only — Siem applies.
 - **21 July 2026 — Merged `MOR-10-research-foundation-2026-07-21` → main.**
   MOR-10 + MOR-11 (Research Tracking foundation + extraction core),
   reviewer-approved, double gate green (352 tests). Migration `0020` file only —

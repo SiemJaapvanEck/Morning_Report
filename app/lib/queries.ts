@@ -23,6 +23,7 @@ import type {
   EditionSection,
   EditionStatus,
   Expense,
+  FinanceGoal,
   FinanceSettings,
   FrontPage,
   Holding,
@@ -1199,5 +1200,24 @@ export async function getCashflow(profileId: string): Promise<CashflowView> {
   return {
     incomes: unwrap(incomesResult) as Income[],
     expenses: unwrap(expensesResult) as Expense[],
+  };
+}
+
+/** Raw DB rows for the /financien goals section (Phase 5). */
+export interface GoalsView {
+  /** the one investment goal, or null when not set yet (locked decision: at most one) */
+  investment: FinanceGoal | null;
+  /** every named savings goal, oldest first */
+  savings: FinanceGoal[];
+}
+
+/** The profile's investment goal (if any) + every named savings goal. */
+export async function getGoals(profileId: string): Promise<GoalsView> {
+  const rows = unwrap(
+    await db().from("finance_goals").select("*").eq("profile_id", profileId).order("created_at"),
+  ) as FinanceGoal[];
+  return {
+    investment: rows.find((g) => g.kind === "investment") ?? null,
+    savings: rows.filter((g) => g.kind === "savings"),
   };
 }

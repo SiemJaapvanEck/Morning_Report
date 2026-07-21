@@ -246,6 +246,32 @@ Page anatomy, top to bottom:
   `EditionOverview` (week/month/year views).
 - Implementation: `Edition*` components + `WereldKaart`/`MarktenKaart`.
 
+### 5.1 Settings tab shell (`/instellingen`)
+
+Tabbed settings home (`InstellingenTabs`), the convergence point for the
+Finance/Research/Settings PRDs. One route, client-side tab state, WAI-ARIA
+"tabs" pattern (roving tabindex, Left/Right/Home/End activate).
+
+- **Tab list**: pill group — `inline-flex rounded-full border border-[var(--line)]
+  bg-[var(--paper)] p-1`, `role="tablist"`.
+- **Tab button**: Space Mono 12px/700, tracking `.06em`, uppercase, `rounded-full
+  px-4 py-2`. Selected = `bg-[var(--accent)] text-white`; idle = `text-[var(--muted)]`
+  hover `text-[var(--ink)]`. `role="tab"`, `aria-selected`, `aria-controls`,
+  roving `tabIndex` (0 on the selected tab, −1 elsewhere).
+- **Panel**: `role="tabpanel"`, `aria-labelledby` the tab, `hidden` when
+  inactive; only the active panel's content is mounted (`mt-8` above the
+  panel area). Panels are handed to the shell as `ReactNode` props from a
+  server-rendered page — the shell component itself owns no data fetching.
+- **"Komt binnenkort" empty state** (`InstellingenLeegState`) — for a tab
+  whose real content lands in a later phase: `rounded-2xl border
+  border-[var(--line)] bg-[var(--paper)] px-6 py-12 text-center`; eyebrow
+  `KOMT BINNENKORT` (Space Mono 11px/700, `--accent`, tracking `.14em`,
+  uppercase); title (Archivo 19px/800); body (14.5px `--muted`, max 46ch,
+  centered); a Space Mono 11px `--faint` line naming the phase that fills it
+  in. This is the one place production UI intentionally shows a placeholder —
+  it names *why* (a future phase), not a missing-data gap (§7 still applies
+  everywhere else).
+
 ## 6. Interaction & motion
 
 - Transitions are small and fast: 0.12–0.15s on hover (color, transform).
@@ -274,6 +300,10 @@ Page anatomy, top to bottom:
 
 ## 8. Change log
 
+- **21 July 2026** — Added §5.1 "Settings tab shell": `InstellingenTabs`
+  (pill tablist, WAI-ARIA tabs pattern) + `InstellingenLeegState` ("komt
+  binnenkort" placeholder recipe), from the `/instellingen` Phase 1 rebuild
+  (MOR-15).
 - **6 July 2026** — Brandbook created from the "A2 · Dagblad + Verhaallijn"
   reference. Scheme system (24 schemes on CSS variables) replaces the 4
   fixed themes; `mr_thema` migrated to `mr_scheme`. Krant page rebuilt to

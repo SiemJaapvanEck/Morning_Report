@@ -1,52 +1,107 @@
-# HANDOFF — Wave 1 landed (Finance + Research foundations on main)
+# HANDOFF — Finance Wave 2: MOR-6 + MOR-7 built, awaiting Siem's live review
 
-> **Last updated:** 21 July 2026 (interactive session with Siem) — on `main`
+> **Last updated:** 21 July 2026 (dispatched implementer session) — on branch
+> `MOR-6-finance-ui-2026-07-21`, not yet merged.
 
 ## Where we stand
 
-Wave 1 of the three-initiative plan is fully merged. Both dispatched sessions
-built their two `auto-ok` phases, both reviewer-approved, both double-gate green,
-both landed on `main`.
+This branch builds the complete `/financien` page: MOR-6 (Phase 3 — holdings
+& portfolio UI, the 3-line chart) and MOR-7 (Phase 4 — income/expense report
+→ monthly surplus as the DCA driver), both to their acceptance criteria.
+Gate green throughout (lint, tsc, vitest, build). **Both issues are
+`needs-siem`** — this session did not merge; Siem live-verifies on
+`localhost:3000` first.
 
-## On main now (Wave 1)
+Wave-1 foundation this branch builds on (already on `main`): migration
+`0019_finance.sql` (holdings, holding_buys, incomes, expenses, finance_goals,
+finance_settings — Siem has applied it), `app/lib/geld.ts`, and
+`modules/finance`/`modules/markten`'s pure math + keyless Yahoo fetchers.
 
-- **Finance foundation** (MOR-4 + MOR-5): `supabase/migrations/0019_finance.sql`
-  (6 tables — holdings, holding_buys, incomes, expenses, finance_goals,
-  finance_settings; **file only, Siem applies**); `app/lib/geld.ts` (€/%
-  formatters); `modules/finance/index.ts` (costBasisSeries, quantityAsOf,
-  portfolioValueEur, monthlySurplus, projectCompound, etaMonthsToTarget);
-  `modules/markten` extended with keyless Yahoo `fetchQuotes`/`fetchFxToEur`.
-- **Research foundation** (MOR-10 + MOR-11):
-  `supabase/migrations/0020_user_research.sql` (**file only, Siem applies**);
-  `modules/research/index.ts` extraction core (`buildExtractionPrompt`,
-  `parseExtraction`, defensive scan-tier `extractResearch`).
-- Types for both in `modules/shared/types.ts`.
+## What this session built
+
+**MOR-6 (commit `d2cce64`):**
+- `getPortfolio(profileId)` in `app/lib/queries.ts` — holdings + buys +
+  finance_settings, one `PortfolioView`.
+- `app/api/holdings/route.ts` + `app/api/holding-buys/route.ts` — cookie-
+  gated, action-based (`create`/`update`/`delete`) POST endpoints, same
+  shape as `app/api/feedback/route.ts`.
+- `app/financien/page.tsx` — guard shape copied from `app/archive/page.tsx`,
+  `force-dynamic`; server-fetches holdings/buys + live quotes/FX
+  (`modules/markten`).
+- `app/lib/financien.ts` (+ `financien.test.ts`, 10 tests) — pure
+  `buildPortfolioChart`/`toSegments` helpers that align cost-basis history,
+  the "today" value marker, and the forward projection onto one shared
+  monthly x-axis, reusing `seriesPoints()` from `app/lib/stories.ts`.
+- `app/components/FinancienChart.tsx` — the 3-line client SVG chart
+  (`<polyline>` renderer, € axis via `geld.ts`); `FinancienPortfolio.tsx`
+  (stat tiles + DCA-contribution override input + holdings list with
+  inline edit/delete); `FinancienHoldingForm.tsx` + `FinancienBuyForm.tsx`
+  (copy `CaptureFormulier.tsx`'s shape).
+- `/financien` nav link in `app/layout.tsx`.
+- `docs/brandbook.md` §6 "Financiën page (portfolio chart)" — new recipe;
+  old §6/§7 renumbered to §7/§8.
+
+**MOR-7 (commit `54e4124`):**
+- `getCashflow(profileId)` in `app/lib/queries.ts` — incomes + expenses.
+- `app/api/income/route.ts` + `app/api/expenses/route.ts` — same
+  cookie-gated action-based shape.
+- `modules/finance/index.ts`: `monthlyTotals`, `recurringMonthlyNet`,
+  `projectRecurringForward` (+8 new tests in `finance.test.ts`) — recurring
+  income/expenses project forward for the report; one-off entries don't.
+- `app/components/FinancienCashflow.tsx` (report table: actual months +
+  3 forward "verwacht" months) + `FinancienIncomeForm.tsx` +
+  `FinancienExpenseForm.tsx` (starter categories in
+  `app/lib/financien.ts`'s `EXPENSE_CATEGORIES`).
+- Wired: `/financien`'s page now passes the current month's surplus (or
+  `finance_settings.monthly_contribution_override` when set) as the P3
+  chart's default DCA contribution — still overridable via the existing
+  input.
+
+**Gate:** lint clean, `tsc --noEmit` clean, vitest 412 passed (up from 380 on
+main; +32 new), `next build` clean. Ran via `.claude/hooks/gate.sh` → GREEN.
+
+## Modeling decision flagged for Siem (not literally in the PRD)
+
+`costBasisSeries` (Phase 2, on main) takes an optional per-buy `fx_to_eur`
+and treats a missing rate as 0 € — "never guess a missing rate" (PRD §5).
+There is no historical-FX source anywhere in this system (Yahoo only gives
+*live* rates; the PRD explicitly rules out historical backfill for V1). So
+for a non-EUR buy, the page (`FinancienPortfolio.tsx`) passes **today's
+live FX rate** (the same one used for portfolio valuation) as the cost-basis
+conversion, rather than leaving it 0. This is the pragmatic reading of "V1 =
+only live data, no history" — but it does mean an old USD buy's € cost basis
+uses today's EUR/USD rate, not the rate on the actual purchase date. If a
+holding's currency has no live rate available *at all* right now, it still
+contributes 0 € and is flagged "wisselkoers onbekend" in the UI (true
+missing-rate case, never guessed). **Please confirm this reading is
+acceptable during live review** — the alternative (0 € cost basis for every
+non-EUR buy) was rejected as clearly worse for a Siem holding real USD
+stocks.
 
 ## What's open / next
 
-1. **Siem — apply migrations `0019` + `0020`** to the live DB. Needed before any
-   Wave-2 `needs-siem` surface phase can be live-verified.
-2. **Wave 2 (needs-siem), still Backlog** — dispatch after migrations applied +
-   Siem in the loop for visual review:
-   - Finance: MOR-6 (holdings UI + 3-line chart), MOR-7 (income/expense report),
-     MOR-8 (goals), MOR-9 (dashboard tiles).
-   - Research: MOR-12 (seed & track → followed thread), MOR-13 (MijnOnderzoek
-     component), MOR-14 (surface in report).
-   - Settings: MOR-15 (tab shell — unblocked, ready), MOR-16 (pipeline report),
-     MOR-17 (Financiën tab ← MOR-8), MOR-18 (Account tab ← MOR-13).
-3. **Merged-branch cleanup**: worktrees `../Morning_Report-worktrees/MOR-4` and
-   `/MOR-10` + their branches can be removed (both landed).
+1. **Siem — live-verify on `localhost:3000`:**
+   - `/financien` — add a holding (e.g. `AAPL`/USD or a EUR ticker), add a
+     buy, confirm the chart renders (amber cost-basis line → accent "today"
+     dot → dashed amber projection), edit/delete a holding and a buy.
+   - Add an income + an expense (mark one recurring), confirm the monthly
+     report table renders and the DCA-contribution stat tile on the chart
+     picks up the computed surplus by default (try the override input too).
+   - Check the FX-flag modeling decision above against a real USD holding.
+2. Once approved: `/merge` MOR-6 + MOR-7 (needs-siem, so Siem's explicit go
+   first — see workflow.md).
+3. **Not built here (later phases, still Backlog):** MOR-8 (goals — Phase 5,
+   depends on MOR-6+MOR-7), MOR-9 (dashboard tiles — Phase 6).
+4. Research (MOR-12/13/14) and Settings (MOR-15..18) Wave-2 issues are
+   untouched by this branch — separate dispatch.
 
 ## Known issues / gotchas
 
 - `.claude/settings.local.json` carries an uncommitted local diff (session
   permission grants) — kept out of commits (per-contributor file).
-- `modules/research` `CATEGORY_SLUGS` is a static mirror of the seeded
-  `categories` table — update it if a migration changes the catalog.
-- Finance FX: per-buy `fx_to_eur` is caller-supplied (no historical-FX lookup in
-  the pure module); a non-EUR buy with no rate contributes 0 € (never guessed) —
-  a settled, reviewer-approved reading of the PRD.
 - Freshly-created worktrees have no `node_modules` — dispatched sessions
-  `npm install` first.
-- Tavily citation row (MOR-3) only shows once `TAVILY_API_KEY` is set + a
-  pipeline runs.
+  `npm install` first (done here).
+- The FX-for-cost-basis modeling decision above is the one open judgment
+  call from this session — flagged, not silently assumed.
+- `modules/research` `CATEGORY_SLUGS` is a static mirror of the seeded
+  `categories` table — unrelated to this branch, carried over from Wave 1.

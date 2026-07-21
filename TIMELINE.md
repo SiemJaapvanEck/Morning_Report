@@ -3,6 +3,13 @@
 Chronologisch logboek van het project. Eén regel (of kort blok) per
 werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
 
+- **21 July 2026 — Dispatched: MOR-6 + MOR-7 (Finance Phase 3+4 — `/financien` page).**
+  Holdings/buys CRUD + 3-line portfolio chart (cost basis / today marker /
+  compound projection, `app/lib/financien.ts` + `FinancienChart.tsx`) and
+  the income/expense monthly report wired as the chart's DCA-contribution
+  default. Brandbook §6 recipe added. Gate green (412 tests, +32 new).
+  Branch `MOR-6-finance-ui-2026-07-21`, commits `d2cce64`/`54e4124`. Both
+  `needs-siem` — not merged, awaiting Siem's live review.
 - **21 July 2026 — Merged `MOR-4-finance-foundation-2026-07-21` → main.**
   MOR-4 + MOR-5 (Finance foundation + math core + keyless Yahoo quotes/FX),
   reviewer-approved (incl. the FX judgment call), rebased over the Research

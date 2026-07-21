@@ -458,6 +458,95 @@ export type EntityType = "actor" | "person" | "product" | "event" | "place" | "o
 /** How confident we are in a registry entry — seed rows are the trusted core. */
 export type EntityConfidence = "seed" | "ai_high" | "ai_low";
 
+// ============================================================
+// Personal Finance module (docs/prd/finance.md, Phase 1).
+// Mirrors supabase/migrations/0019_finance.sql.
+// ============================================================
+
+export type HoldingKind = "aandeel" | "etf" | "crypto" | "overig";
+
+/** A manually-entered instrument (Yahoo ticker), priced live in its native currency. */
+export interface Holding {
+  id: string;
+  profile_id: string;
+  /** Yahoo ticker, e.g. "AAPL", "VWCE.DE" */
+  symbol: string;
+  name: string | null;
+  kind: HoldingKind;
+  /** native pricing currency, e.g. 'USD'/'EUR' — buys and live quotes are in this currency */
+  currency: string;
+  created_at: string;
+}
+
+/** One buy lot (DCA history) for a holding. */
+export interface HoldingBuy {
+  id: string;
+  profile_id: string;
+  holding_id: string;
+  bought_on: string;
+  quantity: number;
+  /** price in the holding's native currency at time of purchase */
+  price_native: number;
+  currency: string;
+  fee_eur: number;
+  created_at: string;
+}
+
+/** A manual income entry feeding the monthly surplus. */
+export interface Income {
+  id: string;
+  profile_id: string;
+  received_on: string;
+  label: string | null;
+  amount_eur: number;
+  recurring: boolean;
+  created_at: string;
+}
+
+/** A manual categorized expense entry. */
+export interface Expense {
+  id: string;
+  profile_id: string;
+  spent_on: string;
+  category: string;
+  label: string | null;
+  amount_eur: number;
+  recurring: boolean;
+  created_at: string;
+}
+
+export type FinanceGoalKind = "investment" | "savings";
+
+/** One investment goal (DCA-driven ETA) or a named savings goal. */
+export interface FinanceGoal {
+  id: string;
+  profile_id: string;
+  kind: FinanceGoalKind;
+  name: string;
+  target_eur: number;
+  target_date: string | null;
+  /** savings only; an investment goal reads its progress off the live portfolio value */
+  saved_eur: number;
+  created_at: string;
+}
+
+/** Per-profile finance knobs: expected return, optional DCA override, base currency. */
+export interface FinanceSettings {
+  id: string;
+  profile_id: string;
+  expected_return_pct: number;
+  /** nullable: when set, overrides the auto surplus-driven DCA amount */
+  monthly_contribution_override: number | null;
+  base_currency: string;
+  updated_at: string;
+}
+
+/** A live quote for one symbol (Phase 2, keyless Yahoo fetch — never persisted). */
+export interface FinanceQuote {
+  price: number;
+  currency: string;
+}
+
 /**
  * One row in the `entities` registry table. Mirrors supabase/migrations/0017_entities.sql.
  * The pipeline upserts on `norm_key` — see modules/entities/ for the pure helpers.

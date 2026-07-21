@@ -3,6 +3,16 @@
 Chronologisch logboek van het project. Eén regel (of kort blok) per
 werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
 
+- **22 July 2026 — Dispatched: MOR-16 (Settings P2 — Pipeline-rapport tab).**
+  Pure aggregation core (`modules/pipeline-report`): today's article count by
+  category/sources/€ cost/Sol/deep-research counts + per-kind step timing,
+  and per-edition € cost + article count trends (last 7/30 editions).
+  `getPipelineReport()` read query + `InstellingenPipelineTab` (stat tiles,
+  category bars, step-duration list, `seriesPoints()` sparklines) mounted
+  into the MOR-15 shell's pipeline panel — no shell change. Brandbook §7
+  added. Gate green (423 tests, +11 new). Branch
+  `MOR-16-pipeline-rapport-tab-2026-07-22`. `needs-siem` — not merged,
+  awaiting Siem's live/visual review.
 - **21 July 2026 — Dispatched: MOR-6 + MOR-7 (Finance Phase 3+4 — `/financien` page).**
   Holdings/buys CRUD + 3-line portfolio chart (cost basis / today marker /
   compound projection, `app/lib/financien.ts` + `FinancienChart.tsx`) and

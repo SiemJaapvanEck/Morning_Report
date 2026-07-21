@@ -1,50 +1,83 @@
-# HANDOFF — Wave 2 surfaces landing: Finance UI + Settings shell on main
+# HANDOFF — MOR-16 (Pipeline-rapport tab) built, gate green, awaiting review
 
-> **Last updated:** 22 July 2026 — merged `MOR-6-finance-ui` and
-> `MOR-15-settings-shell` → main (interactive session with Siem, /merge). On `main`.
+> **Last updated:** 22 July 2026 — dispatched session, branch
+> `MOR-16-pipeline-rapport-tab-2026-07-22`. Not merged.
 
 ## Where we stand
 
-Wave 1 (finance + research foundations) is on `main`; migrations `0019` +
-`0020` are applied to the live DB. Wave 2 surfaces are landing: the
-**finance UI (MOR-6 + MOR-7)** and the **settings tab shell (MOR-15)** are
-now merged — all reviewer-approved, all double-gate green.
+Wave 2 surfaces continue landing on `main`: **finance UI (MOR-6/MOR-7)** and
+the **settings tab shell (MOR-15)** are merged. This session built **MOR-16
+(Settings P2 — Pipeline-rapport tab)** on its own branch — gate green, PR
+open, `needs-siem` (visual review + live data are Siem's).
 
-## On main now (this session)
+## This session (MOR-16)
 
-- **Finance UI (MOR-6 + MOR-7):** `/financien` page — 3-line portfolio chart
-  (cost basis / current value / compound projection), holdings + buys
-  management (inline edit/delete), income/expense forms + monthly report with
-  forward "verwacht" months; current-month surplus feeds the chart's DCA
-  default (overridable). `getPortfolio`/`getCashflow` in `app/lib/queries.ts`;
-  cookie-gated routes `app/api/{holdings,holding-buys,income,expenses}`; pure
-  math in `modules/finance` + `app/lib/financien.ts` (unit-tested). Brandbook §6.
-- **Settings shell (MOR-15):** `/instellingen` is now a three-tab client shell
-  (Account · Financiën · Pipeline-rapport). `VoorkeurenKiezer` + existing prefs
-  relocated unchanged into the Account tab; Financiën + Pipeline-rapport are
-  "komt binnenkort" placeholders filled by later phases. WAI-ARIA tabs pattern,
-  scheme tokens. Brandbook §5.1.
+Mounted the Pipeline-rapport tab into the MOR-15 settings shell's `pipeline`
+panel prop — **no shell change**, per the locked PRD decision.
 
-## What's open / next — Wave-2 remaining (all Backlog, `needs-siem`)
+- **`modules/pipeline-report/index.ts`** (+ `pipeline-report.test.ts`, 11
+  tests): pure aggregation core, no Supabase/React.
+  - `computeTodayReport(items, steps, usage)` → article count by category
+    (busiest first), distinct source count, total € cost, Sol article count
+    (`sol_note != null`), deep-research count (`band === "deep"` **and** a
+    non-null article), and per-kind step duration (average
+    `finished_at − started_at` in seconds; unfinished runs excluded from the
+    average, reported as `avgSeconds: null` when a kind never finished).
+  - `computePipelineTrends(editions, usage, items)` → per-edition € cost +
+    article count, sorted ascending by date, sliced to the last 7 and last
+    30 editions.
+- **`getPipelineReport(profileId)`** in `app/lib/queries.ts`: reads the last
+  30 editions for the profile (bounds the scan per the PRD's rail), finds
+  today's edition, joins its `edition_items` to `items(category_id,
+  source_id, categories(slug, name))` plus its `pipeline_steps` and
+  `usage_log`, flattens the joins into the aggregator's row shapes, and also
+  pulls `usage_log`/`edition_items` for every edition in the 30-edition
+  window (scoped via `edition_id in (...)`) for the trend series. Read-only,
+  no AI calls — every table already existed.
+- **`InstellingenPipelineTab`** (`app/components/InstellingenPipelineTab.tsx`):
+  server-rendered (no `"use client"` — no interactivity). Today's 5 stat
+  tiles (kosten/artikelen/bronnen/Sol-artikelen/deep-research, `--faint` when
+  today's edition hasn't run), a category-breakdown bar list
+  (`categoryColor()` per bar), a per-kind step-duration list (Dutch labels),
+  and two `TrendCard`s (kosten, artikelen) each holding a 7-day and 30-day
+  sparkline built with `seriesPoints()` — the same helper the krant umbrella
+  chart uses (`app/lib/stories.ts`), reused as the PRD specified.
+- **`docs/brandbook.md` §7** "Pipeline-rapport tab" added (stat-tile row,
+  category bars, step-duration list, `TrendCard` sparkline recipe); old
+  §7-9 (Interaction & motion / Do's & don'ts / Change log) renumbered to
+  §8-10, and the one stale in-doc `§7` cross-reference (the "komt binnenkort"
+  empty-state note) updated to `§9`.
+- Gate green: lint, `tsc --noEmit`, **423 tests** (+11 new), `next build`.
 
-- **Finance:** MOR-8 (goals + ETA), MOR-9 (dashboard tiles).
-- **Research:** MOR-12 (seed & track → thread), MOR-13 (MijnOnderzoek
-  component), MOR-14 (surface in report).
-- **Settings convergence** (mount into the shell's `financien`/`pipeline`
-  panel props, no shell change): MOR-16 (pipeline-rapport tab, dep: MOR-15
-  only — dispatchable now), MOR-17 (Financiën tab ← MOR-8), MOR-18 (Account
-  tab ← MOR-13).
+## What's open / next
 
-Merged-branch cleanup: worktrees/branches for MOR-6 and MOR-15 removed this
-session; Wave-1 MOR-4/MOR-10 worktrees can still be pruned if present.
+- **MOR-16 itself:** `needs-siem` — visual review of the tab (tile layout,
+  bar/sparkline rendering with real data) and a check against a live
+  `usage_log`/`pipeline_steps` edition once the pipeline has run today.
+- **Wave-2 remaining** (all Backlog, `needs-siem` unless noted):
+  - Finance: MOR-8 (goals + ETA), MOR-9 (dashboard tiles).
+  - Research: MOR-12 (seed & track → thread), MOR-13 (MijnOnderzoek
+    component), MOR-14 (surface in report).
+  - Settings convergence: MOR-17 (Financiën tab ← MOR-8), MOR-18 (Account
+    tab ← MOR-13) — both still blocked on their finance/research sources.
 
 ## Known issues / gotchas
 
-- **Finance FX (live-review item):** for non-EUR holdings, historical
-  cost-basis conversion defaults to *today's* live FX rate, not the buy-date
-  rate. Surfaced honestly by the implementer; watch real non-EUR positions.
-  Per-buy `fx_to_eur` is caller-supplied; a non-EUR buy with no rate
-  contributes 0 € (never guessed) — a settled, reviewer-approved reading.
+- **Live-review-only claims:** the tab has never rendered against a real
+  `pipeline_steps`/`usage_log`/`edition_items` row set — the aggregation
+  logic is unit-tested over hand-built fixtures, but Siem should sanity-check
+  the numbers against an actual edition (especially step-duration timing,
+  since `pipeline_steps.attempts` retries aren't specially handled — a
+  retried step just contributes another duration sample to its kind's
+  average).
+- Today's stat tiles fetch on every `/instellingen` page load regardless of
+  which tab is active (matches the existing Account-tab data-fetching
+  pattern — the shell mounts all three tabs' data server-side, tab switching
+  is client-only). No new AI calls; the added queries are a handful of
+  `select`s bounded to ≤30 editions.
+- **Finance FX (live-review item, unrelated to this session):** for non-EUR
+  holdings, historical cost-basis conversion defaults to *today's* live FX
+  rate, not the buy-date rate. Watch real non-EUR positions.
 - `.claude/settings.local.json` carries an uncommitted local diff (session
   permission grants) — kept out of commits (per-contributor file).
 - `modules/research` `CATEGORY_SLUGS` is a static mirror of the seeded

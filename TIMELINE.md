@@ -3,6 +3,13 @@
 Chronologisch logboek van het project. Eén regel (of kort blok) per
 werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
 
+- **21 July 2026 — Dispatched: MOR-10 + MOR-11 (Research Tracking Phase 1+2).**
+  `supabase/migrations/0020_user_research.sql` (file only) + `UserResearch`
+  type; `modules/research/index.ts` (`buildExtractionPrompt`/`parseExtraction`/
+  `extractResearch`, defensive `askAI` scan-tier call, tavily-pattern) + 14
+  new tests. Gate green (352 tests). Branch
+  `MOR-10-research-foundation-2026-07-21`, commits `7d2eb2e`/`614c9ed`. Stopped
+  before MOR-12 (needs-siem) per plan.
 - **21 July 2026 — Planned 3 initiatives + dispatched Wave 1.** Wrote & approved
   3 PRDs (`docs/prd/finance.md`, `research-tracking.md`, `settings-tabs.md`) and
   planned them into the single Morning Report Linear project as MOR-4…MOR-18

@@ -26,12 +26,16 @@ reviewer pass that posts its verdict on the issue):
   dispatched unattended on Siem's explicit instruction — the needs-siem
   gate moves to his staging review, as per the merge policy.
 
-**Pipeline status:** xAI billing FIXED by Siem (22 Jul). The cron-job.org
-tick job is still broken (~1×/day instead of every 2 min) — Siem knows,
-parked. Today's edition rerun + the MOR-12 "sinds jouw onderzoek" live proof
-still pending a working scheduler or a manual tick. Backlog decision
-(park vs process ~45 stale editions) still open — see
-`docs/ops/decisions-pending.md`.
+**Pipeline status:** xAI billing FIXED by Siem (22 Jul) and verified — the
+7-21 Jul backlog was parked (946 open steps across 105 stale editions →
+`skipped`, reversible by setting them back to `pending`) and today's 3
+editions ran end-to-end clean (0 failed steps, daily papers finalized), so
+MOR-16's tab now has real rows. MOR-12 live proof: matching confirmed (the
+S&P 500 research storyline caught 1 item); the "sinds jouw onderzoek"
+framing fires the first day a research storyline wins a deep-dive slot
+(thread updates are the budget-capped deep path — `state` still null, so
+the first-update condition is intact on prod). The cron-job.org tick job
+is still broken (~1×/day instead of every 2 min) — Siem knows, parked.
 
 **ntfy phone cards work** — test card delivered to the topic in
 `.claude/ntfy-topic.txt` (HTTP 200, 22 Jul).

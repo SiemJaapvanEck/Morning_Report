@@ -1,5 +1,11 @@
 # Status log
 
+--- Wed 22 Jul 2026 · pipeline restored
+[STATUS] ✅ Today's editions ran clean; backlog parked
+• Done: backlog 7-21 Jul parked (946 steps, reversible); today's 3 editions end-to-end, 0 failures; research matching proven (S&P 500 +1 item); framing awaits first deep-dive slot
+• Next: tonight's sprints as scheduled; tomorrow check the first research deep-dive for the "sinds jouw onderzoek" opening
+• Needs you: only the cron-job.org fix (parked, your call when)
+
 --- Wed 22 Jul 2026 · production promotion + overnight sprints
 [STATUS] ✅ MOR-8/12/16 promoted to production; 2 sprints scheduled tonight
 • Done: Siem approved → staging merged to main (dbfe1bb, double gate green), MOR-8/12/16 Done in Linear, branches+worktrees cleaned, staging fast-forwarded; ntfy test card delivered (HTTP 200); xAI billing fixed by Siem

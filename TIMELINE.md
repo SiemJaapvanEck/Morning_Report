@@ -3,6 +3,15 @@
 Chronologisch logboek van het project. Eén regel (of kort blok) per
 werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
 
+- **22 July 2026 — Pipeline restored: backlog parked, today's editions ran clean.**
+  After Siem fixed xAI billing: parked the 7-21 Jul backlog (946 open steps
+  across 105 stale editions → `skipped`, reversible) and reran — today's 3
+  editions completed end-to-end, 0 failed steps, daily papers finalized.
+  MOR-12 live proof: matching works (S&P 500 storyline caught 1 item);
+  the "sinds jouw onderzoek" framing awaits the first day a research
+  storyline wins a deep-dive slot (updates are the deep path, budget-capped;
+  `state` still null so the first-update condition is intact on prod).
+  cron-job.org tick cadence still broken — parked with Siem.
 - **22 July 2026 — Landed the review queue on `staging`: MOR-8 + MOR-12 + MOR-16.**
   Orchestrator session (interactive). Each branch merged with the double gate
   (source CI green, merged staging gate green — 430 tests after MOR-16):

@@ -12,18 +12,23 @@ starting cold.
 
 ## How to test
 
-Honest note first: **this phase has no screen of its own yet.** The page for
-creating and managing research notes is the next issue (MOR-13, "Mijn
-onderzoek"). What was built here is the machinery underneath. That means a
-click-path test isn't really possible today; you have two options:
+This phase has no screen of its own (the create/manage page is MOR-13), so
+on 22 July the create path was exercised for real instead: **four research
+notes were created through the exact code the future UI will call**, one per
+market you follow — S&P 500, Stoxx Europe 600, iShares Emerging Markets, and
+a European industrials ETF. The AI extraction ran live and produced sensible
+anchors for each (Federal Reserve, ECB, China/TSMC, Siemens/ABB…).
 
-1. **Wait for MOR-13** (recommended) — once it lands you'll create a note
-   through the UI and everything in this issue gets exercised on the way.
-2. **Test it now anyway** — say the word and I'll walk you through one
-   copy-paste command that creates a test note; after that you can check:
-   - The archive shows a new followed storyline named after your note.
-   - After the next morning's pipeline run, if news matched it, its first
-     update starts with the "sinds jouw onderzoek" framing.
+What you can check now:
+
+1. Open the archive ("Alle verhalen") on the staging preview. Expected:
+   four new followed storylines named "S&P 500", "Stoxx Europe 600",
+   "iShares Emerging Markets" and "Europese industrie-ETF", with no updates
+   yet — that's normal, they were just born.
+2. After the next morning's pipeline run: any of them that matched news
+   should show its first update, and that update should open with the
+   "sinds jouw onderzoek" framing. Finance news matches these almost every
+   day, so this shouldn't take long to prove itself.
 
 ## What to pay attention to
 

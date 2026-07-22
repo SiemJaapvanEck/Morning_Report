@@ -3,6 +3,22 @@
 Chronologisch logboek van het project. Eén regel (of kort blok) per
 werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
 
+- **22 July 2026 — Landed the review queue on `staging`: MOR-8 + MOR-12 + MOR-16.**
+  Orchestrator session (interactive). Each branch merged with the double gate
+  (source CI green, merged staging gate green — 430 tests after MOR-16):
+  `89b8c07` MOR-8 (finance goals + ETA), `7982f80` MOR-12 (research seed &
+  track), `19db38f` MOR-16 (pipeline-rapport tab). Conflicts (HANDOFF/
+  TIMELINE/queries.ts/brandbook) resolved keeping both. Review docs written:
+  `docs/reviews/MOR-{8,12,16}.md`; staging preview shared with Siem.
+  Promotion to `main` awaits Siem's approve.
+- **22 July 2026 — Agent-team enrollment committed to git; `staging` pushed.**
+  Local follow-up to the cloud enrollment run: committed the orchestrator
+  Bet & Flow rewrite, settings.json deny-list hardening (force-push, hard
+  reset, .env reads), and the four `docs/ops/` memory files. Deleted the
+  cloud session's `_to_delete/` junk. Gitignored `.claude/ntfy-topic.txt`
+  (public repo — topic name is the channel's only access control).
+  `staging` branch fast-forwarded to main and pushed to origin; the done
+  push-staging item cleared from `docs/ops/decisions-pending.md`. Gate green.
 - **22 July 2026 — Dispatched: MOR-8 (Finance Phase 5 — goals: investment
   goal ETA + named savings goals).** `getGoals` + `app/api/goals`/
   `app/api/finance-settings` (cookie-gated, "one investment goal" 409
@@ -721,12 +737,3 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   prefs relocated unchanged into Account, placeholders for MOR-16/17. Landed
   after the finance merge; conflicts (HANDOFF/TIMELINE/brandbook) resolved
   keeping both. Reviewer-approved; double gate green.
-
-- **22 July 2026 — Agent-team enrollment committed to git; `staging` pushed.**
-  Local follow-up to the cloud enrollment run: committed the orchestrator
-  Bet & Flow rewrite, settings.json deny-list hardening (force-push, hard
-  reset, .env reads), and the four `docs/ops/` memory files. Deleted the
-  cloud session's `_to_delete/` junk. Gitignored `.claude/ntfy-topic.txt`
-  (public repo — topic name is the channel's only access control).
-  `staging` branch fast-forwarded to main and pushed to origin; the done
-  push-staging item cleared from `docs/ops/decisions-pending.md`. Gate green.

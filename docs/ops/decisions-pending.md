@@ -1,8 +1,11 @@
 # Decisions pending — Siem
 
 - **Review queue (3 items, over WIP limit):** MOR-8 (finance goals + ETA),
-  MOR-12 (research seed & track), MOR-16 (pipeline-rapport tab) are built and
-  awaiting your review. Clearing one re-opens the pipeline for new work.
+  MOR-12 (research seed & track), MOR-16 (pipeline-rapport tab) are on
+  `staging` awaiting your review — click-paths in `docs/reviews/`, preview
+  https://morning-report-git-staging-siemjaapvanecks-projects.vercel.app.
+  Your "approve" promotes staging → main. Clearing one re-opens the
+  pipeline for new work.
 - **Visual spot-check owed:** MOR-6, MOR-7, MOR-15 merged to main with
   `needs-siem` flags still open — check /financien and /instellingen look
   right in the live app.

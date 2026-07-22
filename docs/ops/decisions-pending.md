@@ -9,5 +9,3 @@
 - **Live-review item (from HANDOFF):** non-EUR holdings use today's FX rate
   for historical cost basis; a non-EUR buy without a rate contributes €0.
   Watch real non-EUR positions and decide if per-buy FX entry is worth a bet.
-- **staging → GitHub:** the `staging` branch is created locally; the first
-  agent session with network access must `git push -u origin staging`.

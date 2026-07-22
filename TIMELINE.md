@@ -697,4 +697,5 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   reset, .env reads), and the four `docs/ops/` memory files. Deleted the
   cloud session's `_to_delete/` junk. Gitignored `.claude/ntfy-topic.txt`
   (public repo — topic name is the channel's only access control).
-  `staging` branch fast-forwarded to main and pushed to origin. Gate green.
+  `staging` branch fast-forwarded to main and pushed to origin; the done
+  push-staging item cleared from `docs/ops/decisions-pending.md`. Gate green.

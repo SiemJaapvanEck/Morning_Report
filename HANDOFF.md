@@ -10,7 +10,9 @@ The **agent-team workflow is enrolled and now committed**: Bet & Flow
 planning, the plugin specialist team, the staging merge policy, and the
 `docs/ops/` memory files (bets, status-log, decisions-pending, learnings —
 read all four at session start). The `staging` branch exists on GitHub at
-parity with `main`. `.claude/ntfy-topic.txt` is **gitignored on purpose** —
+parity with `main`; the enrollment's follow-up items in
+`docs/ops/decisions-pending.md` are cleared — only Siem-decisions remain
+there. `.claude/ntfy-topic.txt` is **gitignored on purpose** —
 the repo is public and the topic name is the channel's only access control;
 it lives only in the local checkout.
 

@@ -242,6 +242,22 @@ export function projectRecurringForward(
   return rows;
 }
 
+// ============================================================
+// Goal progress (Phase 5) — the investment goal (ETA-driven) + named
+// savings goals share one progress-bar reading: current € over target €.
+// ============================================================
+
+/**
+ * Progress toward a goal as a percentage, clamped to `[0, 100]`: current €
+ * over target €. `targetEur <= 0` reads as 0 (never a divide-by-zero or a
+ * guessed number) — mirrors the module's "never guess" rail. Overachieving
+ * a goal caps the bar at 100 rather than overflowing it.
+ */
+export function goalProgressPct(currentEur: number, targetEur: number): number {
+  if (targetEur <= 0) return 0;
+  return Math.min(100, Math.max(0, (currentEur / targetEur) * 100));
+}
+
 /** Cap on how far `etaMonthsToTarget` searches before declaring the target unreachable. */
 export const ETA_MONTH_CAP = 600;
 

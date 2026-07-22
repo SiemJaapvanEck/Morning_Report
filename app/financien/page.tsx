@@ -8,11 +8,12 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { hasDbConfig } from "@/modules/shared/db";
-import { getCashflow, getPortfolio } from "@/app/lib/queries";
+import { getCashflow, getGoals, getPortfolio } from "@/app/lib/queries";
 import { fetchFxToEur, fetchQuotes } from "../../modules/markten";
-import { monthlySurplus } from "../../modules/finance";
+import { monthlySurplus, portfolioValueEur } from "../../modules/finance";
 import { FinancienPortfolio } from "@/app/components/FinancienPortfolio";
 import { FinancienCashflow } from "@/app/components/FinancienCashflow";
+import { FinancienGoals } from "@/app/components/FinancienGoals";
 
 export const dynamic = "force-dynamic";
 
@@ -31,9 +32,10 @@ export default async function FinancienPagina() {
     );
   }
 
-  const [{ holdings, buys, settings }, { incomes, expenses }] = await Promise.all([
+  const [{ holdings, buys, settings }, { incomes, expenses }, { investment, savings }] = await Promise.all([
     getPortfolio(profileId),
     getCashflow(profileId),
+    getGoals(profileId),
   ]);
 
   const symbols = [...new Set(holdings.map((h) => h.symbol))];
@@ -53,6 +55,11 @@ export default async function FinancienPagina() {
   // contribution input).
   const defaultMonthlyContributionEur =
     settings?.monthly_contribution_override ?? monthlySurplus(incomes, expenses, todayMonth);
+
+  // The investment goal's ETA + progress read the same live portfolio value
+  // the chart shows (Phase 2 math, computed once here so the Goals section
+  // doesn't need its own quotes/fx wiring).
+  const currentPortfolioValueEur = portfolioValueEur(holdings, buys, quotes, fx);
 
   return (
     <div>
@@ -76,6 +83,14 @@ export default async function FinancienPagina() {
       />
 
       <FinancienCashflow initialIncomes={incomes} initialExpenses={expenses} />
+
+      <FinancienGoals
+        initialInvestmentGoal={investment}
+        initialSavingsGoals={savings}
+        currentPortfolioValueEur={currentPortfolioValueEur}
+        monthlyContributionEur={defaultMonthlyContributionEur}
+        initialExpectedReturnPct={settings?.expected_return_pct ?? 7}
+      />
     </div>
   );
 }

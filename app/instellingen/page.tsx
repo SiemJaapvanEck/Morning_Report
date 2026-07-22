@@ -1,16 +1,19 @@
 // Instellingen: tabbed shell — Account · Financiën · Pipeline-rapport.
 // Account hosts the pre-existing preferences content (onderwerp toevoegen,
 // interesses/VoorkeurenKiezer, bronnen, developer-paneel), unchanged.
-// Financiën and Pipeline-rapport are placeholders their integration phases
-// (MOR-17, MOR-16) fill in — the shell ships independently of those.
-// See docs/prd/settings-tabs.md (Phase 1).
+// Pipeline-rapport mounts today's edition report + trends (MOR-16, Phase 2 —
+// see getPipelineReport() in app/lib/queries.ts). Financiën is still a
+// placeholder its integration phase (MOR-17) fills in.
+// See docs/prd/settings-tabs.md (Phases 1-2).
 
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { db, hasDbConfig, unwrap } from "@/modules/shared/db";
 import { getVoorkeurenData } from "@/app/lib/voorkeuren";
+import { getPipelineReport } from "@/app/lib/queries";
 import { InstellingenTabs } from "@/app/components/InstellingenTabs";
 import { InstellingenAccountTab } from "@/app/components/InstellingenAccountTab";
+import { InstellingenPipelineTab } from "@/app/components/InstellingenPipelineTab";
 import { InstellingenLeegState } from "@/app/components/InstellingenLeegState";
 import type { Source } from "@/modules/shared/types";
 
@@ -34,6 +37,7 @@ export default async function InstellingenPagina() {
   const sources: Source[] = unwrap(await db().from("sources").select("*").order("name"));
   const voorkeuren = await getVoorkeurenData(profileId);
   const { categories, topics } = voorkeuren;
+  const pipelineReport = await getPipelineReport(profileId);
 
   return (
     <div className="space-y-10">
@@ -61,13 +65,7 @@ export default async function InstellingenPagina() {
             volgende="Wordt gevuld in een volgende fase (MOR-17)."
           />
         }
-        pipeline={
-          <InstellingenLeegState
-            titel="Pipeline-rapport"
-            beschrijving="Wat de pipeline vandaag opleverde en kostte — artikelen, bronnen, kosten, Sol-stukken — plus 7- en 30-daagse trends."
-            volgende="Wordt gevuld in een volgende fase (MOR-16)."
-          />
-        }
+        pipeline={<InstellingenPipelineTab report={pipelineReport} />}
       />
     </div>
   );

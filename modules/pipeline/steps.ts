@@ -18,6 +18,7 @@ import { searchTavily, buildQuery, tavilyEnabled } from "../tavily";
 import { assembleUserContext, composeDailyPaper, composeSectionIntros, type DigestTopic } from "../redactie";
 import { dedupeForEdition, archivePrimer } from "../archive";
 import { buildAgendaRows, persistAgendaRows, type AgendaItemInput } from "../calendar";
+import { isResearchOriginThread } from "../research";
 import {
   loadActiveThreads,
   loadLinkedItemIds,
@@ -684,6 +685,10 @@ const generateStep: StepHandler = async ({ edition, step }) => {
       const grounding = tavilyEnabled()
         ? await searchTavily(buildQuery(job.title, job.threadEntities))
         : undefined;
+      // Research Tracking PRD, Phase 3 — the sole "is this a research thread"
+      // signal (user_research.thread_id); only drives generateThreadUpdate's
+      // framing, never matching (threadsStep above is untouched).
+      const researchOrigin = await isResearchOriginThread(job.threadId);
       const update = await generateThreadUpdate(
         {
           thread: { title: job.title, state: job.state },
@@ -693,6 +698,7 @@ const generateStep: StepHandler = async ({ edition, step }) => {
           scheduledEvents,
           grounding,
           storyline: job.facet && job.umbrellaTitle ? { umbrella: job.umbrellaTitle, facet: job.facet } : undefined,
+          researchOrigin,
         },
         mode,
         edition.id,

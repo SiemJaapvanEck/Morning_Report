@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   costBasisSeries,
   etaMonthsToTarget,
+  goalProgressPct,
   monthlySurplus,
   monthlyTotals,
   portfolioValueEur,
@@ -256,6 +257,32 @@ describe("etaMonthsToTarget", () => {
   it("returns null when the target is unreachable within the month cap", () => {
     // no contribution, no growth -> flat balance that never reaches a higher target
     expect(etaMonthsToTarget(100, 0, 0, 1_000_000)).toBeNull();
+  });
+});
+
+describe("goalProgressPct", () => {
+  it("returns the percentage of target reached", () => {
+    expect(goalProgressPct(2500, 10000)).toBe(25);
+  });
+
+  it("caps at 100 when the goal is overachieved", () => {
+    expect(goalProgressPct(15000, 10000)).toBe(100);
+  });
+
+  it("is 0 for a target of 0 (never a divide-by-zero)", () => {
+    expect(goalProgressPct(500, 0)).toBe(0);
+  });
+
+  it("is 0 for a negative target", () => {
+    expect(goalProgressPct(500, -100)).toBe(0);
+  });
+
+  it("never goes negative for a negative current value", () => {
+    expect(goalProgressPct(-500, 10000)).toBe(0);
+  });
+
+  it("is 0 for no progress at all", () => {
+    expect(goalProgressPct(0, 10000)).toBe(0);
   });
 });
 

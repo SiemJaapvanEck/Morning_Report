@@ -3,6 +3,53 @@
 Chronologisch logboek van het project. Eén regel (of kort blok) per
 werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
 
+- **22 July 2026 — Landed the review queue on `staging`: MOR-8 + MOR-12 + MOR-16.**
+  Orchestrator session (interactive). Each branch merged with the double gate
+  (source CI green, merged staging gate green — 430 tests after MOR-16):
+  `89b8c07` MOR-8 (finance goals + ETA), `7982f80` MOR-12 (research seed &
+  track), `19db38f` MOR-16 (pipeline-rapport tab). Conflicts (HANDOFF/
+  TIMELINE/queries.ts/brandbook) resolved keeping both. Review docs written:
+  `docs/reviews/MOR-{8,12,16}.md`; staging preview shared with Siem.
+  Promotion to `main` awaits Siem's approve.
+- **22 July 2026 — Agent-team enrollment committed to git; `staging` pushed.**
+  Local follow-up to the cloud enrollment run: committed the orchestrator
+  Bet & Flow rewrite, settings.json deny-list hardening (force-push, hard
+  reset, .env reads), and the four `docs/ops/` memory files. Deleted the
+  cloud session's `_to_delete/` junk. Gitignored `.claude/ntfy-topic.txt`
+  (public repo — topic name is the channel's only access control).
+  `staging` branch fast-forwarded to main and pushed to origin; the done
+  push-staging item cleared from `docs/ops/decisions-pending.md`. Gate green.
+- **22 July 2026 — Dispatched: MOR-8 (Finance Phase 5 — goals: investment
+  goal ETA + named savings goals).** `getGoals` + `app/api/goals`/
+  `app/api/finance-settings` (cookie-gated, "one investment goal" 409
+  guard); `FinancienGoals` — investment-goal ETA card (`etaMonthsToTarget`,
+  "buiten bereik"/"doel al bereikt"), savings-goal progress rows
+  (`goalProgressPct`, new tested pure helper), expected-return control.
+  No new migration (Phase 1's `finance_goals`/`finance_settings` tables
+  already cover it). Brandbook §6 recipe added. Gate green (418 tests, +6
+  new). Branch `MOR-8-goals-eta-2026-07-22`, commits `e654ed5`/`551d899`/
+  `d27f8e0`. `needs-siem` — not merged, awaiting Siem's live review.
+- **22 July 2026 — Dispatched: MOR-12 (Research Phase 3 — seed & track).**
+  `createResearch`/`seedResearchThread` in `modules/research` wire a
+  submitted note into the existing threads engine (no parallel matcher):
+  opens a followed thread anchored on the primary extracted entity, sets
+  `user_research.thread_id`/`status`. `app/api/research/route.ts` adds the
+  POST create path. `researchOriginFraming` (pure, unit-tested) makes a
+  research thread's first pipeline update read as "sinds jouw onderzoek";
+  `generateStep` is the sole pipeline hook (`isResearchOriginThread`),
+  `threadsStep` untouched. Gate green (416 tests, +4 new). Branch
+  `MOR-12-seed-track-thread-2026-07-22`, commits `a57fc0f`/`408517a`.
+  `needs-siem` — live askAI/DB/pipeline verification pending.
+- **22 July 2026 — Dispatched: MOR-16 (Settings P2 — Pipeline-rapport tab).**
+  Pure aggregation core (`modules/pipeline-report`): today's article count by
+  category/sources/€ cost/Sol/deep-research counts + per-kind step timing,
+  and per-edition € cost + article count trends (last 7/30 editions).
+  `getPipelineReport()` read query + `InstellingenPipelineTab` (stat tiles,
+  category bars, step-duration list, `seriesPoints()` sparklines) mounted
+  into the MOR-15 shell's pipeline panel — no shell change. Brandbook §7
+  added. Gate green (423 tests, +11 new). Branch
+  `MOR-16-pipeline-rapport-tab-2026-07-22`. `needs-siem` — not merged,
+  awaiting Siem's live/visual review.
 - **21 July 2026 — Dispatched: MOR-6 + MOR-7 (Finance Phase 3+4 — `/financien` page).**
   Holdings/buys CRUD + 3-line portfolio chart (cost basis / today marker /
   compound projection, `app/lib/financien.ts` + `FinancienChart.tsx`) and
@@ -690,12 +737,3 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   prefs relocated unchanged into Account, placeholders for MOR-16/17. Landed
   after the finance merge; conflicts (HANDOFF/TIMELINE/brandbook) resolved
   keeping both. Reviewer-approved; double gate green.
-
-- **22 July 2026 — Agent-team enrollment committed to git; `staging` pushed.**
-  Local follow-up to the cloud enrollment run: committed the orchestrator
-  Bet & Flow rewrite, settings.json deny-list hardening (force-push, hard
-  reset, .env reads), and the four `docs/ops/` memory files. Deleted the
-  cloud session's `_to_delete/` junk. Gitignored `.claude/ntfy-topic.txt`
-  (public repo — topic name is the channel's only access control).
-  `staging` branch fast-forwarded to main and pushed to origin; the done
-  push-staging item cleared from `docs/ops/decisions-pending.md`. Gate green.

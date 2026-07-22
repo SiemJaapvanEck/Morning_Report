@@ -690,3 +690,11 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   prefs relocated unchanged into Account, placeholders for MOR-16/17. Landed
   after the finance merge; conflicts (HANDOFF/TIMELINE/brandbook) resolved
   keeping both. Reviewer-approved; double gate green.
+
+- **22 July 2026 — Agent-team enrollment committed to git; `staging` pushed.**
+  Local follow-up to the cloud enrollment run: committed the orchestrator
+  Bet & Flow rewrite, settings.json deny-list hardening (force-push, hard
+  reset, .env reads), and the four `docs/ops/` memory files. Deleted the
+  cloud session's `_to_delete/` junk. Gitignored `.claude/ntfy-topic.txt`
+  (public repo — topic name is the channel's only access control).
+  `staging` branch fast-forwarded to main and pushed to origin. Gate green.

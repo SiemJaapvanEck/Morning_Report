@@ -1,14 +1,25 @@
-# HANDOFF — Wave 2 surfaces landing: Finance UI + Settings shell on main
+# HANDOFF — Agent-team enrollment committed; Wave 2 surfaces on main
 
-> **Last updated:** 22 July 2026 — merged `MOR-6-finance-ui` and
-> `MOR-15-settings-shell` → main (interactive session with Siem, /merge). On `main`.
+> **Last updated:** 22 July 2026 — enrollment files committed + `staging`
+> pushed to GitHub (local session, follow-up to the cloud enrollment run).
+> On `main`.
 
 ## Where we stand
 
+The **agent-team workflow is enrolled and now committed**: Bet & Flow
+planning, the plugin specialist team, the staging merge policy, and the
+`docs/ops/` memory files (bets, status-log, decisions-pending, learnings —
+read all four at session start). The `staging` branch exists on GitHub at
+parity with `main`. `.claude/ntfy-topic.txt` is **gitignored on purpose** —
+the repo is public and the topic name is the channel's only access control;
+it lives only in the local checkout.
+
 Wave 1 (finance + research foundations) is on `main`; migrations `0019` +
-`0020` are applied to the live DB. Wave 2 surfaces are landing: the
+`0020` are applied to the live DB. Wave 2 surfaces are landed: the
 **finance UI (MOR-6 + MOR-7)** and the **settings tab shell (MOR-15)** are
-now merged — all reviewer-approved, all double-gate green.
+merged — all reviewer-approved, all double-gate green. The review queue
+(MOR-8, MOR-12, MOR-16) stands at 3 — one over the WIP limit; no new
+feature starts until Siem clears one.
 
 ## On main now (this session)
 

@@ -42,3 +42,6 @@ next-env.d.ts
 
 # personal workflow — each contributor keeps their own CLAUDE.md locally
 CLAUDE.md
+
+# private notification channel — the topic name is the only access control ntfy has
+.claude/ntfy-topic.txt

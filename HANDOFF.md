@@ -1,67 +1,65 @@
-# HANDOFF — review queue landed on staging: MOR-8 + MOR-12 + MOR-16
+# HANDOFF — MOR-8/12/16 in production; overnight sprints scheduled
 
 > **Last updated:** 22 July 2026 — orchestrator session (interactive, with
-> Siem). Landed all three review-queue branches onto `staging`, wrote the
-> review docs. Checkout is on `staging`.
+> Siem). Siem approved the review queue → promoted staging → main. Two
+> overnight sprint waves scheduled as cloud sessions. Checkout is on `main`.
 
 ## Where we stand
 
-**`staging` now carries the whole review queue**, per the new merge policy:
+**Production (`main` = `dbfe1bb`) now carries MOR-8 (finance goals + ETA),
+MOR-12 (research seed & track), MOR-16 (pipeline-rapport tab)** — promoted
+with the double gate (staging gate green, merged main gate green), Siem's
+explicit approve on record. `staging` is fast-forwarded to the same commit.
+Linear: MOR-8/12/16 → Done; feature branches + worktrees deleted (local and
+origin). Review queue is empty — WIP limit clear.
 
-- **MOR-8 — finance goals + ETA** (`/financien`): investment-goal card with
-  progress + `etaMonthsToTarget` ETA, savings-goal rows, expected-return
-  control writing `finance_settings`. New `getGoals` + `app/api/goals` +
-  `app/api/finance-settings` (cookie-gated). Brandbook §6 recipe.
-- **MOR-12 — research seed & track**: `createResearch`/`seedResearchThread`
-  in `modules/research` (reuses `modules/threads`' `insertThread`, no
-  parallel matcher), POST `app/api/research`, `researchOriginFraming` in
-  generate ("sinds jouw onderzoek" on a research thread's first update),
-  `generateStep` hook via `isResearchOriginThread`. No UI yet (MOR-13).
-- **MOR-16 — pipeline-rapport tab** (`/instellingen`): pure
-  `modules/pipeline-report` aggregators + `getPipelineReport` query +
-  server-rendered `InstellingenPipelineTab` (stat tiles, category bars,
-  step durations, 7/30-edition sparklines). Brandbook §7; old §7-9 → §8-10.
+**Overnight schedule (22→23 Jul), approved by Siem — four one-shot cloud
+routines** (claude.ai/code/routines, model claude-sonnet-5, Linear connector
+attached, fresh clone of `main`, prompt = `/work` on the issue + a mandatory
+reviewer pass that posts its verdict on the issue):
 
-Each branch landed with the double gate (source CI green, merged staging
-gate green — 430 tests after MOR-16). Merge commits `89b8c07` (MOR-8),
-`7982f80` (MOR-12), `19db38f` (MOR-16). Review docs for Siem:
-`docs/reviews/MOR-8.md` / `MOR-12.md` / `MOR-16.md`, staging preview:
-https://morning-report-git-staging-siemjaapvanecks-projects.vercel.app
+- **Sprint 1:** MOR-13 (MijnOnderzoek component + API) 19:30 CEST ·
+  MOR-9 (finance dashboard tiles) 19:45 CEST.
+- **Sprint 2:** MOR-17 (Financiën settings tab) 00:30 CEST ·
+  MOR-18 (Account tab; graceful empty state if MOR-13 isn't on main) 00:45.
+- Withheld: MOR-14 (needs MOR-13 landed). `needs-siem` issues were
+  dispatched unattended on Siem's explicit instruction — the needs-siem
+  gate moves to his staging review, as per the merge policy.
 
-`main` is untouched today beyond the agent-team enrollment commit
-(`9f628c0`): Bet & Flow orchestrator, settings deny-list hardening,
-`docs/ops/` memory files. **Promotion `staging` → `main` waits for Siem's
-explicit "approve"** — no exceptions.
+**Pipeline status:** xAI billing FIXED by Siem (22 Jul). The cron-job.org
+tick job is still broken (~1×/day instead of every 2 min) — Siem knows,
+parked. Today's edition rerun + the MOR-12 "sinds jouw onderzoek" live proof
+still pending a working scheduler or a manual tick. Backlog decision
+(park vs process ~45 stale editions) still open — see
+`docs/ops/decisions-pending.md`.
 
-## What's open / next
+**ntfy phone cards work** — test card delivered to the topic in
+`.claude/ntfy-topic.txt` (HTTP 200, 22 Jul).
 
-- **Siem: review MOR-8 / MOR-12 / MOR-16** on the staging preview using the
-  review docs. The queue is at 3 (one over the WIP limit of 2) — no new
-  feature dispatches until at least one clears.
-- After approval → promote staging → main; then MOR-9 (dashboard tiles,
-  ← MOR-8), MOR-13 (MijnOnderzoek UI) and MOR-17 (Financiën tab ← MOR-8)
-  become the natural next dispatches (see `docs/ops/bets.md`).
-- MOR-12's live proof (real askAI + pipeline run + "sinds jouw onderzoek"
-  framing in the paper) mostly arrives with tomorrow's edition or with
-  MOR-13's UI.
+## What's next (morning session, 23 Jul)
+
+- `/status`: collect the four overnight PRs, check reviewer verdicts on the
+  issues, land gate-green branches on `staging` (double gate), write
+  `docs/reviews/<issue>.md` docs, status card to Siem. Then MOR-14 becomes
+  dispatchable once MOR-13 lands.
+- Siem's queue: staging review of tonight's wave; cron fix; backlog decision;
+  visual spot-checks of the six shipped features on production.
 
 ## Known issues / gotchas
 
 - **Finance FX (live-review item):** non-EUR cost-basis conversion uses
-  *today's* FX rate, not the buy-date rate; a non-EUR buy without a rate
-  contributes €0 (never guessed). Watch real non-EUR positions.
-- MOR-16's numbers have never rendered against real
-  `pipeline_steps`/`usage_log` rows — Siem sanity-checks against a real
-  edition; retried steps contribute every attempt to their kind's average.
+  *today's* FX rate; a non-EUR buy without a rate contributes €0.
+- MOR-16's pipeline-report numbers have still never rendered against real
+  rows (pipeline was down); check after the next real edition.
 - `seedResearchThread` anchors on `entities[0]` with no umbrella preference —
-  a weak first entity may under-match; by design, watch in review.
-- `.claude/ntfy-topic.txt` is **gitignored on purpose** (public repo; the
-  topic name is the channel's only access control) — local checkout only.
+  watch weak first entities.
+- `.claude/ntfy-topic.txt` is **gitignored on purpose** (public repo) —
+  local checkout only.
 - `.claude/settings.local.json` carries an uncommitted local diff — kept out
   of commits (per-contributor file).
 - `modules/research` `CATEGORY_SLUGS` is a static mirror of the seeded
   `categories` table — update it if a migration changes the catalog.
-- Fresh worktrees have no `node_modules` — dispatched sessions `npm install`
-  first.
-- Build-cache hygiene: a file-sync tool clones files with a `" 2"` suffix;
-  `rm -rf .next` before a gate on phantom duplicate-identifier errors.
+- Fresh worktrees/clones have no `node_modules` — `npm install` first.
+- Build-cache hygiene: `rm -rf .next` before a gate on phantom
+  duplicate-identifier errors (file-sync tool clones files with a `" 2"`
+  suffix).

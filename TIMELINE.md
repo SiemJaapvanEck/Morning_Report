@@ -737,3 +737,12 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   prefs relocated unchanged into Account, placeholders for MOR-16/17. Landed
   after the finance merge; conflicts (HANDOFF/TIMELINE/brandbook) resolved
   keeping both. Reviewer-approved; double gate green.
+
+- **22 July 2026 — Promoted `staging` → `main` (production): MOR-8 + MOR-12 +
+  MOR-16.** Siem's explicit approve; double gate green both sides; merge
+  commit `dbfe1bb`. Linear issues → Done, branches + worktrees cleaned,
+  staging fast-forwarded to main. ntfy phone-card test delivered. Overnight:
+  two sprint waves scheduled as one-shot cloud routines (Sprint 1 19:30 CEST:
+  MOR-13 + MOR-9 · Sprint 2 00:30 CEST: MOR-17 + MOR-18), each with a
+  mandatory reviewer pass; MOR-14 withheld until MOR-13 lands. xAI billing
+  fixed by Siem; cron tick still degraded (parked).

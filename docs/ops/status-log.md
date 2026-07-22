@@ -1,5 +1,11 @@
 # Status log
 
+--- Wed 22 Jul 2026 · production promotion + overnight sprints
+[STATUS] ✅ MOR-8/12/16 promoted to production; 2 sprints scheduled tonight
+• Done: Siem approved → staging merged to main (dbfe1bb, double gate green), MOR-8/12/16 Done in Linear, branches+worktrees cleaned, staging fast-forwarded; ntfy test card delivered (HTTP 200); xAI billing fixed by Siem
+• Next: Sprint 1 (MOR-13, MOR-9) fires 19:30/19:45 CEST; Sprint 2 (MOR-17, MOR-18) fires 00:30/00:45 CEST — each cloud session self-reviews via reviewer pass; morning /status lands results on staging
+• Needs you: cron-job.org tick still broken (parked, your call when); backlog park/process decision still open
+
 --- Wed 22 Jul 2026 · pipeline incident
 [STATUS] ❌ Pipeline down: xAI credits out + scheduler stalled
 • Done: local run (staging code) cleared non-AI backlog steps; every AI step fails 403 (credits/monthly limit); diagnosis: cron ticks ~1×/day since ~7 Jul instead of every 2 min, editions pile up unprocessed

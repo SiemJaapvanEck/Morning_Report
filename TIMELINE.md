@@ -3,6 +3,11 @@
 Chronologisch logboek van het project. Eén regel (of kort blok) per
 werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
 
+- **23 July 2026 — dispatched (local worktree):** MOR-18 (Settings P4 —
+  Account tab mounts `MijnOnderzoek`) built on `staging` now that MOR-13 is
+  landed — real mount, not the empty-state fallback; removed MOR-13's
+  temporary below-the-tabs mount. Gate green (449 tests), commit `1c10114`,
+  pushed clean, PR #11 opened against `staging`.
 - **23 July 2026 — dispatched (local worktree):** MOR-9 (Finance P6 —
   dashboard tiles + nav polish) rebuilt from scratch after the 22 Jul cloud
   session's push failed (403, commits lost) — rebuilt to the reviewed

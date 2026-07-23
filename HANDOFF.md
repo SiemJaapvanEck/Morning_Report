@@ -1,41 +1,53 @@
-# HANDOFF — staging carries MOR-9 + MOR-13 (rebuilt), awaiting Siem's review
+# HANDOFF — MOR-18 built on top of staging (MOR-9 + MOR-13), awaiting review
 
-> **Last updated:** 23 July 2026 — orchestrator landing on `staging`. This
-> branch = `main` (`373b90a`) + MOR-9 + MOR-13, both reviewer-approved and
-> double-gated. Production (`main`) is unchanged.
+> **Last updated:** 23 July 2026 — dispatched local worktree session,
+> `MOR-18-account-tab-research-mount-2026-07-23` (forked from `origin/staging`,
+> which carries MOR-9 + MOR-13). PR #11 open against `staging`. Production
+> (`main`) is unchanged.
 
 ## Where we stand
 
-**Overnight recovery.** All four 22→23 Jul cloud sprint sessions
-(MOR-13/9/17/18) built their scope gate-green but hit a hard 403 on every
-GitHub write path — commits died with the containers. Their Linear comments
-survived as detailed build specs. Wave 1 (MOR-13 + MOR-9) was rebuilt
-locally on 23 Jul, reviewed (both APPROVE), and landed here:
+**MOR-18 — Settings P4: Account tab (mount research + preferences).** MOR-13
+(the `MijnOnderzoek` component + research API) landed on `staging` earlier in
+the day, unblocking this issue for the real mount (the 22 Jul cloud attempt
+only had MOR-13's Linear spec to go on and built the empty-state fallback,
+then lost its code to a 403 push failure).
 
-- **MOR-9 — Finance dashboard tiles + nav polish** (merge `69e8d10`, PR #9):
-  four cover tiles (Netto waarde / Deze maand over / Beleggingsdoel ETA /
-  Rendement %) linking to `/financien`; snapshot fetched only for today's
-  edition (historical dates render no tiles); shared `etaLabel`/
-  `rendementPct` + pure tested `summarizeFinanceDashboard()` in
-  `modules/finance`. Review doc: `docs/reviews/MOR-9.md`.
-- **MOR-13 — MijnOnderzoek component + API** (PR #10): GET/DELETE/PATCH on
-  `app/api/research/route.ts` (cookie-gated, archive = soft delete scoped by
-  `profile_id`), `getResearch()` in `app/lib/queries.ts`, self-contained
-  `MijnOnderzoek.tsx` temporarily mounted below the tabs on `/instellingen`
-  (real Account-tab mount is MOR-18). Review doc: `docs/reviews/MOR-13.md`.
+This session:
 
-**Wave 2 (MOR-17 Financiën tab · MOR-18 Account tab)** dispatches after this
-landing — MOR-18 mounts the real MijnOnderzoek component now that MOR-13 is
-on staging. MOR-14 is also unblocked.
+- `InstellingenAccountTab.tsx` now renders `VoorkeurenKiezer` (unchanged)
+  plus a new "Mijn onderzoek" section below the two-column preferences grid,
+  mounting `MijnOnderzoek` (from MOR-13, unchanged) via a new optional
+  `research?: ResearchNote[]` prop. When `research` is absent it falls back
+  to `InstellingenLeegState` — the graceful-empty-state acceptance criterion,
+  now dormant since the component is on `staging`, but still live code for
+  any future caller that can't supply the data.
+- `app/instellingen/page.tsx`: removed the temporary below-the-tabs
+  `MijnOnderzoek` mount MOR-13 left there; `getResearch(profileId)`'s result
+  is now passed straight into `InstellingenAccountTab` as the `research` prop.
+- `MijnOnderzoek.tsx` itself: untouched, per the issue's locked decision
+  ("no new logic beyond mounting").
+- Gate green: lint clean, `tsc --noEmit` clean, 449/449 tests, build succeeded.
+- Commit `1c10114`, pushed clean (no 403 — unlike the 22 Jul cloud session).
+  PR #11 opened against `staging`. Linear issue → `in-review` label (team has
+  no "In Review" status; `In Progress` is the closest workflow state and
+  stays as the underlying status).
 
 ## Siem's queue
 
-- Click through `docs/reviews/MOR-9.md` + `docs/reviews/MOR-13.md` on the
-  staging preview; explicit "approve" promotes staging → main.
-- Cloud GitHub write access (Contents: write) before any future overnight
-  run — see `docs/ops/decisions-pending.md`.
+- Review PR #11 (`MOR-18: Settings P4 — Account tab`) — click through the
+  Account tab on the `staging` preview: preferences unchanged, "Mijn
+  onderzoek" now inside the tab (add a note, archive it, follow a
+  storyline link).
+- Once reviewed: orchestrator lands MOR-18 on `staging` per the standing
+  merge policy; only Siem's explicit "approve" promotes `staging` → `main`.
+- Carried from earlier landings: click through `docs/reviews/MOR-9.md` +
+  `docs/reviews/MOR-13.md`; cloud GitHub write access (Contents: write)
+  before any future overnight run (see `docs/ops/decisions-pending.md`) —
+  this session's local push worked fine, so the gap is cloud-session-specific.
 - Carried: cron-job.org tick fix · visual spot-checks of the six live
   features · non-EUR FX live-review item.
+- MOR-17 (Financiën tab) is the other Wave 2 issue, independent of this one.
 
 ## Known issues / gotchas
 
@@ -46,3 +58,6 @@ on staging. MOR-14 is also unblocked.
 - Fresh worktrees need `npm install`; `rm -rf .next` on phantom
   duplicate-identifier tsc errors.
 - `.claude/ntfy-topic.txt` is gitignored on purpose (public repo).
+- No component-level tests exist anywhere in `app/components/` (house style:
+  only pure `modules/` functions get unit tests) — this change follows that
+  convention, no new test file added for the mount itself.

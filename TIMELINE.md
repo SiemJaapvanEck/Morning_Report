@@ -3,6 +3,16 @@
 Chronologisch logboek van het project. Eén regel (of kort blok) per
 werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
 
+- **23 July 2026 — Overnight wave lost to a push 403; rebuilt + landed on
+  `staging` (MOR-9/13/18/17).** All four 22→23 Jul cloud sessions built
+  gate-green but the cloud GitHub credentials were read-only — commits died
+  with the containers; their Linear comments survived as build specs. On
+  Siem's instruction, rebuilt all four in local worktrees, 4× reviewer
+  APPROVE, 4× double-gated staging landings (449 tests): `69e8d10` MOR-9,
+  `87dcab8` MOR-13, `4abcf53` MOR-18, `8cecf49` MOR-17 (page.tsx conflict
+  with MOR-18 resolved). Review docs `docs/reviews/MOR-{9,13,17,18}.md`.
+  All three /instellingen tabs now real; MOR-14 unblocked. No overnight
+  schedule until cloud write access is fixed. Promotion awaits Siem.
 - **22 July 2026 — Pipeline restored: backlog parked, today's editions ran clean.**
   After Siem fixed xAI billing: parked the 7-21 Jul backlog (946 open steps
   across 105 stale editions → `skipped`, reversible) and reran — today's 3

@@ -1,5 +1,11 @@
 # Decisions pending — Siem
 
+- **Cloud GitHub write access (23 Jul, Siem is on it):** the claude.ai/code
+  cloud sessions' GitHub credentials are read-only on `Morning_Report` — all
+  4 overnight sessions (22→23 Jul) hit 403 on push and their commits were
+  lost. The App installation needs Contents: write. No overnight schedule
+  until one cloud test push succeeds.
+
 - **Scheduler degraded since ~7 Jul (parked by Siem, 22 Jul):** the
   cron-job.org tick job fires ~once a day (05:02) instead of every ~2
   minutes — editions are created daily but their steps never run. Siem knows

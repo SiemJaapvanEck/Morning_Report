@@ -29,3 +29,15 @@
 • Done: Bet & Flow + plugin team layered onto the existing workflow; Linear recategorized (18 issues, additive); staging merge policy set
 • Next: clear one of MOR-8 / MOR-12 / MOR-16 to reopen the pipeline
 • Needs you: ntfy topic name for phone cards; push staging branch on first networked session
+
+--- Thu 23 Jul 2026 · overnight recovery
+[STATUS] ⚠️ Overnight sprints lost to a push blocker — rebuilding locally
+• Done: morning /status — all 4 cloud sessions (MOR-13/9/17/18) built gate-green but hit 403 on every GitHub write path; commits died with the containers. Detailed build specs + reviewer findings survive in the Linear comments. Wave 1 re-dispatched locally (MOR-13 + MOR-9, parallel worktrees); Wave 2 (MOR-17 + MOR-18) queued behind MOR-13 landing.
+• Next: land Wave 1 on staging (double gate + review docs), then dispatch Wave 2; MOR-14 unblocks after MOR-13.
+• Needs you: grant the cloud sessions' GitHub App Contents: write on Morning_Report before any future overnight run — Siem is looking into it (23 Jul).
+
+--- Thu 23 Jul 2026 · recovery wave landed
+[STATUS] ✅ All 4 lost overnight issues rebuilt + landed on staging
+• Done: MOR-9, MOR-13, MOR-18, MOR-17 rebuilt locally from the Linear specs, 4× reviewer APPROVE, 4× double gate green (449 tests), landed on staging with review docs (docs/reviews/MOR-{9,13,17,18}.md). MOR-18 got the real MijnOnderzoek mount (better than the cloud attempt's empty state). All three /instellingen tabs now real.
+• Next: Siem's staging click-through (/ + /instellingen covers all four); approve → promote to main. MOR-14 unblocked, dispatchable after the queue drains.
+• Needs you: staging review (4 items, over WIP limit per your instruction) · cloud GitHub write fix before any overnight run · carried: cron tick, spot-checks, FX item

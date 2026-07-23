@@ -1,69 +1,69 @@
-# HANDOFF — MOR-8/12/16 in production; overnight sprints scheduled
+# HANDOFF — overnight wave lost to push 403, rebuilt + landed on staging
 
-> **Last updated:** 22 July 2026 — orchestrator session (interactive, with
-> Siem). Siem approved the review queue → promoted staging → main. Two
-> overnight sprint waves scheduled as cloud sessions. Checkout is on `main`.
+> **Last updated:** 23 July 2026 — orchestrator session (interactive, with
+> Siem). Checkout is on `main` (`373b90a` + this ops commit). `staging` =
+> main + MOR-9/13/18/17, awaiting Siem's review.
 
 ## Where we stand
 
-**Production (`main` = `dbfe1bb`) now carries MOR-8 (finance goals + ETA),
-MOR-12 (research seed & track), MOR-16 (pipeline-rapport tab)** — promoted
-with the double gate (staging gate green, merged main gate green), Siem's
-explicit approve on record. `staging` is fast-forwarded to the same commit.
-Linear: MOR-8/12/16 → Done; feature branches + worktrees deleted (local and
-origin). Review queue is empty — WIP limit clear.
+**The 22→23 Jul overnight cloud sprints all failed at the same wall:** every
+session (MOR-13, MOR-9, MOR-17, MOR-18) built its scope gate-green, but the
+cloud environment's GitHub credentials are read-only — hard 403 on `git push`
+AND the GitHub MCP write path. No branches, no PRs; commits died with the
+containers. The sessions left detailed build specs + (for MOR-9/17) reviewer
+verdicts in their Linear comments.
 
-**Overnight schedule (22→23 Jul), approved by Siem — four one-shot cloud
-routines** (claude.ai/code/routines, model claude-sonnet-5, Linear connector
-attached, fresh clone of `main`, prompt = `/work` on the issue + a mandatory
-reviewer pass that posts its verdict on the issue):
+**Recovery (23 Jul, this session):** on Siem's instruction ("put all of
+yesterday on staging"), all four were rebuilt in local worktrees from those
+specs, each with a fresh reviewer pass (4× APPROVE) and a double-gated
+staging landing (449 tests green throughout):
 
-- **Sprint 1:** MOR-13 (MijnOnderzoek component + API) 19:30 CEST ·
-  MOR-9 (finance dashboard tiles) 19:45 CEST.
-- **Sprint 2:** MOR-17 (Financiën settings tab) 00:30 CEST ·
-  MOR-18 (Account tab; graceful empty state if MOR-13 isn't on main) 00:45.
-- Withheld: MOR-14 (needs MOR-13 landed). `needs-siem` issues were
-  dispatched unattended on Siem's explicit instruction — the needs-siem
-  gate moves to his staging review, as per the merge policy.
+- MOR-9 (PR #9, `69e8d10`) — finance cover tiles, today-only snapshot.
+- MOR-13 (PR #10, `87dcab8`) — MijnOnderzoek component + research API.
+- MOR-18 (PR #11, `4abcf53`) — Account tab mounts research + preferences
+  (real mount — better than the cloud attempt's empty state).
+- MOR-17 (PR #12, `8cecf49`) — Financiën tab; `page.tsx` conflict with
+  MOR-18 resolved, combined result gated green.
 
-**Pipeline status:** xAI billing FIXED by Siem (22 Jul) and verified — the
-7-21 Jul backlog was parked (946 open steps across 105 stale editions →
-`skipped`, reversible by setting them back to `pending`) and today's 3
-editions ran end-to-end clean (0 failed steps, daily papers finalized), so
-MOR-16's tab now has real rows. MOR-12 live proof: matching confirmed (the
-S&P 500 research storyline caught 1 item); the "sinds jouw onderzoek"
-framing fires the first day a research storyline wins a deep-dive slot
-(thread updates are the budget-capped deep path — `state` still null, so
-the first-update condition is intact on prod). The cron-job.org tick job
-is still broken (~1×/day instead of every 2 min) — Siem knows, parked.
+`staging` head: `f70bc9b`. Review docs: `docs/reviews/MOR-{9,13,17,18}.md`.
+Preview: https://morning-report-git-staging-siemjaapvanecks-projects.vercel.app
+All three `/instellingen` tabs are now real. Linear: all four commented,
+`in-review` labels; statuses stay `In Progress` (no In Review state).
 
-**ntfy phone cards work** — test card delivered to the topic in
-`.claude/ntfy-topic.txt` (HTTP 200, 22 Jul).
+## Siem's queue
 
-## What's next (morning session, 23 Jul)
+- **Staging click-through** of the four review docs (one session: `/` for
+  MOR-9, `/instellingen` for the rest) → explicit "approve" promotes to
+  production. 4 items is over the WIP limit of 2, per Siem's explicit
+  instruction.
+- **Cloud GitHub write access** (Contents: write on the repo's App
+  installation) — no overnight schedule until a cloud test push succeeds.
+  See `docs/ops/decisions-pending.md`.
+- Carried: cron-job.org tick fix · visual spot-checks of the six 22-Jul
+  features · non-EUR FX live-review item.
 
-- `/status`: collect the four overnight PRs, check reviewer verdicts on the
-  issues, land gate-green branches on `staging` (double gate), write
-  `docs/reviews/<issue>.md` docs, status card to Siem. Then MOR-14 becomes
-  dispatchable once MOR-13 lands.
-- Siem's queue: staging review of tonight's wave; cron fix; backlog decision;
-  visual spot-checks of the six shipped features on production.
+## What's next
+
+- MOR-14 (research storylines in report/archive) is unblocked — last open
+  issue of the current bets; dispatch after the review queue drains or on
+  Siem's word.
+- Next betting ideas: MOR-1, MOR-2, per-buy FX entry (see docs/ops/bets.md).
+
+## Worktrees / branches (cleanup after promotion)
+
+- `../Morning_Report-worktrees/{MOR-9,MOR-13,MOR-17,MOR-18,staging}` — remove
+  via `git worktree remove` once staging is promoted; then delete the four
+  feature branches (local + origin). PRs #9-#12 (base: #9/#10 `main` — close
+  or retarget; #11/#12 `staging`) close on promotion.
 
 ## Known issues / gotchas
 
-- **Finance FX (live-review item):** non-EUR cost-basis conversion uses
-  *today's* FX rate; a non-EUR buy without a rate contributes €0.
-- MOR-16's pipeline-report numbers have still never rendered against real
-  rows (pipeline was down); check after the next real edition.
-- `seedResearchThread` anchors on `entities[0]` with no umbrella preference —
-  watch weak first entities.
-- `.claude/ntfy-topic.txt` is **gitignored on purpose** (public repo) —
-  local checkout only.
-- `.claude/settings.local.json` carries an uncommitted local diff — kept out
-  of commits (per-contributor file).
-- `modules/research` `CATEGORY_SLUGS` is a static mirror of the seeded
-  `categories` table — update it if a migration changes the catalog.
-- Fresh worktrees/clones have no `node_modules` — `npm install` first.
-- Build-cache hygiene: `rm -rf .next` before a gate on phantom
-  duplicate-identifier errors (file-sync tool clones files with a `" 2"`
-  suffix).
+- Finance FX: non-EUR cost basis uses *today's* FX rate; a non-EUR buy
+  without a rate contributes €0 (by design — flag, don't invent).
+- `seedResearchThread` anchors on `entities[0]` — watch weak first entities.
+- `modules/research` `CATEGORY_SLUGS` mirrors the seeded `categories` table.
+- Fresh worktrees need `npm install`; `rm -rf .next` on phantom
+  duplicate-identifier tsc errors.
+- `.claude/ntfy-topic.txt` gitignored on purpose (public repo).
+- `.claude/settings.local.json` carries an uncommitted local diff (per-
+  contributor file, keep out of commits).

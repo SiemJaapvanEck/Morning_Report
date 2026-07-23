@@ -8,6 +8,10 @@ werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
   session's push failed (403, commits lost) — rebuilt to the reviewed
   end-state its two Linear comments recorded. Gate green (449 tests), 4
   commits, pushed, PR opened.
+- **23 July 2026 — dispatched (local, re-dispatch):** MOR-13 (MijnOnderzoek
+  component + API) rebuilt from the 22 Jul cloud session's lost work (push
+  403'd there; this session pushed clean) — gate green, PR #10 open, issue
+  → In Review.
 - **22 July 2026 — Pipeline restored: backlog parked, today's editions ran clean.**
   After Siem fixed xAI billing: parked the 7-21 Jul backlog (946 open steps
   across 105 stale editions → `skipped`, reversible) and reran — today's 3

@@ -1,53 +1,59 @@
-# HANDOFF — MOR-18 built on top of staging (MOR-9 + MOR-13), awaiting review
+# HANDOFF — staging carries the full recovered overnight wave (MOR-9/13/17/18)
 
-> **Last updated:** 23 July 2026 — dispatched local worktree session,
-> `MOR-18-account-tab-research-mount-2026-07-23` (forked from `origin/staging`,
-> which carries MOR-9 + MOR-13). PR #11 open against `staging`. Production
-> (`main`) is unchanged.
+> **Last updated:** 23 July 2026 — orchestrator, final Wave 2 landing. This
+> branch = `main` (`373b90a`) + MOR-9 + MOR-13 + MOR-18 + MOR-17, all four
+> reviewer-approved and double-gated. Production (`main`) is unchanged.
 
 ## Where we stand
 
-**MOR-18 — Settings P4: Account tab (mount research + preferences).** MOR-13
-(the `MijnOnderzoek` component + research API) landed on `staging` earlier in
-the day, unblocking this issue for the real mount (the 22 Jul cloud attempt
-only had MOR-13's Linear spec to go on and built the empty-state fallback,
-then lost its code to a 403 push failure).
+**Overnight recovery complete (code-side).** All four 22→23 Jul cloud sprint
+sessions built gate-green but hit a hard 403 on every GitHub write path —
+commits died with the containers; their Linear comments survived as build
+specs. All four were rebuilt locally on 23 Jul, reviewed (four APPROVEs),
+and landed on `staging` with the double gate:
 
-This session:
+- **MOR-9 — Finance dashboard tiles + nav polish** (PR #9, merge `69e8d10`):
+  four cover tiles (Netto waarde / Deze maand over / Beleggingsdoel ETA /
+  Rendement %); snapshot only on today's edition; shared `etaLabel`/
+  `rendementPct` + pure `summarizeFinanceDashboard()` in `modules/finance`.
+- **MOR-13 — MijnOnderzoek component + research API** (PR #10, merge
+  `87dcab8`): GET/DELETE/PATCH cookie-gated, archive = soft delete scoped by
+  `profile_id`, `getResearch()` query, self-contained `MijnOnderzoek.tsx`.
+- **MOR-18 — Account tab** (PR #11, merge `4abcf53`): MijnOnderzoek moved
+  into the Account tab (mounted unchanged, `research` prop, LeegState
+  fallback); MOR-13's temporary below-tabs mount removed.
+- **MOR-17 — Financiën tab** (PR #12, merged last): real tab replaces the
+  MOR-15 placeholder — headline stats + quick-edit card (`monthly_
+  contribution_override` + `expected_return_pct`, partial-upsert on
+  `/api/finance-settings` so `/financien`'s save keeps working), unchanged
+  `FinancienGoals`/`FinancienHoldingForm` mounts, brandbook §7bis.
+  Landing conflict in `app/instellingen/page.tsx` (MOR-18 × MOR-17) resolved:
+  Account keeps the research prop, Financiën gets the real tab, the unused
+  `InstellingenLeegState`/`MijnOnderzoek` page-level imports dropped.
 
-- `InstellingenAccountTab.tsx` now renders `VoorkeurenKiezer` (unchanged)
-  plus a new "Mijn onderzoek" section below the two-column preferences grid,
-  mounting `MijnOnderzoek` (from MOR-13, unchanged) via a new optional
-  `research?: ResearchNote[]` prop. When `research` is absent it falls back
-  to `InstellingenLeegState` — the graceful-empty-state acceptance criterion,
-  now dormant since the component is on `staging`, but still live code for
-  any future caller that can't supply the data.
-- `app/instellingen/page.tsx`: removed the temporary below-the-tabs
-  `MijnOnderzoek` mount MOR-13 left there; `getResearch(profileId)`'s result
-  is now passed straight into `InstellingenAccountTab` as the `research` prop.
-- `MijnOnderzoek.tsx` itself: untouched, per the issue's locked decision
-  ("no new logic beyond mounting").
-- Gate green: lint clean, `tsc --noEmit` clean, 449/449 tests, build succeeded.
-- Commit `1c10114`, pushed clean (no 403 — unlike the 22 Jul cloud session).
-  PR #11 opened against `staging`. Linear issue → `in-review` label (team has
-  no "In Review" status; `In Progress` is the closest workflow state and
-  stays as the underlying status).
+Review docs for Siem: `docs/reviews/MOR-{9,13,17,18}.md` · preview:
+https://morning-report-git-staging-siemjaapvanecks-projects.vercel.app
+
+**All three tabs on `/instellingen` are now real** (Account · Financiën ·
+Pipeline-rapport) — the Settings convergence bet is fully built.
 
 ## Siem's queue
 
-- Review PR #11 (`MOR-18: Settings P4 — Account tab`) — click through the
-  Account tab on the `staging` preview: preferences unchanged, "Mijn
-  onderzoek" now inside the tab (add a note, archive it, follow a
-  storyline link).
-- Once reviewed: orchestrator lands MOR-18 on `staging` per the standing
-  merge policy; only Siem's explicit "approve" promotes `staging` → `main`.
-- Carried from earlier landings: click through `docs/reviews/MOR-9.md` +
-  `docs/reviews/MOR-13.md`; cloud GitHub write access (Contents: write)
-  before any future overnight run (see `docs/ops/decisions-pending.md`) —
-  this session's local push worked fine, so the gap is cloud-session-specific.
-- Carried: cron-job.org tick fix · visual spot-checks of the six live
-  features · non-EUR FX live-review item.
-- MOR-17 (Financiën tab) is the other Wave 2 issue, independent of this one.
+- Click through the four review docs on the staging preview (one session
+  covers it: `/` for MOR-9, `/instellingen` for the rest). Explicit
+  "approve" promotes staging → main. Note: 4 items exceeds the WIP limit of
+  2 — per Siem's explicit "put everything from yesterday on staging".
+- Cloud GitHub write access (Contents: write) before any future overnight
+  run — see `docs/ops/decisions-pending.md`. Local pushes work fine.
+- Carried: cron-job.org tick fix · visual spot-checks of the earlier six
+  live features · non-EUR FX live-review item.
+
+## What's next
+
+- **MOR-14** (research storylines surfaced in report/archive) is unblocked —
+  last open issue of the current bets. Dispatchable once the review queue
+  drains (or on Siem's word).
+- Backlog for next betting: MOR-1, MOR-2, per-buy FX entry.
 
 ## Known issues / gotchas
 
@@ -58,6 +64,5 @@ This session:
 - Fresh worktrees need `npm install`; `rm -rf .next` on phantom
   duplicate-identifier tsc errors.
 - `.claude/ntfy-topic.txt` is gitignored on purpose (public repo).
-- No component-level tests exist anywhere in `app/components/` (house style:
-  only pure `modules/` functions get unit tests) — this change follows that
-  convention, no new test file added for the mount itself.
+- No component-level tests in `app/components/` (house style: only pure
+  `modules/` functions get unit tests).

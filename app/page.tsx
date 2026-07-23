@@ -8,6 +8,7 @@ import { hasDbConfig } from "@/modules/shared/db";
 import { todayLocal } from "@/modules/shared/config";
 import { isRegioCode } from "@/modules/shared/regios";
 import { getProfiles, getEdition, listEditionSummaries, getUpcomingAgenda } from "@/app/lib/queries";
+import { getFinanceDashboardSnapshot } from "@/app/lib/financeDashboard";
 import { ProfielKiezer } from "@/app/components/ProfielKiezer";
 import { EditionScreen, parseView } from "@/app/components/EditionScreen";
 
@@ -50,10 +51,13 @@ export default async function Home({
   const calendarView = parseView(view);
 
   const today = todayLocal();
-  const [editionView, summaries, agenda] = await Promise.all([
+  // The homepage is always today's edition, so the finance snapshot is always
+  // fetched here (never for a historical date — see app/editie/[datum]/page.tsx).
+  const [editionView, summaries, agenda, financeSnapshot] = await Promise.all([
     getEdition(profileId, today),
     listEditionSummaries(profileId),
     getUpcomingAgenda(profileId),
+    getFinanceDashboardSnapshot(profileId),
   ]);
 
   return (
@@ -72,6 +76,7 @@ export default async function Home({
         editionView={editionView}
         summaries={summaries}
         agenda={agenda}
+        financeSnapshot={financeSnapshot}
       />
     </div>
   );

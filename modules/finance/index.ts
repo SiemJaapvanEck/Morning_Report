@@ -7,7 +7,7 @@
 // FX correctness rail (PRD §5): a missing rate never gets guessed — it
 // contributes 0 € and the caller is expected to surface that as a flag.
 
-import type { Expense, FinanceQuote, Holding, HoldingBuy, Income } from "../shared/types";
+import type { Expense, FinanceGoal, FinanceQuote, Holding, HoldingBuy, Income } from "../shared/types";
 
 // ============================================================
 // Cost basis (cumulative € invested over time)
@@ -243,6 +243,20 @@ export function projectRecurringForward(
 }
 
 // ============================================================
+// Portfolio return (Phase 3, shared with the Phase 6 dashboard tile) — the
+// live portfolio value read against total € invested.
+// ============================================================
+
+/**
+ * % return of the live portfolio value against cost basis. `null` when
+ * there's no cost basis yet (`costBasisEur <= 0`, e.g. no buys) — a real
+ * "not applicable" reading, never a divide-by-zero or a guessed 0%.
+ */
+export function rendementPct(currentValueEur: number, costBasisEur: number): number | null {
+  return costBasisEur > 0 ? ((currentValueEur - costBasisEur) / costBasisEur) * 100 : null;
+}
+
+// ============================================================
 // Goal progress (Phase 5) — the investment goal (ETA-driven) + named
 // savings goals share one progress-bar reading: current € over target €.
 // ============================================================
@@ -282,4 +296,125 @@ export function etaMonthsToTarget(
     if (value >= targetEur) return month;
   }
   return null;
+}
+
+/**
+ * Presentational label for an `etaMonthsToTarget` result: `"~N jaar M mnd"` /
+ * `"doel al bereikt"` / `"buiten bereik"` (the `ETA_MONTH_CAP` case).
+ * Shared by the Goals section (`FinancienGoals`) and the Phase 6 cover-
+ * dashboard ETA tile — one implementation, no drift between the two.
+ */
+export function etaLabel(months: number | null): string {
+  if (months === null) return "buiten bereik";
+  if (months === 0) return "doel al bereikt";
+  const years = Math.floor(months / 12);
+  const rest = months % 12;
+  const parts = [years > 0 ? `${years} jaar` : null, rest > 0 ? `${rest} mnd` : null].filter(Boolean);
+  return `~${parts.join(" ")}`;
+}
+
+// ============================================================
+// Cover-dashboard snapshot (Phase 6, docs/prd/finance.md) — the four
+// headline tiles (Netto waarde, Deze maand over, Beleggingsdoel ETA,
+// Rendement %) reduced to one pure aggregation over the same raw rows /
+// live quotes `/financien` reads. No new math: composes
+// `portfolioValueEur`/`costBasisSeries`/`monthlySurplus`/`etaMonthsToTarget`/
+// `rendementPct` above. The only impure part (DB reads + the live Yahoo
+// fetch) lives in `app/lib/financeDashboard.ts`.
+// ============================================================
+
+export interface FinanceDashboardBuy {
+  holding_id: string;
+  bought_on: string;
+  quantity: number;
+  price_native: number;
+  currency: string;
+  fee_eur: number;
+}
+
+export interface FinanceDashboardInput {
+  holdings: Pick<Holding, "id" | "symbol" | "currency">[];
+  buys: FinanceDashboardBuy[];
+  quotes: Record<string, FinanceQuote>;
+  fx: Record<string, number>;
+  incomes: Pick<Income, "received_on" | "amount_eur">[];
+  expenses: Pick<Expense, "spent_on" | "amount_eur">[];
+  investmentGoal: Pick<FinanceGoal, "target_eur"> | null;
+  savingsGoals: Pick<FinanceGoal, "saved_eur">[];
+  expectedReturnPct: number;
+  monthlyContributionEur: number;
+  /** "YYYY-MM" — the month `monthlySurplusEur` is computed for (today's month). */
+  month: string;
+}
+
+export interface FinanceDashboardSnapshot {
+  /** live portfolio value + every savings goal's `saved_eur`. */
+  netWorthEur: number;
+  /** this month's income − expenses (same figure the DCA default reads). */
+  monthlySurplusEur: number;
+  /** false hides the ETA tile — no investment goal set yet. */
+  hasInvestmentGoal: boolean;
+  /** meaningful only when `hasInvestmentGoal`; `etaLabel()`-ready. */
+  etaMonths: number | null;
+  /** false hides the Rendement tile — no buys landed a cost basis yet. */
+  hasCostBasis: boolean;
+  /** meaningful only when `hasCostBasis`. */
+  rendementPct: number | null;
+}
+
+/**
+ * Aggregates the cover-dashboard finance tiles. `null` when the profile has
+ * no finance data at all yet (no holdings, no goals, no cashflow entries) —
+ * CijfersCard-style: the caller hides the whole tile row rather than
+ * rendering zeros for a profile that never touched `/financien`.
+ */
+export function summarizeFinanceDashboard(input: FinanceDashboardInput): FinanceDashboardSnapshot | null {
+  const {
+    holdings,
+    buys,
+    quotes,
+    fx,
+    incomes,
+    expenses,
+    investmentGoal,
+    savingsGoals,
+    expectedReturnPct,
+    monthlyContributionEur,
+    month,
+  } = input;
+
+  const hasAnyData =
+    holdings.length > 0 ||
+    savingsGoals.length > 0 ||
+    investmentGoal !== null ||
+    incomes.length > 0 ||
+    expenses.length > 0;
+  if (!hasAnyData) return null;
+
+  const portfolioEur = portfolioValueEur(holdings, buys, quotes, fx);
+  const savingsEur = savingsGoals.reduce((sum, g) => sum + g.saved_eur, 0);
+
+  const costBasis = costBasisSeries(
+    buys.map((buy) => ({
+      bought_on: buy.bought_on,
+      quantity: buy.quantity,
+      price_native: buy.price_native,
+      currency: buy.currency,
+      fee_eur: buy.fee_eur,
+      fx_to_eur: buy.currency === "EUR" ? 1 : fx[buy.currency],
+    })),
+  );
+  const costBasisTotal = costBasis.at(-1)?.cost_basis_eur ?? 0;
+  const hasCostBasis = costBasisTotal > 0;
+
+  return {
+    netWorthEur: portfolioEur + savingsEur,
+    monthlySurplusEur: monthlySurplus(incomes, expenses, month),
+    hasInvestmentGoal: investmentGoal !== null,
+    etaMonths: investmentGoal
+      ? etaMonthsToTarget(portfolioEur, monthlyContributionEur, expectedReturnPct, investmentGoal.target_eur)
+      : null,
+    hasCostBasis,
+    rendementPct: hasCostBasis ? rendementPct(portfolioEur, costBasisTotal) : null,
+  };
 }

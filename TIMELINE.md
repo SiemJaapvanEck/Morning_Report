@@ -3,6 +3,11 @@
 Chronologisch logboek van het project. Eén regel (of kort blok) per
 werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
 
+- **23 July 2026 — dispatched (local worktree):** MOR-9 (Finance P6 —
+  dashboard tiles + nav polish) rebuilt from scratch after the 22 Jul cloud
+  session's push failed (403, commits lost) — rebuilt to the reviewed
+  end-state its two Linear comments recorded. Gate green (449 tests), 4
+  commits, pushed, PR opened.
 - **22 July 2026 — Pipeline restored: backlog parked, today's editions ran clean.**
   After Siem fixed xAI billing: parked the 7-21 Jul backlog (946 open steps
   across 105 stale editions → `skipped`, reversible) and reran — today's 3

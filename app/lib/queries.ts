@@ -45,6 +45,7 @@ import type {
   ThreadPrediction,
   ThreadStatus,
   TimelineNode,
+  UserResearch,
   WeatherSnapshot,
 } from "@/modules/shared/types";
 
@@ -1232,6 +1233,49 @@ export async function getGoals(profileId: string): Promise<GoalsView> {
     investment: rows.find((g) => g.kind === "investment") ?? null,
     savings: rows.filter((g) => g.kind === "savings"),
   };
+}
+
+// ============================================================
+// "Mijn onderzoek" (docs/prd/research-tracking.md, Phase 4) — read-only list
+// for the MijnOnderzoek component. Each note is enriched with its seeded
+// thread's live status + a precomputed "last update" label (both null/"—"
+// until Phase 3 seeding has run — createResearch seeds synchronously, so in
+// practice this is only ever true for a note whose create failed midway).
+// ============================================================
+
+/** A research note plus its seeded storyline's current status + last-update label. */
+export interface ResearchNote extends UserResearch {
+  threadStatus: ThreadStatus | null;
+  threadUpdatedLabel: string;
+}
+
+/** Every research note for one profile, newest first, with thread status/last-update joined in. */
+export async function getResearch(profileId: string): Promise<ResearchNote[]> {
+  const notes = unwrap(
+    await db()
+      .from("user_research")
+      .select("*")
+      .eq("profile_id", profileId)
+      .order("created_at", { ascending: false }),
+  ) as UserResearch[];
+
+  const threadIds = [...new Set(notes.map((n) => n.thread_id).filter((id): id is string => Boolean(id)))];
+  const threads = threadIds.length
+    ? (unwrap(
+        await db().from("threads").select("id, status, last_seen_at").in("id", threadIds),
+      ) as { id: string; status: ThreadStatus; last_seen_at: string | null }[])
+    : [];
+  const threadById = new Map(threads.map((t) => [t.id, t]));
+
+  const now = Date.now();
+  return notes.map((note) => {
+    const thread = note.thread_id ? threadById.get(note.thread_id) : undefined;
+    return {
+      ...note,
+      threadStatus: thread?.status ?? null,
+      threadUpdatedLabel: thread ? updatedAgo(thread.last_seen_at, now) : "—",
+    };
+  });
 }
 
 // ============================================================

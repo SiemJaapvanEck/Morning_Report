@@ -249,6 +249,23 @@ export async function createResearch(input: {
 }
 
 /**
+ * Archive a research note (Phase 4 — "Mijn onderzoek" management). Soft
+ * delete only: sets status to 'gearchiveerd', never removes the row, so the
+ * seeded thread and its storyline history stay intact (locked decision — no
+ * hard delete). Scoped by profile_id so a profile can only archive its own
+ * notes; a no-op (not an error) when the id/profile pair doesn't match a row,
+ * same tolerance as app/api/holdings' update/delete.
+ */
+export async function archiveResearch(profileId: string, id: string): Promise<void> {
+  const { error } = await db()
+    .from("user_research")
+    .update({ status: "gearchiveerd" })
+    .eq("id", id)
+    .eq("profile_id", profileId);
+  if (error) throw new Error(`archiveResearch: ${error.message}`);
+}
+
+/**
  * Whether a thread originated from a research note — the sole detection
  * signal is the `user_research.thread_id` link (locked decision: no `threads`
  * schema change). Used only for generateThreadUpdate's framing (Phase 3),

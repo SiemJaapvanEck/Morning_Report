@@ -272,6 +272,37 @@ Finance/Research/Settings PRDs. One route, client-side tab state, WAI-ARIA
   it names *why* (a future phase), not a missing-data gap (§9 still applies
   everywhere else).
 
+### 5.2 Finance dashboard tiles (`FinanceDashboardTiles`, cover dashboard)
+
+The cover dashboard's headline finance row (docs/prd/finance.md Phase 6):
+Netto waarde, Deze maand over, Beleggingsdoel ETA, Rendement % — reuses the
+`/financien` page's own data (`getPortfolio`/`getCashflow`/`getGoals` +
+`modules/finance` math via the pure `summarizeFinanceDashboard()`), no new
+math. Same stat-tile recipe as §6/§7.
+
+- **Tile**: `rounded-2xl` `--paper` card, border `--line`, `hover:-translate-y-0.5`.
+  Label: Space Mono 10.5px `--muted`, uppercase, `.1em` tracking. Value:
+  Archivo 900 24px `--ink` (surplus `--rose` when negative; rendement
+  `--emer-t` positive / `--rose` negative; ETA `--accent`). Each tile is a
+  `Link` to `/financien`.
+- **Row placement**: a 4-up grid (`grid-cols-2 sm:grid-cols-4`) directly
+  below the hero/weather/agenda/markten bento grid, above "Sol's selectie".
+- **Empty state (CijfersCard-style, §9)**: the snapshot is `null` — and the
+  whole row renders nothing — when the profile has no finance data at all
+  yet (no holdings, no goals, no cashflow). The ETA tile hides on its own
+  when there's no investment goal set; the Rendement tile hides on its own
+  when there's no cost basis yet (no buys) — same "hide, don't placeholder"
+  rule, applied per tile.
+- **Today-only (locked decision)**: the snapshot is only fetched/rendered
+  when the viewed edition date is today (`app/page.tsx` always is; historical
+  `/editie/[datum]` pages pass `null` without fetching) — a past date never
+  shows today's net worth/surplus/ETA/rendement under its own label.
+- **Shared helpers**: `etaLabel()` and `rendementPct()` live in
+  `modules/finance/index.ts` (also used by `FinancienGoals`/`FinancienPortfolio`
+  on `/financien`) — one implementation, no drift between the cover tile and
+  the full page. The DB/Yahoo fetch is the one impure step, in
+  `app/lib/financeDashboard.ts` (`getFinanceDashboardSnapshot`).
+
 ## 6. Financiën page (portfolio chart)
 
 The private `/financien` page (docs/prd/finance.md) reuses the same shell,

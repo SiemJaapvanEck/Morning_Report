@@ -1,60 +1,92 @@
-# HANDOFF — MOR-8/12/16 in production; overnight sprints scheduled
+# HANDOFF — MOR-9 rebuilt (local worktree, push-capable); MOR-8/12/16 in production
 
-> **Last updated:** 22 July 2026 — orchestrator session (interactive, with
-> Siem). Siem approved the review queue → promoted staging → main. Two
-> overnight sprint waves scheduled as cloud sessions. Checkout is on `main`.
+> **Last updated:** 23 July 2026 — dispatched session (orchestrator-triggered,
+> local worktree `../Morning_Report-worktrees/MOR-9`, unattended). Checkout is
+> on `MOR-9-finance-dashboard-tiles-2026-07-23`.
 
 ## Where we stand
 
-**Production (`main` = `dbfe1bb`) now carries MOR-8 (finance goals + ETA),
-MOR-12 (research seed & track), MOR-16 (pipeline-rapport tab)** — promoted
-with the double gate (staging gate green, merged main gate green), Siem's
-explicit approve on record. `staging` is fast-forwarded to the same commit.
-Linear: MOR-8/12/16 → Done; feature branches + worktrees deleted (local and
-origin). Review queue is empty — WIP limit clear.
+**MOR-9 (Finance P6 — dashboard tiles + nav polish) is rebuilt to the
+reviewed end-state from scratch.** The 22 Jul cloud session that originally
+built it hit a hard 403 on push (its GitHub credentials were read-only) and
+the commits were lost with the container — see its two Linear comments
+(build record + reviewer fix list) for the full record of what was reviewed
+and fixed. This session rebuilt from those comments as the spec, in a local
+worktree with real push access.
 
-**Overnight schedule (22→23 Jul), approved by Siem — four one-shot cloud
-routines** (claude.ai/code/routines, model claude-sonnet-5, Linear connector
-attached, fresh clone of `main`, prompt = `/work` on the issue + a mandatory
-reviewer pass that posts its verdict on the issue):
+**Built, gate green, pushed:**
 
-- **Sprint 1:** MOR-13 (MijnOnderzoek component + API) 19:30 CEST ·
-  MOR-9 (finance dashboard tiles) 19:45 CEST.
-- **Sprint 2:** MOR-17 (Financiën settings tab) 00:30 CEST ·
-  MOR-18 (Account tab; graceful empty state if MOR-13 isn't on main) 00:45.
-- Withheld: MOR-14 (needs MOR-13 landed). `needs-siem` issues were
-  dispatched unattended on Siem's explicit instruction — the needs-siem
-  gate moves to his staging review, as per the merge policy.
+- `modules/finance/index.ts` — added `etaLabel()` (moved from
+  `FinancienGoals.tsx`, was a local unexported helper) and `rendementPct()`
+  (extracted from an inline formula in `FinancienPortfolio.tsx`), both now
+  the single shared implementation. Added the pure
+  `summarizeFinanceDashboard()` aggregator: net worth (portfolio + savings),
+  monthly surplus, investment-goal ETA, rendement % — composed from the
+  existing `portfolioValueEur`/`costBasisSeries`/`monthlySurplus`/
+  `etaMonthsToTarget`/`rendementPct` (no new math). Returns `null` when a
+  profile has no finance data at all (CijfersCard-style empty state);
+  `hasInvestmentGoal`/`hasCostBasis` flags gate the ETA and rendement
+  readings individually so those two tiles can hide on their own. 17 new
+  vitest cases (`modules/finance/finance.test.ts`), total suite now 449
+  tests (was 433).
+- `app/lib/financeDashboard.ts` (new) — the one impure step:
+  `getFinanceDashboardSnapshot(profileId)` reads
+  `getPortfolio`/`getCashflow`/`getGoals` + a live quotes/FX fetch
+  (`modules/markten`), applies the same DCA-contribution default as
+  `/financien`, and hands the raw rows to `summarizeFinanceDashboard()`.
+- `app/components/FinanceDashboardTiles.tsx` (new) — the four cover-dashboard
+  tiles (Netto waarde, Deze maand over, Beleggingsdoel ETA, Rendement %),
+  each a `Link` to `/financien`, scheme tokens only (`--paper`/`--line`/
+  `--ink`/`--muted`/`--accent`/`--emer-t`/`--rose`), same stat-tile recipe as
+  the `/financien`/pipeline-rapport tiles.
+- **Reviewed/locked fix folded in from the start:** the finance snapshot is
+  only ever fetched/rendered when the viewed edition date is today.
+  `app/page.tsx` (always today) fetches it unconditionally; `EditionScreen`/
+  `EditionView` thread it through as `financeSnapshot`;
+  `app/editie/[datum]/page.tsx` only calls `getFinanceDashboardSnapshot`
+  when `datum === today`, passing `null` (row hidden, no fetch) for every
+  historical date — a past date never silently shows today's net
+  worth/surplus/ETA/rendement, and never triggers an unnecessary live Yahoo
+  fetch on a past-date view.
+- `app/layout.tsx` — header nav (border, wordmark, link text) moved off
+  hardcoded `stone-*` Tailwind classes onto `--line`/`--ink`/`--muted`
+  scheme tokens (the "nav polish" half of the issue title).
+- `docs/brandbook.md` §5.2 — new recipe documenting the tile shape, row
+  placement, the per-tile + whole-row empty-state rules, the today-only
+  fetch/render rule, and the shared `etaLabel`/`rendementPct` helpers.
 
-**Pipeline status:** xAI billing FIXED by Siem (22 Jul) and verified — the
-7-21 Jul backlog was parked (946 open steps across 105 stale editions →
-`skipped`, reversible by setting them back to `pending`) and today's 3
-editions ran end-to-end clean (0 failed steps, daily papers finalized), so
-MOR-16's tab now has real rows. MOR-12 live proof: matching confirmed (the
-S&P 500 research storyline caught 1 item); the "sinds jouw onderzoek"
-framing fires the first day a research storyline wins a deep-dive slot
-(thread updates are the budget-capped deep path — `state` still null, so
-the first-update condition is intact on prod). The cron-job.org tick job
-is still broken (~1×/day instead of every 2 min) — Siem knows, parked.
+**Gate: green** — lint, `tsc --noEmit`, vitest (449 tests), `next build` all
+pass, re-verified on the final commit.
 
-**ntfy phone cards work** — test card delivered to the topic in
-`.claude/ntfy-topic.txt` (HTTP 200, 22 Jul).
+**Four commits on `MOR-9-finance-dashboard-tiles-2026-07-23`** (pushed):
+`856aab4` shared finance helpers + pure aggregator, `7807ddd` call-site
+adoption + impure fetch wrapper, `1fd70c6` cover-dashboard tiles + today-only
+gating, `d0d0059` nav polish + brandbook recipe.
 
-## What's next (morning session, 23 Jul)
+## What's next
 
-- `/status`: collect the four overnight PRs, check reviewer verdicts on the
-  issues, land gate-green branches on `staging` (double gate), write
-  `docs/reviews/<issue>.md` docs, status card to Siem. Then MOR-14 becomes
-  dispatchable once MOR-13 lands.
-- Siem's queue: staging review of tonight's wave; cron fix; backlog decision;
-  visual spot-checks of the six shipped features on production.
+- Label is `needs-siem` — per the merge policy, this waits for Siem's
+  explicit go before landing on `staging`, same as the original dispatch.
+  A PR is open referencing MOR-9; the orchestrator/reviewer takes it from
+  here (do not merge from this session).
+- Visual check once on staging/preview: the tile row's placement (below the
+  hero/weather/agenda/markten bento grid, above "Sol's selectie") and that
+  the ETA/rendement tiles correctly hide for a profile with no investment
+  goal / no buys yet.
+- Environment note carried forward from the 22 Jul session: if any future
+  **cloud/routine** session hits the same read-only-GitHub-credentials 403,
+  the fix is environment/connector permissions (needs at least Contents:
+  write), not a retry — this session confirms local worktrees with real
+  push access are the reliable path meanwhile.
 
 ## Known issues / gotchas
 
-- **Finance FX (live-review item):** non-EUR cost-basis conversion uses
-  *today's* FX rate; a non-EUR buy without a rate contributes €0.
-- MOR-16's pipeline-report numbers have still never rendered against real
-  rows (pipeline was down); check after the next real edition.
+- **Finance FX (live-review item, pre-existing):** non-EUR cost-basis
+  conversion uses *today's* FX rate; a non-EUR buy without a rate
+  contributes €0. Unchanged by this issue.
+- MOR-16's pipeline-report numbers still need a check against a real edition
+  (was down; fixed 22 Jul, should have real rows now — orchestrator to
+  verify).
 - `seedResearchThread` anchors on `entities[0]` with no umbrella preference —
   watch weak first entities.
 - `.claude/ntfy-topic.txt` is **gitignored on purpose** (public repo) —

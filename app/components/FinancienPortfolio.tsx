@@ -15,7 +15,7 @@
 
 import { useMemo, useState } from "react";
 import { Archivo, Space_Grotesk, Space_Mono } from "next/font/google";
-import { costBasisSeries, portfolioValueEur, projectCompound, quantityAsOf } from "../../modules/finance";
+import { costBasisSeries, portfolioValueEur, projectCompound, quantityAsOf, rendementPct } from "../../modules/finance";
 import { formatEuro, formatPct, parseAmount } from "@/app/lib/geld";
 import { FinancienChart } from "./FinancienChart";
 import { FinancienHoldingForm } from "./FinancienHoldingForm";
@@ -268,7 +268,7 @@ export function FinancienPortfolio({
   );
 
   const costBasisTotal = costBasis.at(-1)?.cost_basis_eur ?? 0;
-  const rendementPct = costBasisTotal > 0 ? ((currentValueEur - costBasisTotal) / costBasisTotal) * 100 : null;
+  const rendement = rendementPct(currentValueEur, costBasisTotal);
 
   const monthlyContribution = parseAmount(contributionInput) ?? 0;
   const projection = useMemo(
@@ -291,10 +291,10 @@ export function FinancienPortfolio({
           <p className={`${MONO} text-[10.5px] text-[var(--muted)] uppercase tracking-[.1em]`}>Rendement</p>
           <p
             className={`${ARCH} mt-1 text-2xl font-black ${
-              rendementPct == null ? "text-[var(--faint)]" : rendementPct >= 0 ? "text-[var(--emer-t)]" : "text-[var(--rose)]"
+              rendement == null ? "text-[var(--faint)]" : rendement >= 0 ? "text-[var(--emer-t)]" : "text-[var(--rose)]"
             }`}
           >
-            {rendementPct == null ? "—" : formatPct(rendementPct)}
+            {rendement == null ? "—" : formatPct(rendement)}
           </p>
         </div>
         <div className="rounded-2xl border border-[var(--line)] bg-[var(--paper)] p-4">

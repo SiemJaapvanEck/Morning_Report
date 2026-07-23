@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   costBasisSeries,
+  etaLabel,
   etaMonthsToTarget,
   goalProgressPct,
   monthlySurplus,
@@ -10,7 +11,10 @@ import {
   projectRecurringForward,
   quantityAsOf,
   recurringMonthlyNet,
+  rendementPct,
+  summarizeFinanceDashboard,
   type CostBasisBuy,
+  type FinanceDashboardInput,
 } from "./index";
 import { fetchFxToEur, fetchQuotes } from "../markten";
 
@@ -283,6 +287,132 @@ describe("goalProgressPct", () => {
 
   it("is 0 for no progress at all", () => {
     expect(goalProgressPct(0, 10000)).toBe(0);
+  });
+});
+
+describe("rendementPct", () => {
+  it("returns a positive percentage when the value exceeds cost basis", () => {
+    expect(rendementPct(1200, 1000)).toBeCloseTo(20, 6);
+  });
+
+  it("returns a negative percentage when the value is below cost basis", () => {
+    expect(rendementPct(800, 1000)).toBeCloseTo(-20, 6);
+  });
+
+  it("is null for a zero cost basis (never a divide-by-zero)", () => {
+    expect(rendementPct(500, 0)).toBeNull();
+  });
+
+  it("is null for a negative cost basis", () => {
+    expect(rendementPct(500, -100)).toBeNull();
+  });
+});
+
+describe("etaLabel", () => {
+  it("reads 'buiten bereik' for null (unreachable)", () => {
+    expect(etaLabel(null)).toBe("buiten bereik");
+  });
+
+  it("reads 'doel al bereikt' for 0 months", () => {
+    expect(etaLabel(0)).toBe("doel al bereikt");
+  });
+
+  it("formats sub-year months as '~N mnd'", () => {
+    expect(etaLabel(7)).toBe("~7 mnd");
+  });
+
+  it("formats whole years with no remainder as '~N jaar'", () => {
+    expect(etaLabel(24)).toBe("~2 jaar");
+  });
+
+  it("formats years plus remainder months as '~N jaar M mnd'", () => {
+    expect(etaLabel(26)).toBe("~2 jaar 2 mnd");
+  });
+});
+
+describe("summarizeFinanceDashboard", () => {
+  const baseInput: FinanceDashboardInput = {
+    holdings: [],
+    buys: [],
+    quotes: {},
+    fx: {},
+    incomes: [],
+    expenses: [],
+    investmentGoal: null,
+    savingsGoals: [],
+    expectedReturnPct: 7,
+    monthlyContributionEur: 200,
+    month: "2026-07",
+  };
+
+  it("is null when the profile has no finance data at all", () => {
+    expect(summarizeFinanceDashboard(baseInput)).toBeNull();
+  });
+
+  it("sums live portfolio value + savings goals into netWorthEur", () => {
+    const result = summarizeFinanceDashboard({
+      ...baseInput,
+      holdings: [{ id: "h1", symbol: "AAPL", currency: "USD" }],
+      buys: [
+        { holding_id: "h1", bought_on: "2026-01-01", quantity: 10, price_native: 100, currency: "USD", fee_eur: 0 },
+      ],
+      quotes: { AAPL: { price: 120, currency: "USD" } },
+      fx: { USD: 0.9 },
+      savingsGoals: [{ saved_eur: 500 }, { saved_eur: 250 }],
+    });
+    // 10 * 120 * 0.9 = 1080 portfolio + 750 savings
+    expect(result?.netWorthEur).toBeCloseTo(1830, 5);
+  });
+
+  it("computes monthlySurplusEur for the given month only", () => {
+    const result = summarizeFinanceDashboard({
+      ...baseInput,
+      savingsGoals: [{ saved_eur: 1 }], // just to avoid the no-data null
+      incomes: [{ received_on: "2026-07-01", amount_eur: 3000 }],
+      expenses: [{ spent_on: "2026-07-15", amount_eur: 1200 }],
+    });
+    expect(result?.monthlySurplusEur).toBe(1800);
+  });
+
+  it("hides the ETA reading (hasInvestmentGoal false) with no investment goal", () => {
+    const result = summarizeFinanceDashboard({ ...baseInput, savingsGoals: [{ saved_eur: 1 }] });
+    expect(result?.hasInvestmentGoal).toBe(false);
+    expect(result?.etaMonths).toBeNull();
+  });
+
+  it("computes etaMonths via etaMonthsToTarget when an investment goal is set", () => {
+    const result = summarizeFinanceDashboard({
+      ...baseInput,
+      investmentGoal: { target_eur: 5000 },
+    });
+    expect(result?.hasInvestmentGoal).toBe(true);
+    expect(result?.etaMonths).toBe(etaMonthsToTarget(0, 200, 7, 5000));
+  });
+
+  it("hides the rendement reading (hasCostBasis false) with a holding but no buys", () => {
+    // a holding alone counts as "has finance data" (not null) but there's no
+    // cost basis yet -> the rendement tile itself stays hidden
+    const result = summarizeFinanceDashboard({
+      ...baseInput,
+      holdings: [{ id: "h1", symbol: "AAPL", currency: "EUR" }],
+    });
+    expect(result).not.toBeNull();
+    expect(result?.hasCostBasis).toBe(false);
+    expect(result?.rendementPct).toBeNull();
+  });
+
+  it("computes rendementPct once a cost basis exists", () => {
+    const result = summarizeFinanceDashboard({
+      ...baseInput,
+      holdings: [{ id: "h1", symbol: "ASML.AS", currency: "EUR" }],
+      buys: [
+        { holding_id: "h1", bought_on: "2026-01-01", quantity: 2, price_native: 500, currency: "EUR", fee_eur: 0 },
+      ],
+      quotes: { "ASML.AS": { price: 600, currency: "EUR" } },
+    });
+    expect(result?.hasCostBasis).toBe(true);
+    // cost basis 1000, value 1200 -> 20%
+    expect(result?.rendementPct).toBeCloseTo(20, 5);
   });
 });
 

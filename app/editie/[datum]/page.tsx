@@ -9,6 +9,7 @@ import { hasDbConfig } from "@/modules/shared/db";
 import { todayLocal } from "@/modules/shared/config";
 import { isRegioCode } from "@/modules/shared/regios";
 import { getEdition, getProfiles, listEditionSummaries, getUpcomingAgenda } from "@/app/lib/queries";
+import { getFinanceDashboardSnapshot } from "@/app/lib/financeDashboard";
 import { EditionScreen, parseView } from "@/app/components/EditionScreen";
 
 export const dynamic = "force-dynamic";
@@ -35,10 +36,16 @@ export default async function EditiePagina({
   const selectedRegio = isRegioCode(regio) ? regio : null;
 
   const today = todayLocal();
-  const [editionView, summaries, agenda] = await Promise.all([
+  const isToday = datum === today;
+  // Reviewed decision: the finance snapshot is only ever fetched/rendered
+  // for *today*'s edition. A historical date never shows (or silently
+  // fetches) today's net worth/surplus/ETA/rendement under its label — it
+  // gets `null` and EditionView hides the tile row.
+  const [editionView, summaries, agenda, financeSnapshot] = await Promise.all([
     getEdition(profileId, datum),
     listEditionSummaries(profileId),
     getUpcomingAgenda(profileId),
+    isToday ? getFinanceDashboardSnapshot(profileId) : Promise.resolve(null),
   ]);
 
   return (
@@ -51,6 +58,7 @@ export default async function EditiePagina({
       editionView={editionView}
       summaries={summaries}
       agenda={agenda}
+      financeSnapshot={financeSnapshot}
     />
   );
 }

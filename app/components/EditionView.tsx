@@ -9,11 +9,13 @@
 import Link from "next/link";
 import { Archivo, Space_Grotesk, Space_Mono } from "next/font/google";
 import type { MarktIndex, CalendarEventKind, CalendarEventCertainty } from "@/modules/shared/types";
+import type { FinanceDashboardSnapshot } from "@/modules/finance";
 import type { EditionView as EditionViewData, SectionView, AgendaEvent } from "@/app/lib/queries";
 import { REGIO_NAAM, type RegioCode } from "@/modules/shared/regios";
 import { ItemRating } from "./ItemRating";
 import { WereldKaart, regioStats } from "./WereldKaart";
 import { MarktenKaart } from "./MarktenKaart";
+import { FinanceDashboardTiles } from "./FinanceDashboardTiles";
 
 // Lettertypen van het ontwerp — alleen op deze weergave via de variabel-classes.
 const archivo = Archivo({ subsets: ["latin"], weight: ["600", "700", "800"], variable: "--font-archivo" });
@@ -456,6 +458,7 @@ export function EditionView({
   profileName,
   selectedRegio,
   agenda = [],
+  financeSnapshot = null,
 }: {
   view: EditionViewData | null;
   date: string;
@@ -463,6 +466,8 @@ export function EditionView({
   profileName?: string;
   selectedRegio?: string | null;
   agenda?: AgendaEvent[];
+  /** Only ever non-null for *today*'s edition — see EditionScreen. */
+  financeSnapshot?: FinanceDashboardSnapshot | null;
 }) {
   const basePath = isToday ? "/" : `/editie/${date}`;
   const weather = view?.sections.find((s) => s.section.kind === "weather")?.weather ?? null;
@@ -544,6 +549,13 @@ export function EditionView({
             {markten.length > 0 && <MarktenTegel indices={markten} />}
           </div>
         </div>
+
+        {/* financiën-tegels — alleen voor vandaag, verborgen zonder data (§5.2) */}
+        {financeSnapshot && (
+          <div className="mt-3">
+            <FinanceDashboardTiles snapshot={financeSnapshot} />
+          </div>
+        )}
 
         {/* Sol's selectie — filtert op regio bij klik op de kaart */}
         {(kaarten.length > 0 || regioFilter) && (

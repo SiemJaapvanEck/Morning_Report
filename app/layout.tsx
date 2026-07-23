@@ -68,20 +68,20 @@ export default async function RootLayout({
       <body className="min-h-full flex flex-col">
         <style id="mr-schemes" dangerouslySetInnerHTML={{ __html: schemeCss() }} />
         <script dangerouslySetInnerHTML={{ __html: themaScript }} />
-        <header className="border-b border-stone-200 dark:border-stone-800">
+        <header className="border-b border-[var(--line)]">
           <nav className="flex w-full items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
-            <Link href="/" className="font-semibold tracking-tight">
+            <Link href="/" className="font-semibold tracking-tight text-[var(--ink)]">
               Morning Report
             </Link>
-            <div className="flex items-center gap-4 text-sm text-stone-500">
+            <div className="flex items-center gap-4 text-sm text-[var(--muted)]">
               <ThemaKiezer />
-              <Link href="/archief" className="hover:text-stone-900 dark:hover:text-stone-100">
+              <Link href="/archief" className="hover:text-[var(--ink)]">
                 Archief
               </Link>
-              <Link href="/financien" className="hover:text-stone-900 dark:hover:text-stone-100">
+              <Link href="/financien" className="hover:text-[var(--ink)]">
                 Financiën
               </Link>
-              <Link href="/instellingen" className="hover:text-stone-900 dark:hover:text-stone-100">
+              <Link href="/instellingen" className="hover:text-[var(--ink)]">
                 Instellingen
               </Link>
               <AccountWisselaar profiles={profiles} currentId={currentProfileId} />

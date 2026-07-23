@@ -1,69 +1,73 @@
-# HANDOFF — MOR-8/12/16 in production; overnight sprints scheduled
+# HANDOFF — MOR-13 rebuilt, gate green, PR open
 
-> **Last updated:** 22 July 2026 — orchestrator session (interactive, with
-> Siem). Siem approved the review queue → promoted staging → main. Two
-> overnight sprint waves scheduled as cloud sessions. Checkout is on `main`.
+> **Last updated:** 23 July 2026 — local session (dispatched by the
+> orchestrator, re-dispatch of the 22 Jul cloud run whose work was lost).
+> Branch: `MOR-13-mijn-onderzoek-component-api-2026-07-23`. Worktree:
+> `../Morning_Report-worktrees/MOR-13`.
 
 ## Where we stand
 
-**Production (`main` = `dbfe1bb`) now carries MOR-8 (finance goals + ETA),
-MOR-12 (research seed & track), MOR-16 (pipeline-rapport tab)** — promoted
-with the double gate (staging gate green, merged main gate green), Siem's
-explicit approve on record. `staging` is fast-forwarded to the same commit.
-Linear: MOR-8/12/16 → Done; feature branches + worktrees deleted (local and
-origin). Review queue is empty — WIP limit clear.
+This branch carries **MOR-13 (Research P4 — "Mijn onderzoek" management
+component + API)**, rebuilt from scratch against current `main` (which
+already has MOR-8/12/16 promoted, per the orchestrator's 22 Jul HANDOFF on
+`main`). The 22 Jul cloud session built this same scope and reported gate
+green, but its container had no GitHub write access (`git push` and the
+GitHub MCP tools both 403'd) and the work was lost when the container was
+reclaimed — see its Linear comment on MOR-13, which served as the build spec
+for this rebuild. This session pushed cleanly and opened the PR.
 
-**Overnight schedule (22→23 Jul), approved by Siem — four one-shot cloud
-routines** (claude.ai/code/routines, model claude-sonnet-5, Linear connector
-attached, fresh clone of `main`, prompt = `/work` on the issue + a mandatory
-reviewer pass that posts its verdict on the issue):
+**What this session built:**
+- `app/api/research/route.ts` — added `GET` (list), `DELETE`/`PATCH`
+  (both archive, aliased — soft delete via the new `archiveResearch`), next
+  to the existing `POST` create path (MOR-12). All cookie-gated (401).
+- `modules/research/index.ts` — `archiveResearch(profileId, id)`: sets
+  `status='gearchiveerd'`, scoped by `profile_id`, no hard delete (keeps
+  storyline history, locked decision).
+- `app/lib/queries.ts` — `getResearch(profileId)` → `ResearchNote[]`,
+  batch-joining `user_research` rows with their seeded thread's `status` +
+  `last_seen_at` (via one `in(...)` lookup, same pattern as
+  `getStoryDetail`), precomputing a `threadUpdatedLabel` with the existing
+  `updatedAgo` helper.
+- `app/components/MijnOnderzoek.tsx` — new self-contained client component:
+  add form (`CaptureFormulier.tsx` pattern), list with status + thread
+  status + "bijgewerkt Xu" label, a link to each note's storyline
+  (`/archive/[threadId]`), and an archive action. Takes its initial list as
+  a prop (`initial: ResearchNote[]`) and owns its own state/API calls from
+  there — no page-specific assumptions, so it drops in unchanged wherever
+  it's mounted.
+- `app/instellingen/page.tsx` — temporary mount: a new section **below**
+  `InstellingenTabs`, deliberately not touching `InstellingenAccountTab.tsx`
+  — that integration (folding it into the Account tab) is **MOR-18's job**,
+  which depends on this component existing.
 
-- **Sprint 1:** MOR-13 (MijnOnderzoek component + API) 19:30 CEST ·
-  MOR-9 (finance dashboard tiles) 19:45 CEST.
-- **Sprint 2:** MOR-17 (Financiën settings tab) 00:30 CEST ·
-  MOR-18 (Account tab; graceful empty state if MOR-13 isn't on main) 00:45.
-- Withheld: MOR-14 (needs MOR-13 landed). `needs-siem` issues were
-  dispatched unattended on Siem's explicit instruction — the needs-siem
-  gate moves to his staging review, as per the merge policy.
+**Gate: green.** `npm run lint && npx tsc --noEmit && npm test && npm run
+build` — 433 tests, clean build, no warnings.
 
-**Pipeline status:** xAI billing FIXED by Siem (22 Jul) and verified — the
-7-21 Jul backlog was parked (946 open steps across 105 stale editions →
-`skipped`, reversible by setting them back to `pending`) and today's 3
-editions ran end-to-end clean (0 failed steps, daily papers finalized), so
-MOR-16's tab now has real rows. MOR-12 live proof: matching confirmed (the
-S&P 500 research storyline caught 1 item); the "sinds jouw onderzoek"
-framing fires the first day a research storyline wins a deep-dive slot
-(thread updates are the budget-capped deep path — `state` still null, so
-the first-update condition is intact on prod). The cron-job.org tick job
-is still broken (~1×/day instead of every 2 min) — Siem knows, parked.
+**PR:** https://github.com/SiemJaapvanEck/Morning_Report/pull/10 (base
+`main`, per the merge policy this actually lands on `staging` after
+review). Linear MOR-13 → In Review.
 
-**ntfy phone cards work** — test card delivered to the topic in
-`.claude/ntfy-topic.txt` (HTTP 200, 22 Jul).
+## What's next
 
-## What's next (morning session, 23 Jul)
-
-- `/status`: collect the four overnight PRs, check reviewer verdicts on the
-  issues, land gate-green branches on `staging` (double gate), write
-  `docs/reviews/<issue>.md` docs, status card to Siem. Then MOR-14 becomes
-  dispatchable once MOR-13 lands.
-- Siem's queue: staging review of tonight's wave; cron fix; backlog decision;
-  visual spot-checks of the six shipped features on production.
+- Reviewer pass on PR #10.
+- Once reviewed + gate green on `staging`, land it (orchestrator, per merge
+  policy) — this unblocks **MOR-18** (Account tab mounts `MijnOnderzoek`)
+  and **MOR-14** (Phase 5, surfacing research storylines in the report).
+- Needs-siem live check (can't be verified unattended): add a research note
+  on the `staging` preview, confirm extraction → thread seed → the list
+  shows it as "Gevolgd", the storyline link resolves, and archive works.
 
 ## Known issues / gotchas
 
-- **Finance FX (live-review item):** non-EUR cost-basis conversion uses
-  *today's* FX rate; a non-EUR buy without a rate contributes €0.
-- MOR-16's pipeline-report numbers have still never rendered against real
-  rows (pipeline was down); check after the next real edition.
-- `seedResearchThread` anchors on `entities[0]` with no umbrella preference —
-  watch weak first entities.
-- `.claude/ntfy-topic.txt` is **gitignored on purpose** (public repo) —
-  local checkout only.
-- `.claude/settings.local.json` carries an uncommitted local diff — kept out
-  of commits (per-contributor file).
-- `modules/research` `CATEGORY_SLUGS` is a static mirror of the seeded
-  `categories` table — update it if a migration changes the catalog.
-- Fresh worktrees/clones have no `node_modules` — `npm install` first.
-- Build-cache hygiene: `rm -rf .next` before a gate on phantom
-  duplicate-identifier errors (file-sync tool clones files with a `" 2"`
-  suffix).
+- `MijnOnderzoek`'s optimistic post-create state assumes the freshly seeded
+  thread is `active`/"nu" (accurate per `seedResearchThread`, which always
+  seeds `status: "active"` with `last_seen_at: now`) — not re-fetched from
+  the server, so if `createResearch` ever changes that default this
+  optimistic patch needs to move too.
+- No new migration in this phase — schema (`0020_user_research.sql`) and
+  `modules/research`'s extraction/seeding were already on `main` (MOR-12).
+- Same repo-wide gotchas as `main`'s HANDOFF (finance FX today's-rate
+  conversion, `modules/research` `CATEGORY_SLUGS` static mirror, gitignored
+  `.claude/ntfy-topic.txt`, uncommitted-by-design
+  `.claude/settings.local.json`, fresh worktrees need `npm install`, `rm -rf
+  .next` before a gate on phantom duplicate-identifier errors).

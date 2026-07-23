@@ -3,6 +3,14 @@
 Chronologisch logboek van het project. Eén regel (of kort blok) per
 werksessie of mijlpaal — details horen in HANDOFF.md en git-history.
 
+- **23 July 2026 — dispatched (local worktree, Wave 2):** MOR-17 (Settings P3
+  — Financiën tab) rebuilt from the 22 Jul cloud session's lost work (push
+  403'd there; this session pushed clean) — rebuilt to the reviewed
+  end-state its Linear comments recorded (headline stats, quick-edit card,
+  unchanged FinancienGoals/FinancienHoldingForm mounts, partial-upsert
+  finance-settings route, brandbook §7bis). Gate green (449 tests), 3
+  commits, PR #12 open (base `staging`), issue carries the `in-review`
+  fallback label.
 - **23 July 2026 — dispatched (local worktree):** MOR-9 (Finance P6 —
   dashboard tiles + nav polish) rebuilt from scratch after the 22 Jul cloud
   session's push failed (403, commits lost) — rebuilt to the reviewed

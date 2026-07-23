@@ -1,46 +1,63 @@
-# HANDOFF — staging carries MOR-9 + MOR-13 (rebuilt), awaiting Siem's review
+# HANDOFF — MOR-17 rebuilt, gate green, PR #12 open against staging
 
-> **Last updated:** 23 July 2026 — orchestrator landing on `staging`. This
-> branch = `main` (`373b90a`) + MOR-9 + MOR-13, both reviewer-approved and
-> double-gated. Production (`main`) is unchanged.
+> **Last updated:** 23 July 2026 — dispatched (local worktree, Wave 2). This
+> branch (`MOR-17-financien-settings-tab-2026-07-23`) is `staging`
+> (`55b5d60`, MOR-9 + MOR-13 already landed there) plus MOR-17's Financiën
+> tab. Neither `staging` nor `main` is touched by this session — the
+> orchestrator lands PR #12 after review.
 
 ## Where we stand
 
-**Overnight recovery.** All four 22→23 Jul cloud sprint sessions
-(MOR-13/9/17/18) built their scope gate-green but hit a hard 403 on every
-GitHub write path — commits died with the containers. Their Linear comments
-survived as detailed build specs. Wave 1 (MOR-13 + MOR-9) was rebuilt
-locally on 23 Jul, reviewed (both APPROVE), and landed here:
+**MOR-17 (Settings P3 — Financiën tab) rebuilt from a lost session.** A 22
+Jul cloud session built this scope completely and its reviewer pass came
+back APPROVE (2 non-blocking nits, 1 applied), but every GitHub write path
+403'd and the commits died with the container — only the two Linear
+comments (detailed build spec + reviewer verdict) survived. This session
+rebuilt to that recorded end-state on a fresh branch forked from current
+`staging`:
 
-- **MOR-9 — Finance dashboard tiles + nav polish** (merge `69e8d10`, PR #9):
-  four cover tiles (Netto waarde / Deze maand over / Beleggingsdoel ETA /
-  Rendement %) linking to `/financien`; snapshot fetched only for today's
-  edition (historical dates render no tiles); shared `etaLabel`/
-  `rendementPct` + pure tested `summarizeFinanceDashboard()` in
-  `modules/finance`. Review doc: `docs/reviews/MOR-9.md`.
-- **MOR-13 — MijnOnderzoek component + API** (PR #10): GET/DELETE/PATCH on
-  `app/api/research/route.ts` (cookie-gated, archive = soft delete scoped by
-  `profile_id`), `getResearch()` in `app/lib/queries.ts`, self-contained
-  `MijnOnderzoek.tsx` temporarily mounted below the tabs on `/instellingen`
-  (real Account-tab mount is MOR-18). Review doc: `docs/reviews/MOR-13.md`.
+- `app/instellingen/page.tsx` fetches portfolio/cashflow/goals + live
+  quotes/FX (same shape as `/financien`) and mounts a real Financiën tab
+  instead of the MOR-15 placeholder.
+- New `app/components/InstellingenFinancienTab.tsx`: headline stats (netto
+  waarde, beleggingsdoel ETA) linking to `/financien`; a "snel bijwerken"
+  quick-edit card (maandelijkse inleg override + verwacht rendement, one
+  save to `/api/finance-settings`) — the only logic this tab owns; mounts
+  `FinancienGoals` + `FinancienHoldingForm` **unchanged**.
+- `app/api/finance-settings/route.ts` extended to a partial upsert: reads
+  the existing row first, so a body with only one field never clobbers the
+  other (both the `/financien` Goals section and this tab's quick-edit hit
+  the same route).
+- `docs/brandbook.md` §7bis "Financiën tab" recipe added.
+- No migration — `monthly_contribution_override` already exists in
+  migration `0019`.
+- `etaLabel()` reused from `modules/finance` (landed via MOR-9, already on
+  `staging`) — not re-extracted, honoring the lost session's reviewer nit.
 
-**Wave 2 (MOR-17 Financiën tab · MOR-18 Account tab)** dispatches after this
-landing — MOR-18 mounts the real MijnOnderzoek component now that MOR-13 is
-on staging. MOR-14 is also unblocked.
+**Gate green**: lint, tsc, 449 vitest tests, `next build`. 3 commits
+(`3744661` API partial-upsert, `6a38c13` component + page wiring, `22e0d4b`
+brandbook recipe), pushed clean (no 403 this time). PR #12 open, base
+`staging`. Linear issue carries the `in-review` fallback label (the team has
+no "In Review" status) and stays `In Progress` status-wise.
 
 ## Siem's queue
 
-- Click through `docs/reviews/MOR-9.md` + `docs/reviews/MOR-13.md` on the
-  staging preview; explicit "approve" promotes staging → main.
-- Cloud GitHub write access (Contents: write) before any future overnight
-  run — see `docs/ops/decisions-pending.md`.
-- Carried: cron-job.org tick fix · visual spot-checks of the six live
-  features · non-EUR FX live-review item.
+- Nothing yet — PR #12 needs a reviewer pass before the orchestrator lands
+  it on `staging`. Once there, click-through review per the merge policy
+  (only Siem's explicit "approve" promotes `staging` → `main`).
+- MOR-18 (Account tab, real MijnOnderzoek mount) is the next Wave-2 item —
+  independent of this branch, no dependency either way.
 
 ## Known issues / gotchas
 
 - Finance FX: non-EUR cost-basis conversion uses *today's* FX rate; a
   non-EUR buy without a rate contributes €0 (by design — flag, don't invent).
+- The Instellingen Financiën tab's headline "Netto waarde"/"ETA" figures are
+  computed inline in `app/instellingen/page.tsx` from the same raw reads
+  `/financien` uses (not via `getFinanceDashboardSnapshot()`, to avoid a
+  second Yahoo/FX network round-trip for the same numbers) — same formulas,
+  just not the same function call. Watch for drift if `summarizeFinanceDashboard()`'s
+  net-worth formula ever changes without a matching update here.
 - `seedResearchThread` anchors on `entities[0]` — watch weak first entities.
 - `modules/research` `CATEGORY_SLUGS` mirrors the seeded `categories` table.
 - Fresh worktrees need `npm install`; `rm -rf .next` on phantom

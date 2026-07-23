@@ -1,15 +1,12 @@
 // Instellingen: tabbed shell — Account · Financiën · Pipeline-rapport.
 // Account hosts the pre-existing preferences content (onderwerp toevoegen,
-// interesses/VoorkeurenKiezer, bronnen, developer-paneel), unchanged.
-// Pipeline-rapport mounts today's edition report + trends (MOR-16, Phase 2 —
-// see getPipelineReport() in app/lib/queries.ts). Financiën is still a
-// placeholder its integration phase (MOR-17) fills in.
-// See docs/prd/settings-tabs.md (Phases 1-2).
-//
-// "Mijn onderzoek" (Research Tracking PRD, Phase 4 — MOR-13) is mounted below
-// as a temporary section, deliberately OUTSIDE InstellingenTabs and without
-// touching InstellingenAccountTab.tsx — folding it into the Account tab is
-// MOR-18's job (Settings P4), which depends on this component existing.
+// interesses/VoorkeurenKiezer, bronnen, developer-paneel) plus "Mijn
+// onderzoek" (Research Tracking PRD, Phase 4 — MOR-13's MijnOnderzoek
+// component, mounted unchanged; MOR-18, Settings P4). Pipeline-rapport mounts
+// today's edition report + trends (MOR-16, Phase 2 — see getPipelineReport()
+// in app/lib/queries.ts). Financiën is still a placeholder its integration
+// phase (MOR-17) fills in.
+// See docs/prd/settings-tabs.md (Phases 1-2, 4).
 
 import Link from "next/link";
 import { cookies } from "next/headers";
@@ -20,7 +17,6 @@ import { InstellingenTabs } from "@/app/components/InstellingenTabs";
 import { InstellingenAccountTab } from "@/app/components/InstellingenAccountTab";
 import { InstellingenPipelineTab } from "@/app/components/InstellingenPipelineTab";
 import { InstellingenLeegState } from "@/app/components/InstellingenLeegState";
-import { MijnOnderzoek } from "@/app/components/MijnOnderzoek";
 import type { Source } from "@/modules/shared/types";
 
 export const dynamic = "force-dynamic";
@@ -63,6 +59,7 @@ export default async function InstellingenPagina() {
             topics={topics}
             voorkeurenSources={voorkeuren.sources}
             initieel={voorkeuren.initieel}
+            research={research}
           />
         }
         financien={
@@ -74,11 +71,6 @@ export default async function InstellingenPagina() {
         }
         pipeline={<InstellingenPipelineTab report={pipelineReport} />}
       />
-
-      {/* Temporary mount (MOR-13) — MOR-18 folds this into the Account tab. */}
-      <section className="border-t border-[var(--line)] pt-10">
-        <MijnOnderzoek initial={research} />
-      </section>
     </div>
   );
 }

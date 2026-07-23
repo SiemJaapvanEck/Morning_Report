@@ -387,6 +387,47 @@ read-only, server-rendered (no client state — the tab itself never mounts
   An empty series (no editions yet) renders a one-line `--faint` message
   instead of a flat/misleading zero line.
 
+## 7bis. Financiën tab (`/instellingen`)
+
+The Financiën settings tab (`InstellingenFinancienTab`,
+docs/prd/settings-tabs.md Phase 3, MOR-17): the often-changed finance knobs
+in one place, plus a link out to the full `/financien` page. Client
+component (`"use client"`) — the one piece of logic it owns is the
+quick-edit save; everything else is either a plain display or a mount of the
+unchanged Personal Finance components.
+
+- **Headline stats**: a 2-up subset of the §5.2 tile recipe (`rounded-2xl`
+  `--paper`/`--line` card, Space Mono 10.5px uppercase label, Archivo 900
+  24px value, `Link` to `/financien`) — **Netto waarde** (always shown) and
+  **Beleggingsdoel ETA** (`--accent` value via the shared `etaLabel()`,
+  hidden per §9 when there's no investment goal yet). Same net-worth formula
+  as `summarizeFinanceDashboard()` (portfolio value + savings goals'
+  `saved_eur`) — computed inline in `app/instellingen/page.tsx` from the same
+  `getPortfolio`/`getCashflow`/`getGoals` + live quotes/FX read `/financien`
+  uses, not refetched via `getFinanceDashboardSnapshot()` (would double the
+  Yahoo/FX network calls for the same numbers).
+- **Snel bijwerken card**: `rounded-2xl` `--paper`/`--line` card, Space Mono
+  11px uppercase eyebrow, one inline form (flex-wrap, `--line`-bordered
+  inputs, `--accent` submit button — same shape as `CaptureFormulier.tsx`)
+  with two fields: **maandelijkse inleg (override)**, a free-text € input
+  where empty means "automatisch berekend uit het maandoverschot" (cleared
+  by submitting blank), and **verwacht rendement p/j**, mirroring `/financien`
+  Goals section's control. One submit POSTs both fields together to
+  `/api/finance-settings` (partial upsert — see the route's own comment);
+  `router.refresh()` on success re-renders the headline stats and the
+  mounted `FinancienGoals` with the new numbers.
+- **Mounted, unchanged**: `FinancienGoals` (goal editing + its own
+  expected-return control) and `FinancienHoldingForm` (holdings shortcut,
+  wrapped in its own `--paper`/`--line` card with a "Holding toevoegen"
+  eyebrow) — both exactly as `/financien` renders them, no forked copies.
+- **Footer link**: a `--muted` sentence pointing to `/financien` for the full
+  chart/holdings-list/kasstroom detail this tab doesn't attempt to replicate.
+- **"Graceful empty state" note**: the acceptance criterion covers the case
+  where the Personal Finance surfaces (Finance P3/P4/P5) aren't merged yet —
+  moot at build time since they already were, so there's no runtime branch
+  here (unlike §5.1's genuine "komt binnenkort" placeholder, still used
+  elsewhere for tabs whose phase truly hasn't landed).
+
 ## 8. Interaction & motion
 
 - Transitions are small and fast: 0.12–0.15s on hover (color, transform).
@@ -415,6 +456,11 @@ read-only, server-rendered (no client state — the tab itself never mounts
 
 ## 10. Change log
 
+- **23 July 2026** — Added §7bis "Financiën tab": headline stats (2-up
+  subset of the §5.2 tile recipe), the "Snel bijwerken" quick-edit card
+  (partial-upsert to `/api/finance-settings`), and the unchanged
+  `FinancienGoals`/`FinancienHoldingForm` mounts, from the `/instellingen`
+  Phase 3 build (MOR-17).
 - **22 July 2026** — Added §7 "Pipeline-rapport tab": stat-tile row, category
   breakdown bars, step-duration list, and `TrendCard` sparklines (via the
   shared `seriesPoints()`), from the `/instellingen` Phase 2 build (MOR-16).

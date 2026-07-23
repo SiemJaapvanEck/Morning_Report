@@ -15,7 +15,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Archivo, Space_Grotesk, Space_Mono } from "next/font/google";
-import { etaMonthsToTarget, goalProgressPct } from "../../modules/finance";
+import { etaLabel, etaMonthsToTarget, goalProgressPct } from "../../modules/finance";
 import { formatEuro, formatPct, parseAmount } from "@/app/lib/geld";
 import type { FinanceGoal, FinanceGoalKind } from "@/modules/shared/types";
 
@@ -32,16 +32,6 @@ function ProgressBar({ pct }: { pct: number }) {
       <div className="h-full rounded-full bg-[var(--accent)]" style={{ width: `${clamped}%` }} />
     </div>
   );
-}
-
-/** "~N maanden" / "doel al bereikt" / "buiten bereik" — presentational only, not exported. */
-function etaLabel(months: number | null): string {
-  if (months === null) return "buiten bereik";
-  if (months === 0) return "doel al bereikt";
-  const years = Math.floor(months / 12);
-  const rest = months % 12;
-  const parts = [years > 0 ? `${years} jaar` : null, rest > 0 ? `${rest} mnd` : null].filter(Boolean);
-  return `~${parts.join(" ")}`;
 }
 
 function GoalForm({
